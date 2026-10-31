@@ -387,6 +387,24 @@ func (s *Server) handleFiles(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.Write(raw)
+	case http.MethodDelete:
+		// the human prunes the genome — same rules as write, lands live
+		q := r.URL.Query().Get("path")
+		if strings.TrimSpace(q) == "" {
+			http.Error(w, `{"error":"path required"}`, 400)
+			return
+		}
+		p := filepath.Join(root, filepath.Clean(q))
+		if !strings.HasPrefix(p, root) || p == root {
+			http.Error(w, `{"error":"escape"}`, 400)
+			return
+		}
+		if err := os.RemoveAll(p); err != nil {
+			http.Error(w, `{"error":"delete"}`, 500)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]bool{"ok": true})
 	default:
 		http.Error(w, "method", 405)
 	}

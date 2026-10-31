@@ -294,6 +294,21 @@ function onToken(text) {
   scrollChat();
 }
 
+// the streaming caret: a blinking block at the end of the last paragraph
+function addCaret() {
+  if (!currentAssistant) return;
+  const body = currentAssistant.body;
+  const old = body.querySelector('.caret'); if (old) old.remove();
+  const c = el('span', 'caret');
+  let last = body.lastElementChild;
+  if (!last) { body.appendChild(c); return; }
+  if (last.classList.contains('tool-group') || last.classList.contains('codeblock')) {
+    body.appendChild(c);
+  } else {
+    last.appendChild(c);
+  }
+}
+
 function onReasoning(text) {
   if (!currentAssistant) return;
   let d = currentAssistant.m.querySelector('details.reason');
@@ -372,6 +387,7 @@ function renderAssistant() {
     htmlOut += proseWithSalvage(tail);
   }
   body.innerHTML = htmlOut;
+  if (state.busy) addCaret();
 }
 
 /* Prose render that salvages action-JSON the model leaked without a fence:
@@ -428,21 +444,77 @@ function finishAssistant() {
   if (!currentAssistant) return;
   hideThinking();
   renderAssistant();
+  const c = currentAssistant.body.querySelector('.caret'); if (c) c.remove();
+  addCopyBtn(currentAssistant.m, currentAssistant.raw);
   currentAssistant = null;
   state.busy = false;
   $('#send').disabled = false;
 }
 
-// tiny markdown: **bold**, `code`, fenced code, paragraphs
+// quiet copy button under assistant messages, GPT-style
+function addCopyBtn(m, raw) {
+  if (m.querySelector('.msg-actions')) return;
+  m.dataset.raw = raw || '';
+  const bar = el('div', 'msg-actions');
+  const b = el('button', 'msg-copy', '⧉ copy');
+  b.addEventListener('click', () => window.copyText(b));
+  bar.appendChild(b);
+  m.querySelector('.body').appendChild(bar);
+}
+
+// markdown lite v2: headings, lists, links, blockquotes, bold/italic/code,
+// fenced code with copy buttons. Escape first, then build tags.
 function mdLite(s) {
   let out = escapeHtml(s);
-  out = out.replace(/```(\w*)\n([\s\S]*?)```/g, (_, l, c) => `<pre><code>${c}</code></pre>`);
+  // fenced code blocks first (grab before inline transforms touch them)
+  out = out.replace(/```(\w*)\n([\s\S]*?)```/g, (_, l, c) =>
+    `<div class="codeblock"><div class="cb-bar"><span>${l || 'code'}</span><button class="cb-copy" onclick="copyText(this)" data-code="${encodeURIComponent(c)}">copy</button></div><pre><code>${c}</code></pre></div>`);
   out = out.replace(/`([^`\n]+)`/g, '<code>$1</code>');
   out = out.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
   out = out.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
-  out = out.split(/\n{2,}/).map((p) => p.trim() && `<p>${p.replace(/\n/g, '<br>')}</p>`).filter(Boolean).join('');
-  return out;
+  out = out.replace(/\[([^\]\n]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+
+  // line-based blocks: headings, lists, quotes, paragraphs
+  const lines = out.split('\n');
+  const html = [];
+  let list = null, para = [];
+  const flushPara = () => { if (para.length) { html.push(`<p>${para.join('<br>')}</p>`); para = []; } };
+  const flushList = () => { if (list) { html.push(`<${list}>` + listItems.join('') + `</${list}>`); list = null; } };
+  let listItems = [];
+  for (const raw of lines) {
+    const line = raw.trimEnd();
+    const h = line.match(/^(#{1,4})\s+(.*)/);
+    const ul = line.match(/^[-*]\s+(.*)/);
+    const ol = line.match(/^\d+[.)]\s+(.*)/);
+    const q = line.match(/^&gt;\s?(.*)/);
+    if (!line.trim()) { flushPara(); flushList(); continue; }
+    if (h) { flushPara(); flushList(); html.push(`<h${h[1].length + 2}>${h[2]}</h${h[1].length + 2}>`); continue; }
+    if (ul || ol) {
+      flushPara();
+      const want = ul ? 'ul' : 'ol';
+      if (list !== want) { flushList(); list = want; listItems = []; }
+      listItems.push(`<li>${(ul || ol)[1]}</li>`);
+      continue;
+    }
+    if (q) { flushPara(); flushList(); html.push(`<blockquote>${q[1]}</blockquote>`); continue; }
+    flushList();
+    para.push(line);
+  }
+  flushPara(); flushList();
+  return html.join('');
 }
+// copy-to-clipboard for code blocks and messages (wired via inline onclick)
+window.copyText = async function (btn) {
+  const raw = btn.dataset.code !== undefined
+    ? decodeURIComponent(btn.dataset.code)
+    : btn.closest('.msg').dataset.raw || btn.closest('.msg').innerText;
+  try {
+    await navigator.clipboard.writeText(raw);
+    const old = btn.textContent;
+    btn.textContent = 'copied ✓';
+    setTimeout(() => { btn.textContent = old; }, 1400);
+  } catch { /* clipboard blocked; ignore */ }
+};
 
 function scrollChat() { const sc = $('#chat-scroll'); sc.scrollTop = sc.scrollHeight; }
 
@@ -452,6 +524,7 @@ function addMsg(role, text) {
     m.innerHTML = `<div class="bubble">${escapeHtml(text)}</div>`;
   } else {
     m.innerHTML = `<div class="avatar">E</div><div class="body">${mdLite(text)}</div>`;
+    addCopyBtn(m, text);
   }
   $('#chat-scroll').appendChild(m);
   scrollChat();
@@ -461,6 +534,7 @@ function addMsg(role, text) {
 async function send(text) {
   text = (text !== undefined ? text : $('#input').value).trim();
   if (!text || state.busy) return;
+  hideWelcome();
   $('#input').value = '';
   $('#input').style.height = 'auto';
   state.busy = true;
@@ -642,6 +716,19 @@ window.addEventListener('DOMContentLoaded', () => {
   $('#btn-files').addEventListener('click', openGenome);
   $('#btn-genome-close').addEventListener('click', closeGenome);
   $('#btn-genome-save').addEventListener('click', saveGenomeFile);
+  $('#btn-genome-del').addEventListener('click', async () => {
+    if (!genomeFile || !confirm(`delete ${genomeFile} from the genome? This cannot be undone (but a snapshot exists).`)) return;
+    try {
+      const r = await fetch('/api/files?path=' + encodeURIComponent(genomeFile), { method: 'DELETE' });
+      if (r.ok) {
+        toast(`💥 <b>${genomeFile}</b> pruned from the genome`);
+        genomeFile = null;
+        $('#genome-open-path').textContent = 'pick a file — the organism feels every save live';
+        $('#genome-editor').value = '';
+        refreshGenomeList();
+      } else toast('⚠️ delete failed');
+    } catch { toast('⚠️ delete failed'); }
+  });
   $('#genome-editor').addEventListener('input', () => { genomeDirty = true; });
   $('#genome-editor').addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveGenomeFile(); }
@@ -656,16 +743,33 @@ window.addEventListener('DOMContentLoaded', () => {
     $('#chat-scroll').innerHTML = '';
     currentAssistant = null; state.thinkingEl = null;
     try { await fetch('/api/reset', { method: 'POST' }); } catch {}
-    welcome();
+    showWelcome();
   });
 
-  welcome();
+  showWelcome();
+  document.querySelectorAll('.w-card').forEach((b) => b.addEventListener('click', () => send(b.dataset.q)));
 });
 
-function welcome() {
-  addMsg('evolv', `**Hey.** I'm EVOLV — this window is my own source code.
-
-When I change anything — my skin, my tool cards, a component on the canvas — you see it land live. Open **Genome inspector** in the sidebar to read and edit every file of my body yourself.
-
-Ask me for a timer, a monitor, a small app. Or point me at your project: *"work on ~/my-app" — I read, edit and run code anywhere on this machine.*`);
+function showWelcome() {
+  if ($('#welcome')) return;
+  const w = el('div', '');
+  w.id = 'welcome';
+  w.innerHTML = `
+    <div class="w-mark">E</div>
+    <h1>What should evolve today?</h1>
+    <p class="w-sub">EVOLV is a workspace that rewrites itself — its UI, its tools, its mind — and works on your code anywhere on this machine.</p>
+    <div class="w-grid">
+      <button class="w-card" data-q="evolve a pomodoro focus timer onto the canvas"><span class="w-ico">⏱</span><b>Pomodoro timer</b><span>a live focus widget, grown in seconds</span></button>
+      <button class="w-card" data-q="evolve a live CPU/memory dashboard component that uses the shell tool"><span class="w-ico">📊</span><b>System monitor</b><span>real CPU / memory, polled live</span></button>
+      <button class="w-card" data-q="evolve yourself: grow a new tool, skill, or component of your own choosing — surprise me"><span class="w-ico">🧬</span><b>Evolve freely</b><span>it picks its own next mutation</span></button>
+      <button class="w-card" data-q="summarize what you are and what you can do, then show me your genome"><span class="w-ico">🗂</span><b>Show your genome</b><span>a guided tour of its own body</span></button>
+    </div>`;
+  $('#chat-scroll').appendChild(w);
+  w.querySelectorAll('.w-card').forEach((b) => b.addEventListener('click', () => send(b.dataset.q)));
 }
+function hideWelcome() {
+  const w = $('#welcome');
+  if (w) w.remove();
+}
+
+// (the empty-state welcome replaced the injected greeting — no fake first message)
