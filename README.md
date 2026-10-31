@@ -52,6 +52,14 @@ Then it does it again. And again. The app you installed is not the app you are r
 | New feature request | "here's some code you could paste…" | "wait for the dev" | **materialized on your canvas in seconds** |
 | Improvement loop | ends when the chat ends | manual | **continuous, visible, alive** |
 
+### It edits itself. It edits YOUR code.
+
+EVOLV is not a walled-garden canvas. It is a **full agent workspace** with the whole machine as its hands:
+
+- **Own body, every byte.** Its chat shell, its CSS skin, its tool call cards, its front-brain JS, its panels — all plain files it rewrites live. Say *"make your tool call cards look exactly like Claude's"* and it opens its own `style.css`, rewrites the card section, reloads its shell — and the new skin lands in under a second, no refresh.
+- **Even the launcher.** If the EVOLV source tree is on the machine, it detects it and can read and edit its own Go kernel (`cmd/`, `internal/`) — the code that runs it. Then `go build ./cmd/evolv`. A program that patches its own bootloader.
+- **Your projects.** Point it at any folder (*"work on the project at ~/my-app"*, or `set_project`): it reads, edits, runs tests and ships code there like any serious coding agent — while still being the workspace it lives in.
+
 ### The organism can
 
 - 🧩 **`evolve_component`** — mount new live UI panels (timers, dashboards, games, editors, monitors) onto your canvas mid-conversation
@@ -59,7 +67,7 @@ Then it does it again. And again. The app you installed is not the app you are r
 - 🧠 **`evolve_skill`** — learn permanent skills written as markdown into its brain
 - ✍️ **`evolve_prompt`** — rewrite its own system prompt when it notices a gap
 - 🔌 **`evolve_plugin`** — install sandboxed JS plugins with lifecycle hooks
-- 📄 **`write_file` / `read_file` / `shell`** — full self-modification of everything it's made of
+- 📄 **`write_file` / `edit_file` / `read_file` / `shell`** — full self-modification *and* work on your code anywhere on disk (absolute paths welcome)
 - 🧬 **Every mutation** is logged to `workspace/evolution.jsonl` and streamed to your screen as it happens
 
 And so can you: **the genome is plain files.** Edit anything in `~/.evolv/workspace/` — it hot-reloads. Delete a component — the canvas drops it. It's your organism too.
@@ -142,7 +150,7 @@ The kernel parses it out of the stream, executes each action against the living 
 
 ```
 ~/.evolv/
-├── config.json                  # kernel config (provider, keys, port…)
+├── config.json                  # kernel config (provider, keys, project root, port…)
 ├── logs/
 └── workspace/
     ├── ui/                      # the ENTIRE frontend — served & hot-reloaded

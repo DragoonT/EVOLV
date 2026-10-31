@@ -40,6 +40,7 @@
           <button class="quick" data-q="evolve a pomodoro focus timer onto the canvas">⏱ pomodoro</button>
           <button class="quick" data-q="evolve a sticky notes component onto the canvas">🗒 stickies</button>
           <button class="quick" data-q="evolve a live CPU/memory dashboard component that uses the shell tool">📊 system monitor</button>
+          <button class="quick" data-q="make your tool call cards look exactly like Claude's — rewrite your own style.css and reload your shell">🎨 claude-style cards</button>
           <button class="quick" data-q="evolve yourself: grow a new tool, skill, or component of your own choosing — surprise me">🧬 evolve freely</button>
         </div>
         <div class="input-wrap">
@@ -59,8 +60,8 @@
         <div id="canvas"></div>
         <div id="canvas-empty">
           <div class="big">🧬</div>
-          <h3>This canvas is the organism's body</h3>
-          <p>Ask for anything — a timer, notes, a dashboard, a game — and EVOLV grows it here as a real component, written into its own genome at <code>~/.evolv/workspace/ui/components/</code>, mounted live. No refresh. Ever.</p>
+          <h3>This is a full agent workspace</h3>
+          <p>EVOLV can edit <b>every single thing</b> — these panels, its own chat shell, its tool call cards, even its launcher — and it can work on <b>your projects</b> anywhere on this machine. Everything it changes lands live. No refresh. Ever.</p>
         </div>
       </div>
     </section>
@@ -106,12 +107,17 @@
       <label>What should EVOLV call you?</label>
       <input id="set-username" placeholder="friend">
     </div>
+    <div class="field">
+      <label>Your project root (it works on your stuff)</label>
+      <input id="set-project" placeholder="/home/you/my-app — or just tell EVOLV the path in chat">
+      <div class="hint">Point EVOLV at any folder; it reads, edits, and runs code there like a real agent. You can also just say “work on the project at …”.</div>
+    </div>
     <button class="save-btn" id="btn-save">COMMIT TO GENOME</button>
     <div class="divider"></div>
     <div class="field">
       <label>Genome location</label>
       <div class="hint" id="genome-path">~/.evolv</div>
-      <div class="hint" style="margin-top:8px">Everything the organism is — UI, tools, skills, prompts, plugins, evolution ledger — is plain files here. Edit them; it hot-reloads. It edits them; you watch.</div>
+      <div class="hint" style="margin-top:8px">Everything the organism is — shell, skin, tool call cards, tools, skills, prompts, plugins — is plain files here. Edit them; it hot-reloads. It edits them; you watch. It can even edit its own launcher source.</div>
     </div>
   </div>
 </div>

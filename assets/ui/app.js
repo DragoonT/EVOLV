@@ -102,6 +102,19 @@ function handle(ev) {
     }
     case 'plugin:toast': toast((ev.payload || {}).text || ''); break;
     case 'plugin:log': console.log('[plugin]', (ev.payload || {}).text); break;
+    case 'shell:reload': {
+      $('#recompile-path').textContent = (ev.payload || {}).reason || 'the organism is rewriting its own shell…';
+      $('#recompile').classList.add('show');
+      clearTimeout(state.shellReloadTimer);
+      state.shellReloadTimer = setTimeout(() => location.reload(), 900);
+      break;
+    }
+    case 'config:updated': {
+      const p = ev.payload || {};
+      if (p.provider) $('#prov-name').textContent = p.provider;
+      if (p.model) $('#model-name').textContent = p.model;
+      break;
+    }
   }
 }
 
@@ -196,7 +209,8 @@ function refreshEmpty() {
 const KIND_META = {
   component: ['🧩', '#22d3ee'], tool: ['🔧', '#a3e635'], skill: ['🧠', '#8b5cf6'],
   prompt: ['✍️', '#fbbf24'], plugin: ['🔌', '#f472b6'], file: ['📄', '#8b93ab'],
-  remove_component: ['🗑', '#f87171'],
+  edit: ['✏️', '#22d3ee'], delete: ['💥', '#f87171'], move: ['📦', '#8b93ab'],
+  project: ['🎯', '#a3e635'], remove_component: ['🗑', '#f87171'],
 };
 function onEvolution(e) {
   state.evolutionCount = Math.max(state.evolutionCount, e.n || 0);
@@ -279,8 +293,51 @@ function onReasoning(text) {
   scrollChat();
 }
 
-/* Render streamed text: visible prose + mutation chips for evolv blocks.
-   Incomplete trailing evolv block shows a "writing DNA…" chip. */
+/* Render streamed text: visible prose + tool call cards for evolv blocks.
+   Incomplete trailing evolv block shows a "running…" card. */
+const ACTION_META = {
+  evolve_component: ['🧩', 'grow component'], remove_component: ['🗑️', 'remove component'],
+  evolve_tool: ['🔧', 'grow tool'], run_tool: ['⚙️', 'run tool'],
+  evolve_skill: ['🧠', 'learn skill'], evolve_prompt: ['✍️', 'rewrite prompt'],
+  evolve_plugin: ['🔌', 'install plugin'], write_file: ['📝', 'write file'],
+  edit_file: ['✏️', 'edit file'], read_file: ['📖', 'read file'],
+  list_dir: ['📂', 'list dir'], tree: ['🌲', 'tree'],
+  delete_file: ['💥', 'delete'], move: ['📦', 'move'],
+  set_project: ['🎯', 'bind project'], reload_shell: ['🔄', 'recompile shell'],
+  shell: ['❖', 'shell'],
+};
+function toolCard(act, pending) {
+  const [ico, verb] = ACTION_META[act.action] || ['✨', act.action];
+  const target = act.name || act.path || act.to || act.command || '';
+  const shortTarget = String(target).length > 64 ? String(target).slice(0, 61) + '…' : target;
+  return `<div class="tool-card${pending ? ' pending' : ''}">`
+    + `<div class="tc-line"><span class="tc-dot"></span><span class="tc-verb">${escapeHtml(verb)}</span>`
+    + (shortTarget ? `<span class="tc-target">${escapeHtml(shortTarget)}</span>` : '')
+    + `<span class="tc-status">${pending ? '◌' : '✓'}</span></div></div>`;
+}
+function evolvBlockCards(body) {
+  const acts = [];
+  const dec = evolvLines(body);
+  for (const line of dec) {
+    try { acts.push(JSON.parse(line)); } catch {}
+  }
+  return acts.map((a) => toolCard(a, false)).join('');
+}
+// tolerant line-splitter: JSON objects may span lines, so use a brace scanner
+function evolvLines(body) {
+  const out = []; let depth = 0, cur = '', inStr = false, esc = false;
+  for (const ch of body) {
+    if (depth === 0 && !/\s/.test(ch) && ch !== '{') { continue; }
+    cur += ch;
+    if (esc) { esc = false; continue; }
+    if (ch === '\\') { esc = true; continue; }
+    if (ch === '"') inStr = !inStr;
+    if (inStr) continue;
+    if (ch === '{') depth++;
+    else if (ch === '}') { depth--; if (depth === 0) { out.push(cur); cur = ''; } }
+  }
+  return out;
+}
 function renderAssistant() {
   const { raw } = currentAssistant;
   const bubble = currentAssistant.m.querySelector('.bubble');
@@ -288,14 +345,16 @@ function renderAssistant() {
   let htmlOut = '', last = 0, mch;
   while ((mch = re.exec(raw))) {
     htmlOut += mdLite(raw.slice(last, mch.index));
-    htmlOut += `<div class="toast" style="animation:none;margin:6px 0">🧬 mutation committed → genome</div>`;
+    htmlOut += `<div class="tool-group">` + evolvBlockCards(mch[1]) + `</div>`;
     last = re.lastIndex;
   }
   const tail = raw.slice(last);
   const openIdx = tail.lastIndexOf('```evolv');
   if (openIdx >= 0) {
     htmlOut += mdLite(tail.slice(0, openIdx));
-    htmlOut += `<div class="toast" style="animation:none;margin:6px 0;border-color:#22d3ee">✍️ writing DNA…</div>`;
+    htmlOut += `<div class="tool-group">` + evolvLines(tail.slice(openIdx + 8)).map((l) => {
+      try { return toolCard(JSON.parse(l), true); } catch { return `<div class="tool-card pending"><div class="tc-line"><span class="tc-dot"></span><span class="tc-verb">mutating genome…</span></div></div>`; }
+    }).join('') + `</div>`;
   } else {
     htmlOut += mdLite(tail);
   }
@@ -365,6 +424,7 @@ async function loadSettings() {
     $('#set-provider').value = c.provider || 'kilo';
     $('#set-model').value = c.model || '';
     $('#set-username').value = c.user_name || '';
+    $('#set-project').value = c.project_dir || '';
     $('#genome-path').textContent = '~/.evolv';
     const dl = $('#model-list'); dl.innerHTML = '';
     (models.models || []).forEach((m) => {
@@ -378,6 +438,7 @@ async function saveSettings() {
     provider: $('#set-provider').value,
     model: $('#set-model').value.trim(),
     user_name: $('#set-username').value.trim(),
+    project_dir: $('#set-project').value.trim(),
     api_keys: {},
     base_urls: {},
   };
@@ -415,5 +476,5 @@ window.addEventListener('DOMContentLoaded', () => {
     toast('🗂 genome lives at <code>~/.evolv/workspace/</code> — edit anything, it hot-reloads', 6000);
   });
 
-  addMsg('evolv', `**I'm alive.** ⚡\n\nI'm not a chat window — I'm a workspace that rewrites itself. Ask me for anything, and if it deserves UI, I'll grow it onto the canvas in front of you, live.\n\nTry: *“evolve a pomodoro timer”* — or hit **🧬 evolve freely** and watch me surprise myself.`);
+  addMsg('evolv', `**I'm alive.** ⚡\n\nI'm a full agent workspace — not a chat window. I rewrite my own code while you watch: my UI, my tool call cards, my skills, even my launcher. And I work on **your** projects too, anywhere on this machine.\n\nTry: *“make your tool call cards look exactly like Claude's”* — I'll restyle my own skin, live. Or *“work on the project at ~/my-app”* and I'll get my hands dirty in your code.`);
 });

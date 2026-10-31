@@ -44,6 +44,7 @@ type Config struct {
         HeartbeatMins  int               `json:"heartbeat_mins"`  // cadence of ambient evolution
         UserName       string            `json:"user_name"`       // how the organism addresses you
         Theme          string            `json:"theme"`           // ui theme hint the agent may rewrite
+        ProjectDir     string            `json:"project_dir"`      // user's project root the agent works on (optional)
         Version        string            `json:"version"`
         InstalledAt    string            `json:"installed_at"`
 }
@@ -77,7 +78,7 @@ func defaultConfig() *Config {
 }
 
 // Version is the organism's genome version.
-const Version = "0.1.0"
+const Version = "0.2.0"
 
 // Load opens (creating if needed) the workspace at ~/.evolv.
 // uiFS is the embedded factory genome used to seed on first run.
@@ -126,6 +127,9 @@ func UIComponentsRel() string { return ComponentsDir }
 
 // seedUI copies embedded ui/ into the workspace if the workspace UI is absent.
 func (w *W) seedUI() error {
+        if w.uiFS == nil {
+                return nil
+        }
         marker := filepath.Join(w.Dir(UIRel()), "index.html")
         if _, err := os.Stat(marker); err == nil {
                 return nil // already seeded; never clobber a living organism
@@ -150,6 +154,9 @@ func (w *W) seedUI() error {
 
 // seedSeeds writes default prompts & skills when missing.
 func (w *W) seedSeeds() error {
+        if w.uiFS == nil {
+                return nil
+        }
         return fs.WalkDir(w.uiFS, "seeds", func(p string, d fs.DirEntry, err error) error {
                 if err != nil || d.IsDir() {
                         return err
@@ -283,4 +290,40 @@ func free(port int) bool {
 // SystemInfo returns a small factsheet used in prompts.
 func (w *W) SystemInfo() string {
         return fmt.Sprintf("os=%s arch=%s workspace=%s version=%s", runtime.GOOS, runtime.GOARCH, w.Root, Version)
+}
+
+// LauncherPath finds the running evolv executable (the launcher the agent may
+// rewrite the source of). Returns "" if unknown.
+func LauncherPath() string {
+        p, err := os.Executable()
+        if err != nil {
+                return ""
+        }
+        if abs, err := filepath.Abs(p); err == nil {
+                return abs
+        }
+        return p
+}
+
+// DetectSourceRoot walks up from the launcher and the working directory
+// looking for the EVOLV Go source tree (go.mod with module github.com/dxn111/EVOLV).
+// Returns "" when running as a plain installed binary.
+func DetectSourceRoot() string {
+        candidates := []string{}
+        if lp := LauncherPath(); lp != "" {
+                candidates = append(candidates, filepath.Dir(lp))
+        }
+        if wd, err := os.Getwd(); err == nil {
+                candidates = append(candidates, wd)
+        }
+        for _, start := range candidates {
+                d := start
+                for i := 0; i < 6 && d != filepath.Dir(d); i++ {
+                        if mod, err := os.ReadFile(filepath.Join(d, "go.mod")); err == nil && strings.Contains(string(mod), "github.com/dxn111/EVOLV") {
+                                return d
+                        }
+                        d = filepath.Dir(d)
+                }
+        }
+        return ""
 }

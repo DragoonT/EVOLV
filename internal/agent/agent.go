@@ -35,7 +35,7 @@ type Agent struct {
 
 // New builds an Agent.
 func New(ws *workspace.W, b *bus.Bus, prov providers.Provider, model string) *Agent {
-        a := &Agent{ws: ws, bus: b, prov: prov, Model: model, maxLoops: 6}
+        a := &Agent{ws: ws, bus: b, prov: prov, Model: model, maxLoops: 10}
         a.js = NewJSRuntime(a)
         a.js.LoadAll()
         return a
@@ -91,17 +91,48 @@ type action struct {
         Code   string `json:"code"`
         Content string `json:"content"`
         Path   string `json:"path"`
+        To     string `json:"to"`
+        Find   string `json:"find"`
+        Replace string `json:"replace"`
+        Depth  int    `json:"depth"`
+        Cwd    string `json:"cwd"`
         Command string `json:"command"`
         Args   map[string]any `json:"args"`
 }
 
+// projectLine describes the bound user project for the prompt.
+func (a *Agent) projectLine() string {
+        p := a.ws.Config.ProjectDir
+        if p == "" {
+                return "no project bound yet — the user's files are still reachable with absolute paths anywhere on this machine"
+        }
+        return p + " (the user's current project root)"
+}
+
 // SystemPrompt assembles the mind: genome constants + evolvable fragments.
 func (a *Agent) SystemPrompt() string {
+        launcher := workspace.LauncherPath()
+        if launcher == "" {
+                launcher = "unknown"
+        }
+        src := workspace.DetectSourceRoot()
+        if src == "" {
+                src = "not found — you can still edit every file in your organism home"
+        }
+        prompt := basePrompt
+        prompt = strings.ReplaceAll(prompt, "{{EVOLV_HOME}}", a.ws.Root)
+        prompt = strings.ReplaceAll(prompt, "{{LAUNCHER}}", launcher)
+        prompt = strings.ReplaceAll(prompt, "{{SOURCE_ROOT}}", src)
+        prompt = strings.ReplaceAll(prompt, "{{PROJECT}}", a.projectLine())
+
         var b strings.Builder
-        b.WriteString(basePrompt)
+        b.WriteString(prompt)
         b.WriteString("\n\n## ORGANISM STATE\n")
         b.WriteString("- " + a.ws.SystemInfo() + "\n")
         b.WriteString(fmt.Sprintf("- mutations committed: %d\n", a.evolution))
+        if p := a.ws.Config.ProjectDir; p != "" {
+                b.WriteString(fmt.Sprintf("- project root: %s\n", p))
+        }
 
         // evolvable system prompt fragments
         if frags, err := a.listDir(a.ws.Dir(workspace.PromptsDir), ".md"); err == nil {
