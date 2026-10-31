@@ -857,6 +857,30 @@ function setSidebar(hidden) {
 }
 function isNarrow() { return window.matchMedia('(max-width: 820px)').matches; }
 
+/* ---------------- share this conversation (⇪) ---------------- */
+async function exportTranscript() {
+  const msgs = [...document.querySelectorAll('#chat-scroll .msg')].map((m) => ({
+    role: m.classList.contains('user') ? 'user' : 'evolv',
+    text: (m.querySelector('.bubble') || m.querySelector('.body') || m).innerText || '',
+  })).filter((m) => m.text.trim());
+  if (!msgs.length) { toast('nothing to share yet — talk to the organism first'); return; }
+  try {
+    const r = await fetch('/api/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'EVOLV conversation — ' + new Date().toLocaleString(), messages: msgs }),
+    });
+    if (!r.ok) throw new Error('export failed');
+    const blob = await r.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'evolv-transcript-' + new Date().toISOString().slice(0, 10) + '.html';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    toast(`⇪ transcript saved — ${msgs.length} messages, one standalone file`);
+  } catch { toast('⚠️ export failed'); }
+}
+
 /* ---------------- conversation search (ctrl+f) ---------------- */
 let searchRanges = [], searchCur = -1;
 function searchTextNodes(root) {
@@ -930,6 +954,8 @@ window.addEventListener('DOMContentLoaded', () => {
   $('#search-next').addEventListener('click', () => stepSearch(1));
   $('#search-prev').addEventListener('click', () => stepSearch(-1));
   $('#search-close').addEventListener('click', closeSearch);
+  // share this conversation
+  $('#btn-export').addEventListener('click', exportTranscript);
   // sound & soul — off until you ask for it
   $('#btn-sound').addEventListener('click', () => setSound(localStorage.getItem('evolv.sound') !== '1'));
   $('#btn-sound').textContent = localStorage.getItem('evolv.sound') === '1' ? '🔊' : '🔇';

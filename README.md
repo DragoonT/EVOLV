@@ -322,6 +322,7 @@ Treat it like a very eager intern with root: brilliant, fun, supervise according
 
 | Version | What evolved |
 |---|---|
+| **v0.17.0** | **share this conversation** — ⇪ in the header downloads the whole transcript as one standalone HTML file (dark branded layout, XSS-escaped, zero external assets) via the new `/api/export` route; shell v15 |
 | **v0.16.0** | **conversation search** — ctrl+f opens a search bar over the chat: live match highlighting (CSS Custom Highlight API, zero DOM mutation), result count, enter/shift+enter to jump between matches, esc to close; shell v14 |
 | **v0.15.0** | **sound & soul** — 🔊 in the header wakes tiny WebAudio blips: a soft sine on file change, a triangle chirp on every mutation, a send blip; off by default, remembered per browser; shell v13 |
 | **v0.14.0** | **mobile pass** — EVOLV fits in your pocket: sidebar folds away on <820px and opens over a dimmed tap-to-close backdrop, full-bleed modals (organ / genome / diff / replay fill the screen), composer respects the home-indicator safe area, tested live at 390×844; shell v12 |
