@@ -39,6 +39,24 @@ The app you installed is not the app you're running five minutes later.
 
 <div align="center"><img src="docs/assets/shot_wave.png" alt="EVOLV workspace: tool cards with live checkmarks, and the live canvas running self-authored pomodoro, system monitor and heartbeat components" width="92%"></div>
 
+### Part 2: it edits its own codebase — and you see it in real time
+
+Components are just the surface. The second demo asks the organism to **rewrite its own source**:
+
+<div align="center"><img src="docs/assets/selfedit.gif" alt="EVOLV edits its own index.html and style.css live — the RECOMPILING SHELL overlay appears, the accent color changes, the footer text changes, all mid-conversation" width="88%"></div>
+
+[▶ **watch the full video (mp4)**](docs/assets/selfedit.mp4) — the agent edits its own `index.html` and `style.css`, forces its own recompile (watch the RECOMPILING SHELL overlay), and keeps going. In the same session it also:
+
+- **grew a Prompt Library button** — template cards that drop into the composer — plus the skill for using it (one batch, two mutations);
+- **installed `ghost-log`, a live plugin** in its own sandbox that pops a toast every time the organism mutates;
+- **grew a playable Flappy Bird** onto its canvas. A video game, written by the app into itself, live:
+
+<div align="center"><img src="docs/assets/shot_flappy.png" alt="EVOLV grew a playable Flappy Bird onto its canvas, a prompt library panel, and a plugin in the Mind panel — all self-authored mid-conversation" width="92%"></div>
+
+And the overlay shot — the app flashing "RECOMPILING SHELL · agent requested a shell recompile" *because the agent asked it to*:
+
+<div align="center"><img src="docs/assets/shot_selfedit.png" alt="The RECOMPILING SHELL overlay mid-demo: the agent requested a recompile of its own shell after editing its own index.html and style.css" width="92%"></div>
+
 <details>
 <summary><b>More views of the organism</b></summary>
 
@@ -298,6 +316,7 @@ Treat it like a very eager intern with root: brilliant, fun, supervise according
 
 | Version | What evolved |
 |---|---|
+| **v0.9.0** | demo brain grows up: the organism now self-edits its own shell live (RECOMPILING SHELL), grows prompt-library buttons + skills in one batch, installs reactive plugins, and grows a playable Flappy Bird into its canvas; PayPal funding link |
 | **v0.8.0** | markdown-lite v2 (lists, quotes, links), code blocks with language bar + copy, hover-to-copy messages, streaming caret, welcome screen, genome inspector can delete files — shell bumped to v7 for existing genomes |
 | **v0.7.0** | conversation persists across restarts (atomic writes, corrupt-tolerant), `evolv.http()` for tools **and** plugins, silent provider retry |
 | **v0.6.0** | batched multi-tool turns, real-time tool-card states, forgiving parser (salvaged raw JSON, unterminated fences), Claude-grade default skin, versioned shell reseed |

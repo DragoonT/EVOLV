@@ -1,6 +1,5 @@
 # Funding links for EVOLV
-# Fill in the platforms you use — GitHub shows them under a "Sponsor this project" button.
+# GitHub Sponsors has no native PayPal key, so PayPal goes under `custom`.
 
 # github: [dxn111]
-# ko-fi: [Replace with a ko-fi username]
-# patreon: [Replace with a patreon username]
+custom: ['https://www.paypal.me/DXN10DAY']
