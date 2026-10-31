@@ -11,10 +11,10 @@ import (
 
 // Event is a single message on the bus.
 type Event struct {
-	Type      string          `json:"type"`                 // e.g. "agent:token", "evolution", "fs:change"
-	Payload   json.RawMessage `json:"payload,omitempty"`    // arbitrary payload
-	Time      string          `json:"time"`                 // RFC3339
-	Seq       uint64          `json:"seq"`                  // monotonically increasing
+	Type    string          `json:"type"`              // e.g. "agent:token", "evolution", "fs:change"
+	Payload json.RawMessage `json:"payload,omitempty"` // arbitrary payload
+	Time    string          `json:"time"`              // RFC3339
+	Seq     uint64          `json:"seq"`               // monotonically increasing
 }
 
 // Subscriber receives events pushed by the bus.

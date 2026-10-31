@@ -345,3 +345,8 @@ details.reason pre { white-space: pre-wrap; font-family: var(--mono); font-size:
 ::-webkit-scrollbar-track { background: transparent; }
 
 ::selection { background: rgba(139,92,246,0.4); }
+
+/* TIME TRAVEL & DREAM MODE (evolvable, like everything else) */
+.check-row { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.check-row input[type="checkbox"] { accent-color: #8b5cf6; width: 15px; height: 15px; }
+#set-dream-mins { background: #12151f; border: 1px solid #262b3d; border-radius: 6px; color: #e8ebf4; padding: 4px 6px; font: inherit; }

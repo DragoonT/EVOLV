@@ -119,6 +119,14 @@ function handle(ev) {
       break;
     }
     case 'plugin:toast': toast((ev.payload || {}).text || ''); break;
+    case 'dream': {
+      const st = (ev.payload || {}).state;
+      const pill = $('#provider-pill');
+      pill.classList.toggle('busy', st === 'start');
+      if (st === 'start') toast('💭 <b>evolv is dreaming</b> — autonomous evolution in progress…', 7000);
+      else toast('🌅 dream over — see what it grew in the Evolution Stream', 6000);
+      break;
+    }
     case 'plugin:log': console.log('[plugin]', (ev.payload || {}).text); break;
     case 'shell:reload': {
       $('#recompile-path').textContent = (ev.payload || {}).reason || 'the organism is rewriting its own shell…';
@@ -234,6 +242,7 @@ const KIND_META = {
   prompt: ['✍️', '#fbbf24'], plugin: ['🔌', '#f472b6'], file: ['📄', '#8b93ab'],
   edit: ['✏️', '#22d3ee'], delete: ['💥', '#f87171'], move: ['📦', '#8b93ab'],
   project: ['🎯', '#a3e635'], remove_component: ['🗑', '#f87171'],
+  snapshot: ['🧊', '#8b93ab'], rollback: ['⏪', '#fbbf24'], self_update: ['🦋', '#22d3ee'],
 };
 function onEvolution(e) {
   state.evolutionCount = Math.max(state.evolutionCount, e.n || 0);
@@ -327,6 +336,7 @@ const ACTION_META = {
   list_dir: ['📂', 'list dir'], tree: ['🌲', 'tree'],
   delete_file: ['💥', 'delete'], move: ['📦', 'move'],
   set_project: ['🎯', 'bind project'], reload_shell: ['🔄', 'recompile shell'],
+  snapshot: ['🧊', 'freeze genome'], rollback: ['⏪', 'rewind genome'],
   shell: ['❖', 'shell'],
 };
 function toolCard(act, pending) {
@@ -449,6 +459,8 @@ async function loadSettings() {
     $('#set-model').value = c.model || '';
     $('#set-username').value = c.user_name || '';
     $('#set-project').value = c.project_dir || '';
+    $('#set-dream').checked = !!c.auto_evolve;
+    $('#set-dream-mins').value = c.heartbeat_mins || 15;
     $('#genome-path').textContent = '~/.evolv';
     const dl = $('#model-list'); dl.innerHTML = '';
     (models.models || []).forEach((m) => {
@@ -465,6 +477,8 @@ async function saveSettings() {
     model: $('#set-model').value.trim(),
     user_name: $('#set-username').value.trim(),
     project_dir: $('#set-project').value.trim(),
+    auto_evolve: $('#set-dream').checked,
+    heartbeat_mins: Math.max(1, parseInt($('#set-dream-mins').value, 10) || 15),
     api_keys: {},
     base_urls: {},
   };
@@ -499,6 +513,10 @@ window.addEventListener('DOMContentLoaded', () => {
   $('#btn-close-settings').addEventListener('click', () => $('#drawer').classList.remove('open'));
   $('#btn-update').addEventListener('click', runUpdate);
   $('#btn-save').addEventListener('click', saveSettings);
+  $('#btn-dream').addEventListener('click', async () => {
+    toast('💭 tucking the organism in — dream starting…');
+    try { await fetch('/api/dream', { method: 'POST' }); } catch { toast('⚠️ could not start dream'); }
+  });
   $('#btn-files').addEventListener('click', () => {
     toast('🗂 genome lives at <code>~/.evolv/workspace/</code> — edit anything, it hot-reloads', 6000);
   });

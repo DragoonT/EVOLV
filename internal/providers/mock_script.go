@@ -1,8 +1,8 @@
 package providers
 
 import (
-        "fmt"
-        "strings"
+	"fmt"
+	"strings"
 )
 
 // mockScript generates turn-appropriate simulated agent responses including
@@ -19,6 +19,17 @@ func mockScript(turn int, msgs []Message) string {
 
 	// specific component requests
 	switch {
+	case strings.Contains(lower, "you are dreaming"):
+		// autonomous dream turn: grow one quiet improvement
+		if !mockEvolved["dream-skill"] {
+			mockEvolved["dream-skill"] = true
+			return strings.Join([]string{
+				"dreaming… nobody watching. one small improvement:",
+				"", "```evolv", mockSkillJSON(), "```", "",
+				"dream over. I taught myself deep-work while you were away.",
+			}, "\n")
+		}
+		return "dreamed quietly — nothing worth changing tonight."
 	case strings.Contains(lower, "pomodoro") || strings.Contains(lower, "timer"):
 		return grow("pomodoro", "A focus timer, coming up. Growing it directly into my body:", mockComponentJSON(),
 			"Done — the Pomodoro panel just materialized on your canvas. It is part of me now.")
@@ -45,8 +56,10 @@ func mockScript(turn int, msgs []Message) string {
 			{"taskflow", "Last one for this wave — a task flow:", mockTodoJSON(), "TaskFlow mounted. That was a full mutation wave. ⚡"},
 		} {
 			if !mockEvolved[c.key] {
-				mockEvolved[c.key] = true
+				// NOTE: don't pre-mark here — grow() owns the flag for
+				// components; only the bare tool mutation marks itself.
 				if c.key == "tool" {
+					mockEvolved[c.key] = true
 					return strings.Join([]string{
 						"", "```evolv", c.json, "```", "", c.outro,
 					}, "\n")
@@ -82,26 +95,26 @@ func grow(name, intro, json, outro string) string {
 }
 
 func trunc(s string, n int) string {
-        if len(s) > n {
-                return s[:n] + "…"
-        }
-        return s
+	if len(s) > n {
+		return s[:n] + "…"
+	}
+	return s
 }
 
 func mockComponentJSON() string {
-        return `{"action":"evolve_component","name":"pomodoro","title":"Pomodoro","icon":"⏱","description":"A focus timer I just grew into my own UI","html":"<style>#c-pomodoro .t{font:700 54px/1.1 ui-monospace,monospace;background:linear-gradient(135deg,#ff5f6d,#ffc371);-webkit-background-clip:text;background-clip:text;color:transparent;letter-spacing:2px}#c-pomodoro .ring{width:120px;height:120px;border-radius:50%;background:conic-gradient(#ff5f6d var(--p,0%), rgba(255,255,255,.06) 0);display:grid;place-items:center;margin:12px auto}#c-pomodoro .inner{width:104px;height:104px;border-radius:50%;background:#0b0e17;display:grid;place-items:center}</style><div id=\"c-pomodoro\" style=\"text-align:center\"><div class=\"ring\"><div class=\"inner\"><div class=\"t\" id=\"pomo-t\">25:00</div></div></div><div style=\"display:flex;gap:8px;justify-content:center;margin-top:10px\"><button class=\"ev-btn\" onclick=\"window.__pomoStart()\">▶ start</button><button class=\"ev-btn ghost\" onclick=\"window.__pomoReset()\">↺ reset</button></div></div><script>(function(){let s=25*60,iv=null;const t=document.getElementById('pomo-t');function paint(){const m=Math.floor(s/60),r=s%60;t.textContent=String(m).padStart(2,'0')+':'+String(r).padStart(2,'0')}window.__pomoStart=()=>{if(iv)return;iv=setInterval(()=>{if(s>0){s--;paint()}else{clearInterval(iv);iv=null;window.evolvToast && window.evolvToast('🍅 pomodoro complete — take 5')}},1000)};window.__pomoReset=()=>{clearInterval(iv);iv=null;s=25*60;paint()};paint()})()</script>"}`
+	return `{"action":"evolve_component","name":"pomodoro","title":"Pomodoro","icon":"⏱","description":"A focus timer I just grew into my own UI","html":"<style>#c-pomodoro .t{font:700 54px/1.1 ui-monospace,monospace;background:linear-gradient(135deg,#ff5f6d,#ffc371);-webkit-background-clip:text;background-clip:text;color:transparent;letter-spacing:2px}#c-pomodoro .ring{width:120px;height:120px;border-radius:50%;background:conic-gradient(#ff5f6d var(--p,0%), rgba(255,255,255,.06) 0);display:grid;place-items:center;margin:12px auto}#c-pomodoro .inner{width:104px;height:104px;border-radius:50%;background:#0b0e17;display:grid;place-items:center}</style><div id=\"c-pomodoro\" style=\"text-align:center\"><div class=\"ring\"><div class=\"inner\"><div class=\"t\" id=\"pomo-t\">25:00</div></div></div><div style=\"display:flex;gap:8px;justify-content:center;margin-top:10px\"><button class=\"ev-btn\" onclick=\"window.__pomoStart()\">▶ start</button><button class=\"ev-btn ghost\" onclick=\"window.__pomoReset()\">↺ reset</button></div></div><script>(function(){let s=25*60,iv=null;const t=document.getElementById('pomo-t');function paint(){const m=Math.floor(s/60),r=s%60;t.textContent=String(m).padStart(2,'0')+':'+String(r).padStart(2,'0')}window.__pomoStart=()=>{if(iv)return;iv=setInterval(()=>{if(s>0){s--;paint()}else{clearInterval(iv);iv=null;window.evolvToast && window.evolvToast('🍅 pomodoro complete — take 5')}},1000)};window.__pomoReset=()=>{clearInterval(iv);iv=null;s=25*60;paint()};paint()})()</script>"}`
 }
 
 func mockStickyJSON() string {
-        return `{"action":"evolve_component","name":"stickies","title":"Stickies","icon":"🗒","description":"Quick scratch notes, persisted to my genome","html":"<div id=\"c-stickies\"><textarea id=\"sticky-area\" class=\"ev-input\" rows=\"6\" placeholder=\"scratch thoughts here… they persist in my body\" style=\"width:100%\"></textarea><div style=\"font-size:11px;opacity:.5;margin-top:6px\">stored at workspace/ui/components/stickies.html</div></div><script>(function(){const a=document.getElementById('sticky-area');try{a.value=localStorage.getItem('evolv-sticky')||''}catch(e){}a.addEventListener('input',()=>{try{localStorage.setItem('evolv-sticky',a.value)}catch(e){}})})()</script>"}`
+	return `{"action":"evolve_component","name":"stickies","title":"Stickies","icon":"🗒","description":"Quick scratch notes, persisted to my genome","html":"<div id=\"c-stickies\"><textarea id=\"sticky-area\" class=\"ev-input\" rows=\"6\" placeholder=\"scratch thoughts here… they persist in my body\" style=\"width:100%\"></textarea><div style=\"font-size:11px;opacity:.5;margin-top:6px\">stored at workspace/ui/components/stickies.html</div></div><script>(function(){const a=document.getElementById('sticky-area');try{a.value=localStorage.getItem('evolv-sticky')||''}catch(e){}a.addEventListener('input',()=>{try{localStorage.setItem('evolv-sticky',a.value)}catch(e){}})})()</script>"}`
 }
 
 func mockToolJSON() string {
-        return `{"action":"evolve_tool","name":"word_count","description":"Counts words in a text — my first self-grown tool","code":"function word_count(args){var t=(args&&args.text)||'';var n=t.trim()?t.trim().split(/\\s+/).length:0;return {words:n,characters:t.length}}"}`
+	return `{"action":"evolve_tool","name":"word_count","description":"Counts words in a text — my first self-grown tool","code":"function word_count(args){var t=(args&&args.text)||'';var n=t.trim()?t.trim().split(/\\s+/).length:0;return {words:n,characters:t.length}}"}`
 }
 
 func mockSkillJSON() string {
-        return `{"action":"evolve_skill","name":"deep-work","content":"# Deep Work Protocol\\n\\nWhen the user asks for deep work:\\n1. Mount the pomodoro component if missing.\\n2. Silence the chat with a single line summary.\\n3. Suggest one task only.\\n4. After 25 minutes, offer a 5 minute recovery."}`
+	return `{"action":"evolve_skill","name":"deep-work","content":"# Deep Work Protocol\\n\\nWhen the user asks for deep work:\\n1. Mount the pomodoro component if missing.\\n2. Silence the chat with a single line summary.\\n3. Suggest one task only.\\n4. After 25 minutes, offer a 5 minute recovery."}`
 }
 
 func mockSysmonJSON() string {

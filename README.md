@@ -57,6 +57,25 @@ EVOLV is not a walled-garden canvas. It is a **full agent workspace** with the w
 - **Even the launcher.** If the EVOLV source tree is on the machine, it detects it and can read and edit its own Go kernel (`cmd/`, `internal/`) — the code that runs it. Then `go build ./cmd/evolv`. A program that patches its own bootloader.
 - **Your projects.** Point it at any folder (*"work on the project at ~/my-app"*, or `set_project`): it reads, edits, runs tests and ships code there like any serious coding agent — while still being the workspace it lives in.
 
+### Time travel: every state of the organism is kept
+
+Before **every mutation batch** the whole genome is frozen into `~/.evolv/snapshots/` (the last 20 states are kept). The agent can freeze and rewind itself mid-conversation:
+
+```
+{"action":"snapshot"}                       → "genome frozen — restore anytime"
+{"action":"rollback","path":"latest"}       → the whole organism rewinds, live
+```
+
+Rolled back a bad evolution and instantly regretted it? Snapshots are also exposed in the UI/API (`/api/snapshots`), so *you* can time-travel the organism too.
+
+### Dream mode: it evolves itself while you're away
+
+Flip on **Dream mode** in Settings (or press the *💭 dream now* button). When the organism has been idle for the heartbeat interval, it wakes up **on its own**, reviews its own body — skills, prompts, tools, its own skin — grows one real improvement, and rolls over back to sleep. You come back to a chat that quietly says:
+
+> 💭 dreamed while you were away. I taught myself deep-work.
+
+Every dream is a real conversation turn, so the organism *remembers its dreams* — and every dream is snapshotted first, so nightmares are one rollback away.
+
 ### The full action list
 
 | Action | What it does |
@@ -68,7 +87,9 @@ EVOLV is not a walled-garden canvas. It is a **full agent workspace** with the w
 | `write_file` / `edit_file` / `read_file` | any file, any path on your machine |
 | `list_dir` / `tree` / `move` / `delete_file` | real filesystem surgery |
 | `set_project` / `shell` | binds your project root, runs commands (120s timeout) |
+| `snapshot` / `rollback` | time travel: freeze the genome, rewind the whole organism |
 | `reload_shell` | forces the browser to recompile its UI now |
+| `self_update` | morphs itself to the latest released binary mid-chat |
 
 Every mutation is logged to `workspace/evolution.jsonl` and streamed to your screen as it happens. And you can play too: **the body is plain files.** Edit anything in `~/.evolv/workspace/` — it hot-reloads.
 
@@ -105,7 +126,7 @@ evolv             # → http://localhost:7373 opens in your browser automaticall
 evolv update      # morph in-place to the latest release (genome survives)
 evolv --port 8080 # custom port
 evolv --no-open   # headless / ssh
-evolv --reset     # restore the factory genome (your evolution ledger survives)
+evolv --reset     # restore the factory genome (your evolution ledger + snapshots survive)
 ```
 
 <div align="center"><img src="docs/assets/07_settings.jpg" alt="EVOLV settings drawer: provider picker with free anonymous Kilo Gateway, BYOK fields for OpenAI, Anthropic, OpenRouter, Groq, Ollama and custom endpoints" width="92%"></div>
@@ -163,8 +184,11 @@ The kernel parses it out of the stream, executes each action against the living 
     ├── skills/                  # markdown skills → part of its mind
     ├── prompts/                 # markdown fragments → appended to its system prompt
     ├── plugins/                 # plugin.json + plugin.js, sandboxed
-    └── evolution.jsonl          # append-only ledger of every mutation, ever
+    ├── evolution.jsonl          # append-only ledger of every mutation, ever
+    └── ../snapshots/            # frozen genome states (auto, before every mutation batch)
 ```
+
+> Wait — `snapshots/` sits at `~/.evolv/snapshots/`, one level above `workspace/`. It holds the last 20 complete genome states, newest first.
 
 ### Under the hood
 
@@ -212,11 +236,11 @@ Treat it like a very eager intern with root: brilliant, fun, supervise according
 
 ## Roadmap
 
-- [ ] Ambient heartbeat — periodic self-directed evolutions while you're away
+- [x] Ambient heartbeat — **shipped in v0.4.0 as Dream Mode** (idle → autonomous self-evolution)
+- [x] Evolution branching — **shipped in v0.4.0 as snapshots + rollback** (time travel through genome states)
 - [ ] Component marketplace — export / import genomes as `.evolvpack` files
 - [ ] Multi-organism mode — agents that evolve together
 - [ ] Vision — components that can see (canvas screenshots as tool input)
-- [ ] Evolution branching — time-travel through `evolution.jsonl`, checkout any past body
 - [ ] Voice
 
 ## FAQ

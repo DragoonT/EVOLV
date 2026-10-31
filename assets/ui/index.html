@@ -42,6 +42,7 @@
           <button class="quick" data-q="evolve a live CPU/memory dashboard component that uses the shell tool">📊 system monitor</button>
           <button class="quick" data-q="make your tool call cards look exactly like Claude's — rewrite your own style.css and reload your shell">🎨 claude-style cards</button>
           <button class="quick" data-q="evolve yourself: grow a new tool, skill, or component of your own choosing — surprise me">🧬 evolve freely</button>
+          <button class="quick" id="btn-dream">💭 dream now</button>
         </div>
         <div class="input-wrap">
           <textarea id="input" rows="1" placeholder="talk to the organism… (Enter to send)"></textarea>
@@ -111,6 +112,10 @@
       <label>Your project root (it works on your stuff)</label>
       <input id="set-project" placeholder="/home/you/my-app — or just tell EVOLV the path in chat">
       <div class="hint">Point EVOLV at any folder; it reads, edits, and runs code there like a real agent. You can also just say “work on the project at …”.</div>
+    </div>
+    <div class="field">
+      <label class="check-row"><input type="checkbox" id="set-dream"> Dream mode — it evolves itself while you're away</label>
+      <div class="hint" style="display:flex;align-items:center;gap:6px;margin-top:6px">every <input id="set-dream-mins" type="number" min="1" max="720" style="width:64px"> min of idle time, it wakes up and improves itself</div>
     </div>
     <button class="save-btn" id="btn-save">COMMIT TO GENOME</button>
     <div class="divider"></div>
