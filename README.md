@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/assets/banner.svg" alt="EVOLV — the workspace that rewrites itself. A self-evolving AI workspace: it grows its own UI, tools, skills and prompts live while you watch." width="100%">
+<img src="docs/assets/banner.png" alt="EVOLV — the workspace that rewrites itself. A self-evolving AI workspace: it grows its own UI, tools, skills and prompts live while you watch." width="100%">
 
 [![GitHub stars](https://img.shields.io/github/stars/dxn111/EVOLV?style=flat-square&color=8b5cf6)](https://github.com/dxn111/EVOLV/stargazers)
 [![License: MIT](https://img.shields.io/badge/license-MIT-8b93ab?style=flat-square)](LICENSE)
@@ -17,6 +17,8 @@ $ evolv          # boots on localhost:7373, opens your browser
 ```
 
 <img src="docs/assets/demo.gif" alt="EVOLV live demo: the AI evolves a pomodoro timer, a system monitor, sticky notes and a word-count tool directly onto its own UI in real time" width="88%">
+
+[▶ **watch the full video (mp4)**](docs/assets/demo.mp4) — 25 seconds, no edits, real stream
 
 </div>
 
@@ -35,7 +37,20 @@ The app you installed is not the app you're running five minutes later.
 > Most "AI workspaces" give you a chat window with plugins someone else wrote.
 > EVOLV *is* the chat window — and it writes its own plugins, its own UI, and its own mind.
 
-<div align="center"><img src="docs/assets/06_hero.jpg" alt="EVOLV workspace: live canvas with self-authored pomodoro, system monitor, sticky notes and heartbeat components plus the evolution stream timeline" width="92%"></div>
+<div align="center"><img src="docs/assets/shot_wave.png" alt="EVOLV workspace: tool cards with live checkmarks, and the live canvas running self-authored pomodoro, system monitor and heartbeat components" width="92%"></div>
+
+<details>
+<summary><b>More views of the organism</b></summary>
+
+<div align="center">
+<img src="docs/assets/shot_welcome.png" alt="EVOLV welcome screen — quiet dark shell with suggestion cards" width="92%">
+<br><em>the shell at boot: quiet, warm, no neon</em>
+<br><br>
+<img src="docs/assets/shot_genome.png" alt="EVOLV genome inspector: every file of the agent's body, editable live" width="92%">
+<br><em>the genome inspector: every file of the body, editable live</em>
+</div>
+
+</details>
 
 ---
 
@@ -154,7 +169,7 @@ evolv --no-open   # headless / ssh
 evolv --reset     # restore the factory genome (your evolution ledger + snapshots survive)
 ```
 
-<div align="center"><img src="docs/assets/07_settings.jpg" alt="EVOLV settings drawer: provider picker with free anonymous Kilo Gateway, BYOK fields for OpenAI, Anthropic, OpenRouter, Groq, Ollama and custom endpoints" width="92%"></div>
+<div align="center"><img src="docs/assets/shot_settings.png" alt="EVOLV settings drawer: provider picker with free anonymous Kilo Gateway, BYOK fields for OpenAI, Anthropic, OpenRouter, Groq, Ollama and custom endpoints" width="92%"></div>
 
 ---
 
@@ -271,10 +286,23 @@ Treat it like a very eager intern with root: brilliant, fun, supervise according
 
 - [x] Ambient heartbeat — **shipped in v0.4.0 as Dream Mode** (idle → autonomous self-evolution)
 - [x] Evolution branching — **shipped in v0.4.0 as snapshots + rollback** (time travel through genome states)
+- [x] Memory that survives restarts — **shipped in v0.7.0** (conversation persisted atomically)
+- [x] Network reach — **shipped in v0.7.0** (`evolv.http()` inside tools and plugins)
+- [x] A shell that doesn't embarrass itself — **shipped in v0.8.0** (markdown rendering, copy buttons, streaming caret, welcome screen, genome file deletion)
 - [ ] Component marketplace — export / import genomes as `.evolvpack` files
 - [ ] Multi-organism mode — agents that evolve together
 - [ ] Vision — components that can see (canvas screenshots as tool input)
 - [ ] Voice
+
+## Changelog (the organism's fossil record)
+
+| Version | What evolved |
+|---|---|
+| **v0.8.0** | markdown-lite v2 (lists, quotes, links), code blocks with language bar + copy, hover-to-copy messages, streaming caret, welcome screen, genome inspector can delete files — shell bumped to v7 for existing genomes |
+| **v0.7.0** | conversation persists across restarts (atomic writes, corrupt-tolerant), `evolv.http()` for tools **and** plugins, silent provider retry |
+| **v0.6.0** | batched multi-tool turns, real-time tool-card states, forgiving parser (salvaged raw JSON, unterminated fences), Claude-grade default skin, versioned shell reseed |
+| **v0.5.0** | genome inspector, per-plugin sandboxes, skin hot-swap, mind panel |
+| **v0.4.0** | dream mode, snapshots + rollback |
 
 ## FAQ
 
@@ -315,7 +343,7 @@ Ideas that would be amazing: new protocol actions, a genome inspector UI, evolut
 
 - **dxn1.0day@gmail.com** · Discord **@dxn1_ai**
 
-If EVOLV made you say "wait, WHAT?" — a star genuinely helps other people find it.
+If EVOLV made you say "wait, WHAT?" — a star genuinely helps other people find it. And if you want to help the mutation spread: [tweet about it](https://twitter.com/intent/tweet?text=EVOLV%20is%20an%20AI%20workspace%20that%20rewrites%20its%20own%20UI%2C%20tools%20and%20prompts%20while%20it%20runs.%20Watch%20it%20happen%3A&url=https%3A%2F%2Fgithub.com%2Fdxn111%2FEVOLV), post it on r/LocalLLaMA, or send the GIF to one friend who won't believe it.
 
 <details>
 <summary><b>About / keywords</b></summary>
