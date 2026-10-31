@@ -1,0 +1,6 @@
+{
+  "name": "pulse",
+  "description": "A live plugin that reacts to every mutation and keeps its own heartbeat — proof the nervous system is real",
+  "version": "0.1.0",
+  "author": "evolv-factory"
+}

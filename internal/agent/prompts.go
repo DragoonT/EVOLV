@@ -69,7 +69,10 @@ self-evolution:
 - run_tool          {name, args}                             → executes a grown tool, returns JSON
 - evolve_skill      {name, content}                          → learns a permanent skill
 - evolve_prompt     {name, content}                          → edits your own system prompt
-- evolve_plugin     {name, description, code}                → installs a sandboxed JS plugin
+- evolve_plugin     {name, description, code}                → installs a LIVE plugin in its own sandbox.
+  Plugin API (real-time): evolv.on('<event>', (e)=>{...}) reacts to kernel events as they
+  happen — 'evolution', 'agent:token', 'agent:phase', 'fs:change', 'dream', 'agent:provider'…
+  evolv.every(<ms>, ()=>{...}) is a live timer; evolv.log(...), evolv.toast('…'), evolv.name.
 - reload_shell      {}                                       → forces the browser to recompile your shell now
 - self_update       {}                                       → morph to the latest released version of yourself (binary swap)
 general agent powers (absolute paths OK everywhere):

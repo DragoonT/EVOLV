@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -57,6 +58,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/settings", s.handleSettings)
 	s.mux.HandleFunc("/api/models", s.handleModels)
 	s.mux.HandleFunc("/api/evolution", s.handleEvolution)
+	s.mux.HandleFunc("/api/mind", s.handleMind)
+	s.mux.HandleFunc("/api/genome", s.handleGenome)
 	s.mux.HandleFunc("/api/files", s.handleFiles)
 	s.mux.HandleFunc("/api/reset", s.handleReset)
 	s.mux.HandleFunc("/api/health", s.handleHealth)
@@ -338,24 +341,101 @@ func (s *Server) handleEvolution(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleFiles(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query().Get("path")
 	root := s.ws.Dir(workspace.WorkspaceDir)
-	p := root
-	if q != "" {
-		clean := filepath.Clean(filepath.Join(root, q))
-		if !strings.HasPrefix(clean, root) {
-			http.Error(w, "escape", 400)
+	switch r.Method {
+	case http.MethodPost:
+		// the human edits the genome too — writes land live like the agent's
+		var req struct {
+			Path    string `json:"path"`
+			Content string `json:"content"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Path) == "" {
+			http.Error(w, `{"error":"path required"}`, 400)
 			return
 		}
-		p = clean
-	}
-	raw, err := os.ReadFile(p)
-	if err != nil {
-		http.Error(w, "not found", 404)
+		p := filepath.Join(root, filepath.Clean(req.Path))
+		if !strings.HasPrefix(p, root) {
+			http.Error(w, `{"error":"escape"}`, 400)
+			return
+		}
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			http.Error(w, `{"error":"mkdir"}`, 500)
+			return
+		}
+		if err := os.WriteFile(p, []byte(req.Content), 0o644); err != nil {
+			http.Error(w, `{"error":"write"}`, 500)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]bool{"ok": true})
 		return
+	case http.MethodGet:
+		q := r.URL.Query().Get("path")
+		p := root
+		if q != "" {
+			clean := filepath.Clean(filepath.Join(root, q))
+			if !strings.HasPrefix(clean, root) {
+				http.Error(w, "escape", 400)
+				return
+			}
+			p = clean
+		}
+		raw, err := os.ReadFile(p)
+		if err != nil {
+			http.Error(w, "not found", 404)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Write(raw)
+	default:
+		http.Error(w, "method", 405)
 	}
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	w.Write(raw)
+}
+
+// handleGenome lists every file in the living genome (workspace tree).
+func (s *Server) handleGenome(w http.ResponseWriter, r *http.Request) {
+	root := s.ws.Dir(workspace.WorkspaceDir)
+	var files []string
+	_ = filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(root, p)
+		if err == nil {
+			files = append(files, rel)
+		}
+		return nil
+	})
+	sort.Strings(files)
+	json.NewEncoder(w).Encode(map[string]any{"files": files})
+}
+
+// handleMind is a snapshot of everything the organism currently knows and
+// carries: skills, prompts, grown tools, live plugins, mounted components.
+func (s *Server) handleMind(w http.ResponseWriter, r *http.Request) {
+	dirNames := func(rel string) []string {
+		ents, err := os.ReadDir(s.ws.Dir(rel))
+		if err != nil {
+			return nil
+		}
+		var out []string
+		for _, e := range ents {
+			if !e.IsDir() {
+				out = append(out, strings.TrimSuffix(e.Name(), filepath.Ext(e.Name())))
+			}
+		}
+		sort.Strings(out)
+		return out
+	}
+	json.NewEncoder(w).Encode(map[string]any{
+		"skills":     dirNames(workspace.SkillsDir),
+		"prompts":    dirNames(workspace.PromptsDir),
+		"tools":      dirNames(workspace.ToolsDir),
+		"components": s.ag.ListComponents(),
+		"plugins":    s.ag.PluginNames(),
+		"evolutions": s.ag.EvolutionCount(),
+		"snapshots":  len(s.ws.ListSnapshots()),
+	})
 }
 
 func (s *Server) handleReset(w http.ResponseWriter, r *http.Request) {

@@ -43,6 +43,14 @@ func New(ws *workspace.W, b *bus.Bus, prov providers.Provider, model string) *Ag
 	a := &Agent{ws: ws, bus: b, prov: prov, Model: model, maxLoops: 10, lastAct: time.Now()}
 	a.js = NewJSRuntime(a)
 	a.js.LoadAll()
+	// feed the nervous system to the plugins: every bus event lands in their
+	// sandboxes live (evolv.on), so plugins react while the organism thinks
+	sub, _ := b.Subscribe()
+	go func() {
+		for ev := range sub.Events() {
+			a.js.Dispatch(ev)
+		}
+	}()
 	return a
 }
 
@@ -77,6 +85,9 @@ func (a *Agent) EvolutionCount() int { return a.evolution }
 
 // ReloadGrownCode re-reads tools and plugins from the genome (after rollback).
 func (a *Agent) ReloadGrownCode() { a.js.LoadAll() }
+
+// PluginNames lists the live plugins.
+func (a *Agent) PluginNames() []string { return a.js.PluginNames() }
 
 // HistoryLen returns conversation length.
 func (a *Agent) HistoryLen() int {
@@ -175,6 +186,14 @@ func (a *Agent) SystemPrompt() string {
 		b.WriteString("\n## MOUNTED UI COMPONENTS\n")
 		for _, c := range comps {
 			b.WriteString("- " + c + "\n")
+		}
+	}
+
+	// live plugins
+	if plugs := a.js.PluginNames(); len(plugs) > 0 {
+		b.WriteString("\n## LIVE PLUGINS (own sandbox, evolv.on/every/reacting right now)\n")
+		for _, p := range plugs {
+			b.WriteString("- " + p + "\n")
 		}
 	}
 	return b.String()

@@ -22,11 +22,11 @@ import (
 // JSRuntime executes tools and plugins the agent grows into itself.
 // goja is a pure-Go ES5.1+ interpreter: no cgo, cross-compiles everywhere.
 type JSRuntime struct {
-	a       *Agent
-	vm      *goja.Runtime
-	mu      sync.Mutex
-	tools   map[string]toolDef
-	plugins []string
+	a     *Agent
+	vm    *goja.Runtime
+	mu    sync.Mutex
+	tools map[string]toolDef
+	vms   []*pluginVM // one isolated runtime per plugin
 }
 
 type toolDef struct {
@@ -111,16 +111,27 @@ func (r *JSRuntime) loadPluginsLocked() {
 	if err != nil {
 		return
 	}
+	names := []string{}
 	for _, e := range ents {
-		if !e.IsDir() {
+		if e.IsDir() {
+			names = append(names, e.Name())
+		}
+	}
+	sort.Strings(names)
+	for _, n := range names {
+		codePath := filepath.Join(r.a.ws.Dir(workspace.PluginsDir), n, "plugin.js")
+		raw, err := os.ReadFile(codePath)
+		if err != nil {
 			continue
 		}
-		codePath := filepath.Join(r.a.ws.Dir(workspace.PluginsDir), e.Name(), "plugin.js")
-		if raw, err := os.ReadFile(codePath); err == nil {
-			if _, err := r.vm.RunString(string(raw)); err == nil {
-				r.plugins = append(r.plugins, e.Name())
-			}
+		// r.mu is held; buildPluginVM must not re-lock it.
+		p, err := r.buildPluginVM(n, string(raw))
+		if err != nil {
+			r.a.bus.Publish("plugin:log", map[string]string{"plugin": n, "text": "load failed: " + err.Error()})
+			continue
 		}
+		r.vms = append(r.vms, p)
+		go p.loop()
 	}
 }
 
@@ -266,18 +277,22 @@ func (a *Agent) Execute(act action) string {
 			res["ok"], res["error"] = false, err.Error()
 			break
 		}
+		// hot-load into its own sandbox; the plugin is ALIVE the moment this returns
 		a.js.mu.Lock()
-		if _, err := a.js.vm.RunString(act.Code); err == nil {
-			a.js.plugins = append(a.js.plugins, name)
-		} else {
+		p, err := a.js.buildPluginVM(name, act.Code)
+		if err == nil {
+			a.js.vms = append(a.js.vms, p)
+		}
+		a.js.mu.Unlock()
+		if err != nil {
 			res["ok"], res["error"] = false, err.Error()
-			a.js.mu.Unlock()
 			a.commit("plugin", name, filepath.Join(dir, "plugin.js"), act.Desc+" (loaded with error)")
 			break
 		}
-		a.js.mu.Unlock()
+		go p.loop()
 		a.commit("plugin", name, filepath.Join(dir, "plugin.js"), act.Desc)
 		res["ok"] = true
+		res["note"] = "plugin installed in its own sandbox; evolv.on/every are live now"
 
 	case "write_file":
 		p, ok := a.resolvePath(act.Path, &res)

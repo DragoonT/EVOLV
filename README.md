@@ -57,6 +57,27 @@ EVOLV is not a walled-garden canvas. It is a **full agent workspace** with the w
 - **Even the launcher.** If the EVOLV source tree is on the machine, it detects it and can read and edit its own Go kernel (`cmd/`, `internal/`) — the code that runs it. Then `go build ./cmd/evolv`. A program that patches its own bootloader.
 - **Your projects.** Point it at any folder (*"work on the project at ~/my-app"*, or `set_project`): it reads, edits, runs tests and ships code there like any serious coding agent — while still being the workspace it lives in.
 
+### Zero refresh. Ever. You see every change as it happens.
+
+- **Skin hot-swap** — when the agent (or you) rewrites `style.css`, the new skin slides in **without a reload and without a flash**. The organism changes clothes while you're looking at it.
+- **Genome Inspector** — the 🗂 button opens every file of the body in a live modal: watch the file list flicker as the agent mutates (changed files flash green), open anything, edit it, hit ctrl+s. Your write lands in the genome like one of the agent's own — same watcher, same live effect.
+- **The Mind panel** — the sidebar shows every skill, tool, plugin and prompt the organism currently carries, updating the instant something grows.
+- **Shell recompiles** (index.html / app.js) still show the fun "GENOME RECOMPILING" overlay — a 900ms morph, not a reload.
+
+### Plugins that are actually alive
+
+Plugins aren't dead scripts — each one runs in **its own sandbox with a real-time nervous system**:
+
+```js
+// workspace/plugins/<name>/plugin.js — this is running, now
+evolv.on("evolution", (e) => evolv.log("saw a mutation:", e.kind, e.name));
+evolv.on("agent:token", (e) => { /* react to every streamed token */ });
+evolv.every(30000, () => evolv.log("heartbeat — still alive"));
+evolv.toast("hello from inside the organism");
+```
+
+`evolv.on` fires the moment the event happens on the bus — mutations, streamed tokens, phase changes, fs changes, dreams. The repo ships a `pulse` plugin so you can watch it work immediately.
+
 ### Time travel: every state of the organism is kept
 
 Before **every mutation batch** the whole genome is frozen into `~/.evolv/snapshots/` (the last 20 states are kept). The agent can freeze and rewind itself mid-conversation:
@@ -83,7 +104,7 @@ Every dream is a real conversation turn, so the organism *remembers its dreams* 
 | `evolve_component` | mounts a new live UI panel mid-conversation |
 | `evolve_tool` | compiles a JS tool into its sandbox and calls it |
 | `evolve_skill` / `evolve_prompt` | grows its own memory and system prompt |
-| `evolve_plugin` | installs a sandboxed JS plugin |
+| `evolve_plugin` | installs a **live** plugin: own sandbox, reacts to bus events via `evolv.on`, real timers via `evolv.every` |
 | `write_file` / `edit_file` / `read_file` | any file, any path on your machine |
 | `list_dir` / `tree` / `move` / `delete_file` | real filesystem surgery |
 | `set_project` / `shell` | binds your project root, runs commands (120s timeout) |
@@ -208,6 +229,7 @@ The kernel parses it out of the stream, executes each action against the living 
 - **Single static binary** (Go + embedded genome) — no runtime deps, no node_modules, no docker
 - **goja** (pure-Go JS interpreter) executes the tools/plugins the agent writes — no cgo, cross-compiles to every platform
 - **150ms filesystem watcher** + WebSocket fan-out = "did it just…? yes it did"
+- **Per-plugin goja sandboxes** with a live event bus (`evolv.on` / `evolv.every`) — plugins react while the organism thinks
 - Everything local. Nothing phones home except the model provider you choose.
 
 ---

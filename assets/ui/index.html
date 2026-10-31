@@ -70,6 +70,8 @@
     <aside id="stream">
       <div id="stream-head">Evolution Stream</div>
       <div id="stream-list"></div>
+      <div id="mind-head">Mind <span id="mind-stats"></span></div>
+      <div id="mind-list"></div>
     </aside>
   </main>
 </div>
@@ -139,6 +141,23 @@
     <span class="dna">🧬</span>
     <h3>GENOME RECOMPILING</h3>
     <p id="recompile-path">the organism is rewriting its own shell…</p>
+  </div>
+</div>
+
+<div id="genome-modal">
+  <div class="gm-box">
+    <div class="gm-head">
+      <span>🗂 GENOME INSPECTOR — <span id="genome-count" class="live">live</span></span>
+      <button class="icon-btn" id="btn-genome-close">✕</button>
+    </div>
+    <div class="gm-body">
+      <div id="genome-list"></div>
+      <div class="gm-editor">
+        <div class="gm-path" id="genome-open-path">pick a file — the organism feels every save live</div>
+        <textarea id="genome-editor" spellcheck="false" placeholder="workspace files are plain text: ui/style.css, ui/components/*.html, tools/*.js, skills/*.md, plugins/*/plugin.js…"></textarea>
+        <button class="save-btn" id="btn-genome-save">⚡ WRITE TO GENOME (ctrl+s)</button>
+      </div>
+    </div>
   </div>
 </div>
 

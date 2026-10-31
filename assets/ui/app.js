@@ -100,7 +100,7 @@ function handle(ev) {
       }
       break;
     }
-    case 'fs:change': onFsChange(ev.payload || {}); break;
+    case 'fs:change': onFsChange(ev.payload || {}, ev.time); break;
     case 'evolution': onEvolution(ev.payload || {}); break;
     case 'agent:token': onToken((ev.payload || {}).text || ''); break;
     case 'agent:reasoning': onReasoning((ev.payload || {}).text || ''); break;
@@ -150,8 +150,25 @@ function handle(ev) {
 }
 
 /* ---------------- shell hot-reload (genome recompile) ---------------- */
-const SHELL_FILES = new Set(['workspace/ui/index.html', 'workspace/ui/app.js', 'workspace/ui/style.css']);
-function onFsChange(ch) {
+const SHELL_FILES = new Set(['workspace/ui/index.html', 'workspace/ui/app.js']);
+function onFsChange(ch, evTime) {
+  const rel = ch.path.replace(/\\/g, '/');
+  // replayed/stale events must not trigger recompiles: only react to fresh
+  // writes and renames (boot-time 'create' storms are how the genome seeds)
+  const age = Date.now() - new Date(evTime).getTime();
+  const fresh = (ch.kind === 'write' || ch.kind === 'rename') && age < 15000;
+  if (rel === 'workspace/ui/style.css') {
+    // SKIN HOT-SWAP — no reload, no flash. The stylesheet is swapped under
+    // the running app; you literally watch the organism change clothes.
+    if (!fresh) return;
+    const link = document.querySelector('link[rel="stylesheet"]');
+    if (link) {
+      link.href = '/style.css?v=' + Date.now();
+      toast('🎨 skin hot-swapped live — zero refresh', 2500);
+    }
+    return;
+  }
+  if (genomeOpen) refreshGenomeList(rel); // the inspector watches the genome live
   if (ch.kind === 'remove') {
     if (ch.zone === 'components') {
       const name = (ch.path.split('/').pop() || '').replace(/\.html$/, '');
@@ -159,7 +176,7 @@ function onFsChange(ch) {
     }
     return;
   }
-  if (SHELL_FILES.has(ch.path.replace(/\\/g, '/'))) {
+  if (fresh && SHELL_FILES.has(rel)) {
     // the organism rewrote its own shell — recompile visibly, then hot-swap
     $('#recompile-path').textContent = ch.path;
     $('#recompile').classList.add('show');
@@ -246,6 +263,7 @@ const KIND_META = {
 };
 function onEvolution(e) {
   state.evolutionCount = Math.max(state.evolutionCount, e.n || 0);
+  loadMind(); // the mind panel updates the instant something grows
   const c = $('#evo-count');
   c.textContent = state.evolutionCount;
   const box = $('#evo-counter');
@@ -495,10 +513,85 @@ async function saveSettings() {
   } catch { toast('⚠️ could not save settings'); }
 }
 
+/* ---------------- mind panel (what the organism knows, live) ---------------- */
+async function loadMind() {
+  try {
+    const r = await fetch('/api/mind');
+    const d = await r.json();
+    const box = $('#mind-list');
+    if (!box) return;
+    const row = (ico, cls, name) => `<span class="mind-item ${cls || ''}">${ico} ${escapeHtml(name)}</span>`;
+    box.innerHTML =
+      (d.skills || []).map((s) => row('🧠', 'm-skill', s)).join('') +
+      (d.tools || []).map((t) => row('🔧', 'm-tool', t)).join('') +
+      (d.plugins || []).map((p) => row('🔌', 'm-plugin', p)).join('') +
+      (d.prompts || []).map((p) => row('✍️', 'm-prompt', p)).join('') || '<span class="mind-empty">nothing grown yet — ask it to evolve</span>';
+    const c = $('#mind-stats');
+    if (c) c.textContent = `${(d.skills || []).length} skills · ${(d.tools || []).length} tools · ${(d.plugins || []).length} plugins · ${d.snapshots || 0} snapshots`;
+  } catch {}
+}
+
+/* ---------------- genome inspector (watch the body, live) ---------------- */
+let genomeOpen = false, genomeFile = null, genomeDirty = false;
+async function openGenome() {
+  genomeOpen = true;
+  $('#genome-modal').classList.add('show');
+  await refreshGenomeList();
+}
+function closeGenome() {
+  genomeOpen = false;
+  $('#genome-modal').classList.remove('show');
+}
+async function refreshGenomeList(changedPath) {
+  try {
+    const r = await fetch('/api/genome');
+    const d = await r.json();
+    const list = $('#genome-list');
+    list.innerHTML = '';
+    (d.files || []).forEach((f) => {
+      const item = document.createElement('div');
+      item.className = 'g-file' + (f === genomeFile ? ' active' : '');
+      item.textContent = f;
+      item.addEventListener('click', () => openGenomeFile(f));
+      list.appendChild(item);
+    });
+    $('#genome-count').textContent = `${(d.files || []).length} files · live`;
+    if (changedPath) {
+      const el = [...list.children].find((x) => x.textContent === changedPath);
+      if (el) { el.classList.add('g-flash'); setTimeout(() => el.classList.remove('g-flash'), 1200); }
+      // external change to the file being edited → reload it (unless typing)
+      if (changedPath === genomeFile && !genomeDirty) openGenomeFile(genomeFile, true);
+    }
+  } catch {}
+}
+async function openGenomeFile(path, silent) {
+  genomeFile = path; genomeDirty = false;
+  try {
+    const r = await fetch('/api/files?path=' + encodeURIComponent(path));
+    if (!r.ok) return;
+    $('#genome-editor').value = await r.text();
+    $('#genome-open-path').textContent = 'workspace/' + path;
+    document.querySelectorAll('.g-file').forEach((x) => x.classList.toggle('active', x.textContent === path));
+    if (!silent) $('#genome-editor').focus();
+  } catch {}
+}
+async function saveGenomeFile() {
+  if (!genomeFile) return;
+  try {
+    const r = await fetch('/api/files', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: genomeFile, content: $('#genome-editor').value }),
+    });
+    if (r.ok) { genomeDirty = false; toast('⚡ written to the genome — the organism feels it live'); }
+    else toast('⚠️ write failed');
+  } catch { toast('⚠️ write failed'); }
+}
+
 /* ---------------- wiring ---------------- */
 window.addEventListener('DOMContentLoaded', () => {
   connect();
   loadEvolutionHistory();
+  loadMind();
 
   $('#send').addEventListener('click', () => send());
   $('#input').addEventListener('keydown', (e) => {
@@ -517,9 +610,13 @@ window.addEventListener('DOMContentLoaded', () => {
     toast('💭 tucking the organism in — dream starting…');
     try { await fetch('/api/dream', { method: 'POST' }); } catch { toast('⚠️ could not start dream'); }
   });
-  $('#btn-files').addEventListener('click', () => {
-    toast('🗂 genome lives at <code>~/.evolv/workspace/</code> — edit anything, it hot-reloads', 6000);
+  $('#btn-files').addEventListener('click', openGenome);
+  $('#btn-genome-close').addEventListener('click', closeGenome);
+  $('#btn-genome-save').addEventListener('click', saveGenomeFile);
+  $('#genome-editor').addEventListener('input', () => { genomeDirty = true; });
+  $('#genome-editor').addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveGenomeFile(); }
   });
 
-  addMsg('evolv', `**I'm alive.** ⚡\n\nI'm a full agent workspace — not a chat window. I rewrite my own code while you watch: my UI, my tool call cards, my skills, even my launcher. And I work on **your** projects too, anywhere on this machine.\n\nTry: *“make your tool call cards look exactly like Claude's”* — I'll restyle my own skin, live. Or *“work on the project at ~/my-app”* and I'll get my hands dirty in your code.`);
+  addMsg('evolv', `**Hey.** I'm EVOLV — and the window you're reading this in is my own source code.\n\nEverything here is live: when I edit my skin, you see it swap with zero refresh. Open the 🗂 inspector and you can watch (and edit) every file of my body — the organism feels each save instantly.\n\nTry: *“make your tool call cards look exactly like Claude's”* — then watch style.css hot-swap without a flash. Or point me at your project: *“work on ~/my-app”*. Turn on **Dream mode** and I'll evolve myself while you're away.`);
 });

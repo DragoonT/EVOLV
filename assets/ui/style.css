@@ -350,3 +350,31 @@ details.reason pre { white-space: pre-wrap; font-family: var(--mono); font-size:
 .check-row { display: flex; align-items: center; gap: 8px; cursor: pointer; }
 .check-row input[type="checkbox"] { accent-color: #8b5cf6; width: 15px; height: 15px; }
 #set-dream-mins { background: #12151f; border: 1px solid #262b3d; border-radius: 6px; color: #e8ebf4; padding: 4px 6px; font: inherit; }
+
+/* GENOME INSPECTOR + MIND PANEL (evolvable, like everything else) */
+#genome-modal { position: fixed; inset: 0; display: none; place-items: center; background: rgba(4,5,10,0.72); backdrop-filter: blur(6px); z-index: 90; }
+#genome-modal.show { display: grid; }
+.gm-box { width: min(960px, 94vw); height: min(640px, 88vh); background: #0b0e17; border: 1px solid #262b3d; border-radius: 14px; display: flex; flex-direction: column; overflow: hidden; }
+.gm-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #1a1f2e; font-weight: 700; letter-spacing: 0.6px; }
+.gm-head .live { color: #a3e635; font-size: 11px; font-weight: 600; }
+.gm-body { display: grid; grid-template-columns: 280px 1fr; flex: 1; min-height: 0; }
+#genome-list { overflow-y: auto; border-right: 1px solid #1a1f2e; padding: 6px; }
+.g-file { font: 12px ui-monospace, monospace; color: #8b93ab; padding: 6px 9px; border-radius: 7px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.g-file:hover { background: rgba(139,92,246,0.09); color: #e8ebf4; }
+.g-file.active { background: rgba(139,92,246,0.16); color: #c4b5fd; }
+.g-file.g-flash { animation: gflash 1.2s ease; }
+@keyframes gflash { 0%, 60% { background: rgba(163,230,53,0.28); color: #d9f99d; } 100% { background: transparent; } }
+.gm-editor { display: flex; flex-direction: column; min-width: 0; padding: 12px 14px; gap: 8px; }
+.gm-path { font: 11px ui-monospace, monospace; color: #4d5570; }
+#genome-editor { flex: 1; min-height: 0; resize: none; background: #070910; border: 1px solid #1a1f2e; border-radius: 10px; color: #d7dce8; font: 12.5px ui-monospace, monospace; padding: 12px; outline: none; }
+#genome-editor:focus { border-color: rgba(139,92,246,0.55); }
+
+#mind-head { padding: 10px 14px 6px; font-size: 10.5px; font-weight: 800; letter-spacing: 1.6px; color: #4d5570; border-top: 1px solid #1a1f2e; }
+#mind-head span { font-weight: 500; letter-spacing: 0.2px; text-transform: none; }
+#mind-list { display: flex; flex-wrap: wrap; gap: 5px; padding: 2px 12px 12px; overflow-y: auto; max-height: 30vh; }
+.mind-item { font-size: 11px; padding: 3px 8px; border-radius: 999px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); color: #8b93ab; }
+.m-skill { border-color: rgba(139,92,246,0.4); color: #c4b5fd; }
+.m-tool { border-color: rgba(163,230,53,0.35); color: #bef264; }
+.m-plugin { border-color: rgba(244,114,182,0.35); color: #f9a8d4; }
+.m-prompt { border-color: rgba(251,191,36,0.3); color: #fcd34d; }
+.mind-empty { font-size: 11px; color: #4d5570; }
