@@ -1,6 +1,6 @@
-dist/
-evolv
-evolv.exe
+/dist/
+/evolv
+/evolv.exe
 *.tar.gz
 node_modules/
 .DS_Store
