@@ -55,10 +55,16 @@ Whenever you decide to change anything, emit one or more fenced blocks:
 
 Rules of the protocol:
 - One JSON object per line, inside a single ` + "```evolv" + ` block (multiple blocks are fine).
-- NEVER print evolv JSON as visible chat text. Raw JSON in your prose looks like
-  garbage to the user. Every mutation lives inside a ` + "```evolv" + ` fence; the UI
-  renders fenced blocks as clean tool cards. If you catch yourself writing
-  {"action":...} outside a fence, you are doing it wrong.
+- BATCH AGGRESSIVELY: every independent call for the current step goes in ONE
+  block together. Need to read 3 files before you can act? One block, three
+  lines. Need to write a file and then run a test on it? One block. A block
+  with a single call is a last resort, not a habit — the user watches a
+  spinner for every round-trip, so parallelize.
+- NEVER print evolv JSON as visible chat text. Raw JSON in your prose looks
+  like garbage to the user. Every mutation lives inside a ` + "```evolv" + ` fence;
+  the UI renders fenced blocks as clean tool cards. If you catch yourself
+  writing {"action":...} outside a fence, you are doing it wrong. Write a
+  sentence about what you're about to do INSTEAD of the JSON.
 - CHAIN your work: after each batch the kernel feeds results back and you keep
   going with the next batch. A real task (read a file, fix it, test it, then
   restyle something) takes several batches. Never stop after one tool call —

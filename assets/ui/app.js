@@ -1,5 +1,5 @@
-/* EVOLV front brain — connects to the organism over WebSocket and hot-swaps
-   whatever the agent rewrites. No refresh. Ever. */
+/* EVOLV front brain (v6 shell) — connects to the organism over WebSocket and
+   hot-swaps whatever the agent rewrites. No refresh. Ever. */
 'use strict';
 
 const $ = (s) => document.querySelector(s);
@@ -72,6 +72,7 @@ function handle(ev) {
       if (p === 'idle') finishAssistant();
       break;
     }
+    case 'tool:call': onToolCall(ev.payload || {}); break;
     case 'agent:provider': {
       const p = ev.payload || {};
       $('#prov-name').textContent = p.provider; $('#model-name').textContent = p.model;
@@ -84,7 +85,7 @@ function handle(ev) {
       const pill = $('#provider-pill');
       pill.classList.toggle('busy', st === 'start');
       if (st === 'start') toast('💭 <b>evolv is dreaming</b> — autonomous evolution in progress…', 7000);
-      else toast('🌅 dream over — see what it grew in the Evolution Stream', 6000);
+      else toast('🌅 dream over — see what it grew in the sidebar', 6000);
       break;
     }
     case 'plugin:log': console.log('[plugin]', (ev.payload || {}).text); break;
@@ -188,7 +189,7 @@ async function mountComponent(name, animate) {
   for (const st of Array.from(doc.querySelectorAll('style'))) {
     const s = document.createElement('style');
     s.textContent = st.textContent;
-    if (!st.closest('body') || true) body.appendChild(s);
+    body.appendChild(s);
   }
   const scripts = Array.from(doc.querySelectorAll('script')).map((sc) => sc.textContent);
   const frag = document.createDocumentFragment();
@@ -213,28 +214,34 @@ function refreshEmpty() {
   $('#canvas-empty').style.display = state.mounted.size ? 'none' : '';
 }
 
-/* ---------------- evolution stream ---------------- */
+/* ---------------- evolution stream (sidebar) ---------------- */
 const KIND_META = {
-  component: ['🧩', '#22d3ee'], tool: ['🔧', '#a3e635'], skill: ['🧠', '#8b5cf6'],
-  prompt: ['✍️', '#fbbf24'], plugin: ['🔌', '#f472b6'], file: ['📄', '#8b93ab'],
-  edit: ['✏️', '#22d3ee'], delete: ['💥', '#f87171'], move: ['📦', '#8b93ab'],
-  project: ['🎯', '#a3e635'], remove_component: ['🗑', '#f87171'],
-  snapshot: ['🧊', '#8b93ab'], rollback: ['⏪', '#fbbf24'], self_update: ['🦋', '#22d3ee'],
+  component: ['🧩'], tool: ['🔧'], skill: ['🧠'],
+  prompt: ['✍️'], plugin: ['🔌'], file: ['📄'],
+  edit: ['✏️'], delete: ['💥'], move: ['📦'],
+  project: ['🎯'], remove_component: ['🗑'],
+  snapshot: ['🧊'], rollback: ['⏪'], self_update: ['🦋'],
 };
+function evoItem(kind, name, desc, time) {
+  const [ico] = KIND_META[kind] || ['✨'];
+  const t = time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const item = document.createElement('div');
+  item.className = 'evo-item';
+  item.innerHTML = `<span class="ico">${ico}</span><span><div><span class="k">${escapeHtml(kind)}</span> <span class="n">${escapeHtml(name || '')}</span></div>${desc ? `<div class="d">${escapeHtml(desc)}</div>` : ''}</span><span class="t">${t}</span>`;
+  return item;
+}
+function bumpCounter() {
+  for (const id of ['#evo-count', '#evo-count2']) {
+    const c = $(id); if (c) c.textContent = state.evolutionCount;
+  }
+  const box = $('#evo-counter');
+  box.classList.remove('bump'); void box.offsetWidth; box.classList.add('bump');
+}
 function onEvolution(e) {
   state.evolutionCount = Math.max(state.evolutionCount, e.n || 0);
   loadMind(); // the mind panel updates the instant something grows
-  const c = $('#evo-count');
-  c.textContent = state.evolutionCount;
-  const box = $('#evo-counter');
-  box.classList.remove('bump'); void box.offsetWidth; box.classList.add('bump');
-
-  const [ico] = KIND_META[e.kind] || ['✨', '#fff'];
-  const t = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  const item = document.createElement('div');
-  item.className = 'evo-item';
-  item.innerHTML = `<span class="ico">${ico}</span><span><div><span class="k">${e.kind}</span> <span class="n">${escapeHtml(e.name || '')}</span></div>${e.description ? `<div class="d">${escapeHtml(e.description)}</div>` : ''}</span><span class="t">${t}</span>`;
-  $('#stream-list').prepend(item);
+  bumpCounter();
+  $('#stream-list').prepend(evoItem(e.kind, e.name, e.description));
 }
 
 async function loadEvolutionHistory() {
@@ -242,13 +249,9 @@ async function loadEvolutionHistory() {
     const r = await fetch('/api/evolution');
     const d = await r.json();
     state.evolutionCount = d.count || 0;
-    $('#evo-count').textContent = state.evolutionCount;
+    bumpCounter();
     (d.history || []).slice().reverse().forEach((h) => {
-      const [ico] = KIND_META[h.kind] || ['✨', '#fff'];
-      const item = document.createElement('div');
-      item.className = 'evo-item';
-      item.innerHTML = `<span class="ico">${ico}</span><span><div><span class="k">${h.kind}</span> <span class="n">${escapeHtml(h.name || '')}</span></div>${h.description ? `<div class="d">${escapeHtml(h.description)}</div>` : ''}</span><span class="t">${(h.time || '').slice(11, 19)}</span>`;
-      $('#stream-list').appendChild(item);
+      $('#stream-list').appendChild(evoItem(h.kind, h.name, h.description, (h.time || '').slice(11, 19)));
     });
     (d.components || []).forEach((n) => mountComponent(n, false));
   } catch {}
@@ -265,11 +268,11 @@ function escapeHtml(s) {
   return (s || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-let currentAssistant = null; // {bubble, raw}
+let currentAssistant = null; // {m, body, raw}
 function showThinking() {
   if (currentAssistant) return;
   const m = el('div', 'msg evolv');
-  m.innerHTML = `<div class="who">EVOLV</div><div class="bubble thinking"><i></i><i></i><i></i></div>`;
+  m.innerHTML = `<div class="avatar">E</div><div class="body"><div class="bubble thinking"><i></i><i></i><i></i></div></div>`;
   $('#chat-scroll').appendChild(m);
   state.thinkingEl = m;
   scrollChat();
@@ -282,9 +285,9 @@ function onToken(text) {
   hideThinking();
   if (!currentAssistant) {
     const m = el('div', 'msg evolv');
-    m.innerHTML = `<div class="who">EVOLV</div><div class="bubble"></div>`;
+    m.innerHTML = `<div class="avatar">E</div><div class="body"></div>`;
     $('#chat-scroll').appendChild(m);
-    currentAssistant = { m, raw: '', doneBlocks: 0 };
+    currentAssistant = { m, body: m.querySelector('.body'), raw: '' };
   }
   currentAssistant.raw += text;
   renderAssistant();
@@ -297,7 +300,7 @@ function onReasoning(text) {
   if (!d) {
     d = el('details', 'reason');
     d.innerHTML = '<summary>🤔 thoughts</summary><pre></pre>';
-    currentAssistant.m.querySelector('.bubble').before(d);
+    currentAssistant.body.prepend(d);
   }
   d.querySelector('pre').textContent += text;
   scrollChat();
@@ -315,13 +318,13 @@ const ACTION_META = {
   delete_file: ['💥', 'delete'], move: ['📦', 'move'],
   set_project: ['🎯', 'bind project'], reload_shell: ['🔄', 'recompile shell'],
   snapshot: ['🧊', 'freeze genome'], rollback: ['⏪', 'rewind genome'],
-  shell: ['❖', 'shell'],
+  shell: ['❖', 'shell'], self_update: ['🦋', 'self update'],
 };
 function toolCard(act, pending) {
   const [ico, verb] = ACTION_META[act.action] || ['✨', act.action];
   const target = act.name || act.path || act.to || act.command || '';
   const shortTarget = String(target).length > 64 ? String(target).slice(0, 61) + '…' : target;
-  return `<div class="tool-card${pending ? ' pending' : ''}">`
+  return `<div class="tool-card${pending ? ' pending' : ''}" data-action="${escapeHtml(act.action || '')}" data-target="${escapeHtml(String(target))}">`
     + `<div class="tc-line"><span class="tc-dot"></span><span class="tc-verb">${escapeHtml(verb)}</span>`
     + (shortTarget ? `<span class="tc-target">${escapeHtml(shortTarget)}</span>` : '')
     + `<span class="tc-status">${pending ? '◌' : '✓'}</span></div></div>`;
@@ -350,8 +353,7 @@ function evolvLines(body) {
   return out;
 }
 function renderAssistant() {
-  const { raw } = currentAssistant;
-  const bubble = currentAssistant.m.querySelector('.bubble');
+  const { raw, body } = currentAssistant;
   const re = /```evolv\s*\n([\s\S]*?)```/g;
   let htmlOut = '', last = 0, mch;
   while ((mch = re.exec(raw))) {
@@ -369,18 +371,18 @@ function renderAssistant() {
   } else {
     htmlOut += proseWithSalvage(tail);
   }
-  bubble.innerHTML = htmlOut;
+  body.innerHTML = htmlOut;
 }
 
 /* Prose render that salvages action-JSON the model leaked without a fence:
    the kernel executes it anyway, so the UI shows it as a tool card instead of
    raw garbage. */
-function proseWithSalvage(body) {
-  if (!body) return '';
+function proseWithSalvage(bodyText) {
+  if (!bodyText) return '';
   let out = '', last = 0, depth = 0, start = -1, inStr = false, esc = false;
-  const flush = (from, to) => { const seg = body.slice(from, to); if (seg.trim()) out += mdLite(seg); };
-  for (let i = 0; i < body.length; i++) {
-    const ch = body[i];
+  const flush = (from, to) => { const seg = bodyText.slice(from, to); if (seg.trim()) out += mdLite(seg); };
+  for (let i = 0; i < bodyText.length; i++) {
+    const ch = bodyText[i];
     if (esc) { esc = false; continue; }
     if (ch === '\\' && inStr) { esc = true; continue; }
     if (ch === '"') { inStr = !inStr; continue; }
@@ -389,7 +391,7 @@ function proseWithSalvage(body) {
     else if (ch === '}') {
       depth--;
       if (depth === 0 && start >= 0) {
-        const obj = body.slice(start, i + 1);
+        const obj = bodyText.slice(start, i + 1);
         if (obj.includes('"action"')) {
           try {
             flush(last, start);
@@ -401,8 +403,25 @@ function proseWithSalvage(body) {
       } else if (depth < 0) depth = 0;
     }
   }
-  flush(last, body.length);
+  flush(last, bodyText.length);
   return out;
+}
+
+/* Live tool status: the kernel publishes tool:call (running/ok/error) around
+   every execution. Match the newest pending card with the same action+target. */
+function onToolCall(p) {
+  const cards = document.querySelectorAll(`.tool-card.pending[data-action="${CSS.escape(p.action || '')}"]`);
+  for (let i = cards.length - 1; i >= 0; i--) {
+    const c = cards[i];
+    if (!p.target || !p.path || String(c.dataset.target) === String(p.target) || String(c.dataset.target) === String(p.path)) {
+      c.classList.remove('pending');
+      if (p.state === 'running') c.classList.add('running');
+      else if (p.state === 'error') c.classList.add('error');
+      const st = c.querySelector('.tc-status');
+      if (st) st.textContent = p.state === 'running' ? '…' : (p.state === 'error' ? '✗' : '✓');
+      return;
+    }
+  }
 }
 
 function finishAssistant() {
@@ -429,8 +448,11 @@ function scrollChat() { const sc = $('#chat-scroll'); sc.scrollTop = sc.scrollHe
 
 function addMsg(role, text) {
   const m = el('div', 'msg ' + (role === 'user' ? 'user' : 'evolv'));
-  const who = role === 'user' ? 'You' : 'EVOLV';
-  m.innerHTML = `<div class="who">${who}</div><div class="bubble">${role === 'user' ? escapeHtml(text) : mdLite(text)}</div>`;
+  if (role === 'user') {
+    m.innerHTML = `<div class="bubble">${escapeHtml(text)}</div>`;
+  } else {
+    m.innerHTML = `<div class="avatar">E</div><div class="body">${mdLite(text)}</div>`;
+  }
   $('#chat-scroll').appendChild(m);
   scrollChat();
   return m;
@@ -520,7 +542,7 @@ async function loadMind() {
       (d.plugins || []).map((p) => row('🔌', 'm-plugin', p)).join('') +
       (d.prompts || []).map((p) => row('✍️', 'm-prompt', p)).join('') || '<span class="mind-empty">nothing grown yet — ask it to evolve</span>';
     const c = $('#mind-stats');
-    if (c) c.textContent = `${(d.skills || []).length} skills · ${(d.tools || []).length} tools · ${(d.plugins || []).length} plugins · ${d.snapshots || 0} snapshots`;
+    if (c) c.textContent = `${(d.skills || []).length}·${(d.tools || []).length}·${(d.plugins || []).length}`;
   } catch {}
 }
 
@@ -550,8 +572,8 @@ async function refreshGenomeList(changedPath) {
     });
     $('#genome-count').textContent = `${(d.files || []).length} files · live`;
     if (changedPath) {
-      const el = [...list.children].find((x) => x.textContent === changedPath);
-      if (el) { el.classList.add('g-flash'); setTimeout(() => el.classList.remove('g-flash'), 1200); }
+      const elx = [...list.children].find((x) => x.textContent === changedPath);
+      if (elx) { elx.classList.add('g-flash'); setTimeout(() => elx.classList.remove('g-flash'), 1200); }
       // external change to the file being edited → reload it (unless typing)
       if (changedPath === genomeFile && !genomeDirty) openGenomeFile(genomeFile, true);
     }
@@ -580,18 +602,32 @@ async function saveGenomeFile() {
   } catch { toast('⚠️ write failed'); }
 }
 
+/* ---------------- layout toggles ---------------- */
+function setSidebar(hidden) {
+  document.body.classList.toggle('sb-hidden', hidden);
+  localStorage.setItem('evolv.sb', hidden ? '1' : '');
+}
+function setCanvas(hidden) {
+  document.body.classList.toggle('cv-hidden', hidden);
+  localStorage.setItem('evolv.cv', hidden ? '1' : '');
+}
+
 /* ---------------- wiring ---------------- */
 window.addEventListener('DOMContentLoaded', () => {
   connect();
   loadEvolutionHistory();
   loadMind();
 
+  // restore panel state
+  setSidebar(localStorage.getItem('evolv.sb') === '1');
+  setCanvas(localStorage.getItem('evolv.cv') === '1');
+
   $('#send').addEventListener('click', () => send());
   $('#input').addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
   });
   $('#input').addEventListener('input', function () {
-    this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+    this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 140) + 'px';
   });
   document.querySelectorAll('.quick').forEach((b) => b.addEventListener('click', () => send(b.dataset.q)));
   $('#btn-settings').addEventListener('click', openDrawer);
@@ -611,9 +647,25 @@ window.addEventListener('DOMContentLoaded', () => {
     if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveGenomeFile(); }
   });
 
-  addMsg('evolv', `**Hey.** I'm EVOLV — the window you're reading this in is my own source code.
+  // layout
+  $('#btn-sidebar').addEventListener('click', () => setSidebar(true));
+  $('#btn-sidebar-open').addEventListener('click', () => setSidebar(false));
+  $('#btn-canvas').addEventListener('click', () => setCanvas(document.body.classList.contains('cv-hidden')));
+  $('#btn-canvas-close').addEventListener('click', () => setCanvas(true));
+  $('#btn-new').addEventListener('click', async () => {
+    $('#chat-scroll').innerHTML = '';
+    currentAssistant = null; state.thinkingEl = null;
+    try { await fetch('/api/reset', { method: 'POST' }); } catch {}
+    welcome();
+  });
 
-When I change anything — my skin, my tool cards, a component on the canvas — you see it land live. Open the 🗂 inspector to read and edit every file of my body yourself.
-
-Ask me for a timer, a monitor, a small app. Or point me at your project: *“work on ~/my-app”*.`);
+  welcome();
 });
+
+function welcome() {
+  addMsg('evolv', `**Hey.** I'm EVOLV — this window is my own source code.
+
+When I change anything — my skin, my tool cards, a component on the canvas — you see it land live. Open **Genome inspector** in the sidebar to read and edit every file of my body yourself.
+
+Ask me for a timer, a monitor, a small app. Or point me at your project: *"work on ~/my-app" — I read, edit and run code anywhere on this machine.*`);
+}

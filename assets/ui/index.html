@@ -4,73 +4,93 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>EVOLV</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23d97757'/%3E%3Ctext x='50' y='70' font-size='56' font-weight='800' text-anchor='middle' font-family='sans-serif' fill='%231f1e1d'%3EE%3C/text%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%23d97757'/%3E%3Ctext x='50' y='71' font-size='58' font-weight='800' text-anchor='middle' font-family='sans-serif' fill='%231f1e1d'%3EE%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 <div id="app">
-  <header>
-    <div class="logo">
-      <div class="logo-mark">E</div>
-      <div>
+
+  <!-- ===== left sidebar ===== -->
+  <aside id="sidebar">
+    <div class="sb-top">
+      <div class="logo">
+        <div class="logo-mark">E</div>
         <div class="logo-word">EV<em>OLV</em></div>
-        <div class="logo-sub">self-evolving workspace</div>
       </div>
+      <button class="icon-btn" id="btn-sidebar" title="hide sidebar">«</button>
     </div>
-    <div class="spacer"></div>
-    <div class="evo-counter" id="evo-counter" title="mutations committed by the organism">
-      <b id="evo-count">0</b>&nbsp;mutations
-    </div>
-    <div class="pill" id="provider-pill" title="click to configure models">
-      <span class="dot"></span> <b id="prov-name">kilo</b> <span id="model-name">kilo-auto/free</span>
-    </div>
-    <button class="icon-btn" id="btn-files" title="genome files">🗂</button>
-    <button class="icon-btn" id="btn-settings" title="settings">⚙️</button>
-  </header>
+    <button class="new-chat" id="btn-new"><span>＋</span> New chat</button>
 
-  <main>
-    <section id="chat-col">
-      <div id="chat-scroll"></div>
-      <div id="composer">
-        <div class="quick-row">
-          <button class="quick" data-q="evolve a pomodoro focus timer onto the canvas">⏱ pomodoro</button>
-          <button class="quick" data-q="evolve a sticky notes component onto the canvas">🗒 stickies</button>
-          <button class="quick" data-q="evolve a live CPU/memory dashboard component that uses the shell tool">📊 system monitor</button>
-          <button class="quick" data-q="evolve yourself: grow a new tool, skill, or component of your own choosing — surprise me">🧬 evolve freely</button>
-          <button class="quick" id="btn-dream">💭 dream now</button>
-        </div>
-        <div class="input-wrap">
-          <textarea id="input" rows="1" placeholder="Message EVOLV…"></textarea>
-          <button id="send" title="send">↑</button>
-        </div>
-      </div>
-    </section>
-
-    <section id="canvas-col">
-      <div id="canvas-head">
-        <h2>Live Canvas</h2>
-        <span class="live"><i></i> hot-reload on</span>
-        <div class="spacer"></div>
-      </div>
-      <div id="canvas-scroll">
-        <div id="canvas"></div>
-        <div id="canvas-empty">
-          <div class="big">⬡</div>
-          <h3>Live canvas</h3>
-          <p>Components the organism builds land here — live, while you watch.
-          Ask for a timer, a monitor, a game… or point it at <b>your own project</b>
-          anywhere on this machine and watch it work.</p>
-        </div>
-      </div>
-    </section>
-
-    <aside id="stream">
-      <div id="stream-head">Evolution Stream</div>
-      <div id="stream-list"></div>
-      <div id="mind-head">Mind <span id="mind-stats"></span></div>
+    <div class="sb-sec" id="mind-sec">
+      <div class="sb-head">Mind <span id="mind-stats"></span></div>
       <div id="mind-list"></div>
-    </aside>
+    </div>
+
+    <div class="sb-sec" id="evo-sec">
+      <div class="sb-head">Evolution <b id="evo-count">0</b></div>
+      <div id="stream-list"></div>
+    </div>
+
+    <div class="sb-bottom">
+      <button class="sb-btn" id="btn-files"><span>🗂</span> Genome inspector</button>
+      <button class="sb-btn" id="btn-settings"><span>⚙️</span> Settings</button>
+      <div class="pill" id="provider-pill" title="click to configure models">
+        <span class="dot"></span> <b id="prov-name">kilo</b> <span id="model-name">kilo-auto/free</span>
+      </div>
+    </div>
+  </aside>
+
+  <div id="sb-rail">
+    <button class="icon-btn" id="btn-sidebar-open" title="show sidebar">»</button>
+  </div>
+
+  <!-- ===== center chat ===== -->
+  <main id="chat-col">
+    <header id="chat-head">
+      <div class="evo-counter" id="evo-counter" title="mutations committed by the organism">
+        <b id="evo-count2">0</b>&nbsp;mutations
+      </div>
+      <div class="spacer"></div>
+      <button class="icon-btn" id="btn-canvas" title="toggle live canvas">▦</button>
+    </header>
+
+    <div id="chat-scroll"></div>
+
+    <div id="composer">
+      <div class="quick-row">
+        <button class="quick" data-q="evolve a pomodoro focus timer onto the canvas">⏱ pomodoro</button>
+        <button class="quick" data-q="evolve a sticky notes component onto the canvas">🗒 stickies</button>
+        <button class="quick" data-q="evolve a live CPU/memory dashboard component that uses the shell tool">📊 system monitor</button>
+        <button class="quick" data-q="evolve yourself: grow a new tool, skill, or component of your own choosing — surprise me">🧬 evolve freely</button>
+        <button class="quick" id="btn-dream">💭 dream now</button>
+      </div>
+      <div class="input-wrap">
+        <textarea id="input" rows="1" placeholder="Message EVOLV…"></textarea>
+        <button id="send" title="send">↑</button>
+      </div>
+      <div class="foot-note">EVOLV rewrites its own code while you watch — every file it touches is yours to edit too.</div>
+    </div>
   </main>
+
+  <!-- ===== live canvas ===== -->
+  <section id="canvas-col">
+    <div id="canvas-head">
+      <h2>Live Canvas</h2>
+      <span class="live"><i></i> hot-reload on</span>
+      <div class="spacer"></div>
+      <button class="icon-btn" id="btn-canvas-close" title="hide">✕</button>
+    </div>
+    <div id="canvas-scroll">
+      <div id="canvas"></div>
+      <div id="canvas-empty">
+        <div class="big">⬡</div>
+        <h3>Live canvas</h3>
+        <p>Components the organism builds land here — live, while you watch.
+        Ask for a timer, a monitor, a game… or point it at <b>your own project</b>
+        anywhere on this machine and watch it work.</p>
+      </div>
+    </div>
+  </section>
 </div>
 
 <div id="drawer">
@@ -110,7 +130,7 @@
     <div class="field">
       <label>Your project root (it works on your stuff)</label>
       <input id="set-project" placeholder="/home/you/my-app — or just tell EVOLV the path in chat">
-      <div class="hint">Point EVOLV at any folder; it reads, edits, and runs code there like a real agent. You can also just say “work on the project at …”.</div>
+      <div class="hint">Point EVOLV at any folder; it reads, edits, and runs code there like a real agent. You can also just say "work on the project at …".</div>
     </div>
     <div class="field">
       <label class="check-row"><input type="checkbox" id="set-dream"> Dream mode — it evolves itself while you're away</label>
@@ -121,7 +141,7 @@
     <div class="field">
       <label>Genome location</label>
       <div class="hint" id="genome-path">~/.evolv</div>
-      <div class="hint" style="margin-top:8px">Everything the organism is — shell, skin, tool call cards, tools, skills, prompts, plugins — is plain files here. Edit them; it hot-reloads. It edits them; you watch. It can even edit its own launcher source.</div>
+      <div class="hint" style="margin-top:8px">Everything the organism is — shell, skin, tools, skills, prompts, plugins — is plain files here. Edit them; it hot-reloads. It edits them; you watch. It can even edit its own launcher source.</div>
     </div>
   </div>
 </div>

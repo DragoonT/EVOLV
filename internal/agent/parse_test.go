@@ -71,3 +71,26 @@ func TestExtractFenceWordDoesNotMatchEvolvX(t *testing.T) {
 		t.Fatalf("wrong fence matched: %+v", acts)
 	}
 }
+
+func TestExtractMutationsDedupesRepeats(t *testing.T) {
+	// tiny models repeat the same call three times in one breath
+	text := "```evolv\n" +
+		"{\"action\":\"read_file\",\"path\":\"workspace/ui/index.html\"}\n" +
+		"{\"action\":\"read_file\",\"path\":\"workspace/ui/index.html\"}\n" +
+		"{\"action\":\"read_file\",\"path\":\"workspace/ui/style.css\"}\n" +
+		"```\n" +
+		`and leaked: {"action":"read_file","path":"workspace/ui/index.html"}` + "\n"
+	acts := extractMutations(text)
+	if len(acts) != 2 {
+		t.Fatalf("duplicates not collapsed: %d acts", len(acts))
+	}
+}
+
+func TestResStatus(t *testing.T) {
+	if resStatus(`kernel:{"ok":true,"path":"/x"}`) != "ok" {
+		t.Fatal("ok result misread")
+	}
+	if resStatus(`kernel:{"ok":false,"error":"nope"}`) != "error" {
+		t.Fatal("error result misread")
+	}
+}

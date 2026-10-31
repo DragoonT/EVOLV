@@ -127,18 +127,28 @@ func Load(uiFS fs.FS) (*W, error) {
 // UIComponentsRel is the workspace-relative components path.
 func UIComponentsRel() string { return ComponentsDir }
 
-// seedUI copies embedded ui/ into the workspace if the workspace UI is absent.
+// seedUI copies embedded ui/ into the workspace if the workspace UI is absent,
+// or older than the embedded shell. The shell (index.html/app.js/style.css) is
+// version-stamped with .uiversion: when the binary ships a newer shell, the
+// installed genome's shell is upgraded in place. Components (workspace/ui/
+// components/) are the organism's own grown tissue and are NEVER clobbered.
 func (w *W) seedUI() error {
 	if w.uiFS == nil {
 		return nil
 	}
-	marker := filepath.Join(w.Dir(UIRel()), "index.html")
-	if _, err := os.Stat(marker); err == nil {
-		return nil // already seeded; never clobber a living organism
+	marker := filepath.Join(w.Dir(UIRel()), ".uiversion")
+	embeddedVer, _ := fs.ReadFile(w.uiFS, "ui/.uiversion")
+	installedVer, err := os.ReadFile(marker)
+	if err == nil && strings.TrimSpace(string(installedVer)) == strings.TrimSpace(string(embeddedVer)) {
+		return nil // same shell generation; never clobber a living organism
 	}
 	return fs.WalkDir(w.uiFS, "ui", func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
+		}
+		// grown components survive every shell upgrade
+		if strings.HasPrefix(p, "ui/components/") {
+			return nil
 		}
 		// embedded "ui/x" → "workspace/ui/x"
 		rel := WorkspaceDir + "/" + p
