@@ -28,15 +28,17 @@ import (
 
 // Server is the organism's interface to the world.
 type Server struct {
-	ws     *workspace.W
-	bus    *bus.Bus
-	ag     *agent.Agent
-	reg    *providers.Registry
-	mux    *http.ServeMux
-	upgr   websocket.Upgrader
-	mu     sync.Mutex
-	live   int
-	update *update.Info // newer release, if any
+	ws        *workspace.W
+	bus       *bus.Bus
+	ag        *agent.Agent
+	reg       *providers.Registry
+	mux       *http.ServeMux
+	upgr      websocket.Upgrader
+	mu        sync.Mutex
+	live      int
+	update    *update.Info // newer release, if any
+	genMu     sync.Mutex
+	genCancel context.CancelFunc // cancels the in-flight generation (stop button)
 }
 
 // New builds the server.
@@ -68,6 +70,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/snapshots", s.handleSnapshots)
 	s.mux.HandleFunc("/api/snapshots/restore", s.handleSnapshotRestore)
 	s.mux.HandleFunc("/api/dream", s.handleDream)
+	s.mux.HandleFunc("/api/stop", s.handleStop)
 	s.WatchReleases()
 	s.ag.StartDreaming() // the organism wakes itself when idle
 }
@@ -215,7 +218,15 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		}()
 		// detached context: the organism keeps working after the HTTP reply
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-		defer cancel()
+		s.genMu.Lock()
+		s.genCancel = cancel
+		s.genMu.Unlock()
+		defer func() {
+			s.genMu.Lock()
+			s.genCancel = nil
+			s.genMu.Unlock()
+			cancel()
+		}()
 		s.ag.Chat(ctx, req.Message)
 		s.bus.Publish("agent:phase", map[string]string{"phase": "idle"})
 	}()
@@ -292,6 +303,25 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "method", 405)
 	}
+}
+
+// handleStop aborts the in-flight generation — the organism mid-thought
+// simply stops. It does not roll back mutations it already committed.
+func (s *Server) handleStop(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", 405)
+		return
+	}
+	s.genMu.Lock()
+	cancel := s.genCancel
+	s.genMu.Unlock()
+	if cancel != nil {
+		cancel()
+		s.bus.Publish("agent:token", map[string]string{"text": "\n\n*(stopped — the organism paused mid-thought)*\n"})
+		w.Write([]byte(`{"ok":true}`))
+		return
+	}
+	w.Write([]byte(`{"ok":false,"error":"nothing in flight"}`))
 }
 
 // applyProvider rebuilds the active provider from config.

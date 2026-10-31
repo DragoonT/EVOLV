@@ -571,3 +571,37 @@ and can be opened across the entire window via the ⤢ control. */
   #sidebar { position: fixed; left: 0; top: 0; bottom: 0; z-index: 55; box-shadow: 12px 0 40px rgba(0,0,0,0.4); }
   body.sb-hidden #sidebar { margin-left: calc(var(--sb-w) * -1); }
 }
+
+/* ---------- paper theme: the organism in daylight ---------- */
+body.paper {
+  --bg: #f4f1ea;
+  --bg2: #ece8de;
+  --bg3: #ffffff;
+  --bg4: #e6e1d3;
+  --line: #d8d2c2;
+  --line-soft: #e4dfd2;
+  --text: #2b2926;
+  --dim: #6b665c;
+  --faint: #97917f;
+  --accent: #c05f3c;
+  --accent-soft: rgba(192, 95, 60, 0.12);
+  --ok: #3d8b63;
+  --danger: #c2503f;
+}
+body.paper .input-wrap { box-shadow: 0 4px 20px rgba(60, 50, 30, 0.08); }
+body.paper ::selection { background: rgba(192, 95, 60, 0.25); }
+body.paper .msg.user .bubble { background: var(--bg4); }
+body.paper .logo-mark, body.paper .msg.evolv .avatar, body.paper .w-mark,
+body.paper #send, body.paper .save-btn, body.paper #btn-update { color: #fff8f2; }
+body.paper #welcome .w-mark { box-shadow: 0 8px 40px rgba(192, 95, 60, 0.18); }
+
+/* ---------- sidebar drag resizer ---------- */
+#sb-resizer {
+  width: 5px; flex-shrink: 0; cursor: col-resize; margin-left: -2px;
+  transition: background 0.15s; z-index: 5;
+}
+#sb-resizer:hover, #sb-resizer.active { background: var(--accent-soft); }
+
+/* ---------- stop mode: the send button while the organism thinks ---------- */
+#send.stop { background: var(--danger); color: #fff; font-size: 12px; }
+#send.stop:hover { transform: scale(1.06); filter: brightness(1.08); }

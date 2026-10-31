@@ -492,6 +492,7 @@ function finishAssistant() {
   addCopyBtn(currentAssistant.m, currentAssistant.raw);
   currentAssistant = null;
   state.busy = false;
+  setSendMode('send');
   $('#send').disabled = false;
 }
 
@@ -582,7 +583,7 @@ async function send(text) {
   $('#input').value = '';
   $('#input').style.height = 'auto';
   state.busy = true;
-  $('#send').disabled = true;
+  setSendMode('stop');
   addMsg('user', text);
   showThinking();
   try {
@@ -594,6 +595,17 @@ async function send(text) {
     hideThinking(); finishAssistant();
     toast('⚠️ kernel unreachable — is evolv still running?');
   }
+}
+
+/* the send button doubles as a stop button while the organism thinks */
+function setSendMode(mode) {
+  const b = $('#send');
+  if (mode === 'stop') { b.textContent = '■'; b.title = 'stop the organism mid-thought'; b.classList.add('stop'); b.disabled = false; }
+  else { b.textContent = '↑'; b.title = 'send'; b.classList.remove('stop'); b.disabled = false; }
+}
+async function stopGeneration() {
+  try { await fetch('/api/stop', { method: 'POST' }); } catch {}
+  toast('⏹ stop signal sent — the organism pauses');
 }
 
 /* ---------------- settings ---------------- */
@@ -735,7 +747,7 @@ window.addEventListener('DOMContentLoaded', () => {
   // restore panel state
   setSidebar(localStorage.getItem('evolv.sb') === '1');
 
-  $('#send').addEventListener('click', () => send());
+  $('#send').addEventListener('click', () => { if (state.busy) stopGeneration(); else send(); });
   $('#input').addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
   });
@@ -776,6 +788,35 @@ window.addEventListener('DOMContentLoaded', () => {
   // layout
   $('#btn-sidebar').addEventListener('click', () => setSidebar(true));
   $('#btn-sidebar-open').addEventListener('click', () => setSidebar(false));
+
+  // theme (dark obsidian <-> light paper), persisted
+  applyTheme(localStorage.getItem('evolv.theme') || 'dark');
+  $('#btn-theme').addEventListener('click', () =>
+    applyTheme(document.body.classList.contains('paper') ? 'dark' : 'paper'));
+
+  // draggable sidebar width, persisted
+  initSidebarResize();
+
+  // keyboard shortcuts
+  document.addEventListener('keydown', (e) => {
+    const mod = e.ctrlKey || e.metaKey;
+    if (mod && e.key.toLowerCase() === 'k') { e.preventDefault(); $('#btn-new').click(); return; }
+    if (mod && e.key.toLowerCase() === 'b') { e.preventDefault(); setSidebar(!document.body.classList.contains('sb-hidden')); return; }
+    if (mod && e.shiftKey && e.key.toLowerCase() === 'l') {
+      e.preventDefault(); $('#btn-theme').click(); return;
+    }
+    if (e.key === 'Escape') {
+      if ($('#organ-modal').classList.contains('open')) closeOrgan();
+      if ($('#genome-modal').classList.contains('show')) closeGenome();
+      $('#drawer').classList.remove('open');
+      return;
+    }
+    const tag = document.activeElement && document.activeElement.tagName;
+    if (e.key === '/' && tag !== 'TEXTAREA' && tag !== 'INPUT') {
+      e.preventDefault(); $('#input').focus();
+    }
+  });
+
   $('#btn-organ-close').addEventListener('click', closeOrgan);
   $('#organ-modal').addEventListener('click', (e) => { if (e.target.id === 'organ-modal') closeOrgan(); });
   $('#btn-organ-expand').addEventListener('click', () => $('#organ-modal').classList.toggle('wide'));
@@ -789,6 +830,34 @@ window.addEventListener('DOMContentLoaded', () => {
   showWelcome();
   document.querySelectorAll('.w-card').forEach((b) => b.addEventListener('click', () => send(b.dataset.q)));
 });
+
+// theme: light "paper" flips every CSS variable through a warm daylight palette
+function applyTheme(t) {
+  document.body.classList.toggle('paper', t === 'paper');
+  localStorage.setItem('evolv.theme', t);
+  const b = $('#btn-theme');
+  if (b) { b.textContent = t === 'paper' ? '🌙' : '☀️'; b.title = t === 'paper' ? 'back to the dark (ctrl+shift+l)' : 'daylight mode (ctrl+shift+l)'; }
+}
+
+// drag the sidebar edge to resize; width persists across boots
+function initSidebarResize() {
+  const rz = $('#sb-resizer');
+  const saved = parseInt(localStorage.getItem('evolv.sbw') || '', 10);
+  if (saved >= 200 && saved <= 480) document.documentElement.style.setProperty('--sb-w', saved + 'px');
+  let startX = 0, startW = 0, dragging = false;
+  rz.addEventListener('mousedown', (e) => { dragging = true; startX = e.clientX; startW = $('#sidebar').offsetWidth; document.body.style.cursor = 'col-resize'; e.preventDefault(); });
+  window.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    const w = Math.max(200, Math.min(480, startW + e.clientX - startX));
+    document.documentElement.style.setProperty('--sb-w', w + 'px');
+  });
+  window.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false; document.body.style.cursor = '';
+    const w = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--sb-w'), 10);
+    if (w) localStorage.setItem('evolv.sbw', String(w));
+  });
+}
 
 function showWelcome() {
   if ($('#welcome')) return;
