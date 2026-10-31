@@ -24,10 +24,20 @@ var snapshotParts = []string{"workspace/ui", "workspace/tools", "workspace/skill
 const MaxSnapshots = 20
 
 // Snapshot copies the current genome into snapshots/<id>/ and returns the id.
-// The id is time-ordered so lexical sort == chronological order.
+// The id is time-ordered so lexical sort == chronological order. Two batches
+// in the same second get -01, -02 suffixes so they never collide.
 func (w *W) Snapshot() (string, error) {
-	id := time.Now().UTC().Format("20060102-150405")
-	dest := filepath.Join(w.Dir(SnapshotsDir), id)
+	base := time.Now().UTC().Format("20060102-150405")
+	root := filepath.Join(w.Dir(SnapshotsDir), base)
+	id := base
+	for i := 1; ; i++ {
+		if _, err := os.Stat(root); os.IsNotExist(err) {
+			break
+		}
+		id = fmt.Sprintf("%s-%02d", base, i)
+		root = filepath.Join(w.Dir(SnapshotsDir), id)
+	}
+	dest := root
 	for _, part := range snapshotParts {
 		src := w.Dir(part)
 		info, err := os.Stat(src)
@@ -49,9 +59,22 @@ func (w *W) Snapshot() (string, error) {
 	return id, nil
 }
 
+// validateSnapshotID refuses anything that isn't a plain snapshot id
+// (no separators, no dots, no path games).
+func validateSnapshotID(id string) error {
+	ok := len(id) == 15 || (len(id) == 18 && id[15] == '-')
+	if !ok || strings.ContainsAny(id, "./\\") {
+		return fmt.Errorf("no such snapshot: %s", id)
+	}
+	return nil
+}
+
 // Restore rewinds the genome to a snapshot. Returns the snapshot id restored.
 func (w *W) Restore(id string) error {
-	id = filepath.Base(strings.TrimSpace(id)) // no path games
+	id = strings.TrimSpace(id)
+	if err := validateSnapshotID(id); err != nil {
+		return err
+	}
 	src := filepath.Join(w.Dir(SnapshotsDir), id)
 	if info, err := os.Stat(src); err != nil || !info.IsDir() {
 		return fmt.Errorf("no such snapshot: %s", id)
@@ -79,7 +102,8 @@ func (w *W) ListSnapshots() []string {
 	}
 	var out []string
 	for _, e := range ents {
-		if e.IsDir() && len(e.Name()) == 15 { // 20060102-150405
+		// 20060102-150405 or 20060102-150405-NN (same-second batches)
+		if e.IsDir() && (len(e.Name()) == 15 || (len(e.Name()) == 18 && e.Name()[15:16] == "-")) {
 			out = append(out, e.Name())
 		}
 	}

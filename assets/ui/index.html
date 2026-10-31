@@ -179,7 +179,10 @@
   <div class="gm-box">
     <div class="gm-head">
       <span>🗂 GENOME INSPECTOR — <span id="genome-count" class="live">live</span></span>
-      <button class="icon-btn" id="btn-genome-close">✕</button>
+      <div style="display:flex;gap:6px">
+        <button class="icon-btn" id="btn-snap-diff" title="diff two snapshots — see what a mutation changed">⏪</button>
+        <button class="icon-btn" id="btn-genome-close">✕</button>
+      </div>
     </div>
     <div class="gm-body">
       <div id="genome-list"></div>
@@ -205,6 +208,20 @@
       </div>
     </div>
     <div class="om-body" id="organ-body"></div>
+  </div>
+</div>
+
+<div id="diff-modal">
+  <div class="dm-box">
+    <div class="dm-head">
+      <span>⏪ WHAT CHANGED — genome diff</span>
+      <button class="icon-btn" id="btn-diff-close">✕</button>
+    </div>
+    <div class="dm-controls">
+      <select id="diff-from"></select> → <select id="diff-to"></select>
+      <button class="save-btn" id="btn-diff-run" style="width:auto;margin:0;padding:8px 16px">DIFF</button>
+    </div>
+    <div class="dm-body" id="diff-body"></div>
   </div>
 </div>
 

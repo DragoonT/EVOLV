@@ -301,6 +301,65 @@ async function loadEvolutionHistory() {
   } catch {}
 }
 
+/* ---------------- snapshot diff ---------------- */
+function fmtSnap(id) {
+  // 20261031-160201 → Oct 31 16:02
+  const m = /^((\d{4})(\d{2})(\d{2}))-(\d{2})(\d{2})(\d{2})$/.exec(id || '');
+  if (!m) return id || '?';
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${months[+m[3] - 1]} ${+m[4]} ${m[5]}:${m[6]}`;
+}
+async function openDiff() {
+  $('#diff-modal').classList.add('open');
+  let ids = [];
+  try {
+    const r = await fetch('/api/snapshots');
+    const d = await r.json();
+    ids = d.snapshots || [];
+  } catch {}
+  const from = $('#diff-from'), to = $('#diff-to');
+  from.innerHTML = ''; to.innerHTML = '';
+  if (!ids.length) {
+    $('#diff-body').innerHTML = '<div class="dm-empty">no snapshots yet — they are taken before every mutation</div>';
+    return;
+  }
+  ids.forEach((id) => {
+    from.appendChild(new Option(`${fmtSnap(id)}  (${id})`, id));
+    to.appendChild(new Option(`${fmtSnap(id)}  (${id})`, id));
+  });
+  to.selectedIndex = 0;
+  from.selectedIndex = Math.min(1, ids.length - 1);
+  runDiff();
+}
+async function runDiff() {
+  const from = $('#diff-from').value, to = $('#diff-to').value;
+  if (!from || !to) return;
+  $('#diff-body').innerHTML = '<div class="dm-empty">comparing genomes…</div>';
+  let diffs = [];
+  try {
+    const r = await fetch(`/api/snapshots/diff?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+    const d = await r.json();
+    if (d.error) { $('#diff-body').innerHTML = `<div class="dm-empty">${escapeHtml(d.error)}</div>`; return; }
+    diffs = d.diffs || [];
+  } catch {}
+  if (!diffs.length) { $('#diff-body').innerHTML = '<div class="dm-empty">these two genome states are identical</div>'; return; }
+  const body = $('#diff-body');
+  body.innerHTML = '';
+  diffs.forEach((f) => {
+    const box = el('div', 'dm-file');
+    const head = el('div', 'dm-path');
+    head.innerHTML = `<span>${escapeHtml(f.path)}</span><span class="dm-status ${f.status}">${f.status}</span>`;
+    box.appendChild(head);
+    (f.lines || []).forEach((l) => {
+      const row = el('div', 'dm-line ' + (l.tag === '+' ? 'add' : l.tag === '-' ? 'del' : 'ctx'));
+      row.innerHTML = `<span class="tag">${l.tag}</span><span>${escapeHtml(l.text) || '&nbsp;'}</span>`;
+      box.appendChild(row);
+    });
+    body.appendChild(box);
+  });
+}
+function closeDiff() { $('#diff-modal').classList.remove('open'); }
+
 /* ---------------- replay timeline ---------------- */
 // map a ledger entry to the genome file it most likely touched
 function replayFilePath(kind, name) {
@@ -804,6 +863,10 @@ window.addEventListener('DOMContentLoaded', () => {
     try { await fetch('/api/dream', { method: 'POST' }); } catch { toast('⚠️ could not start dream'); }
   });
   $('#btn-files').addEventListener('click', openGenome);
+  $('#btn-snap-diff').addEventListener('click', openDiff);
+  $('#btn-diff-close').addEventListener('click', closeDiff);
+  $('#btn-diff-run').addEventListener('click', runDiff);
+  $('#diff-modal').addEventListener('click', (e) => { if (e.target.id === 'diff-modal') closeDiff(); });
   $('#btn-replay').addEventListener('click', openReplay);
   $('#btn-replay-close').addEventListener('click', closeReplay);
   $('#replay-modal').addEventListener('click', (e) => { if (e.target.id === 'replay-modal') closeReplay(); });
@@ -851,6 +914,7 @@ window.addEventListener('DOMContentLoaded', () => {
       if ($('#organ-modal').classList.contains('open')) closeOrgan();
       if ($('#genome-modal').classList.contains('show')) closeGenome();
       if ($('#replay-modal').classList.contains('open')) closeReplay();
+      if ($('#diff-modal').classList.contains('open')) closeDiff();
       $('#drawer').classList.remove('open');
       return;
     }

@@ -322,6 +322,7 @@ Treat it like a very eager intern with root: brilliant, fun, supervise according
 
 | Version | What evolved |
 |---|---|
+| **v0.13.0** | **"what changed" genome diff** — ⏪ in the genome inspector diffs any two snapshots line-by-line (real LCS diff engine, `/api/snapshots/diff`); along the way: fixed same-second snapshot ID collisions and hardened snapshot restore against path escape — both caught by new tests; shell v11 |
 | **v0.12.0** | **replay timeline** — ⏳ in the sidebar opens the organism's entire fossil record (`/api/replay`, every mutation birth→now on one spine, color-coded by kind, click any entry to jump to the file it grew in the genome inspector); shell v10 |
 | **v0.11.0** | **stop button** (abort the organism mid-thought — real context cancel, not a cosmetic pause), **daylight "paper" theme** (one click / ctrl+shift+l, persisted), keyboard shortcuts (ctrl+k new chat · ctrl+b sidebar · / focus · esc closes), draggable resizable sidebar, shell v9 |
 | **v0.10.0** | the right-hand canvas pane is dead — **the whole page is the canvas**: organs mount inline in the conversation, sidebar Organs list, full-window organ mode; demo brain grows Flappy Bird + prompt-library + plugins + live self-edit |
