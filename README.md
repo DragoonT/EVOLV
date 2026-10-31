@@ -2,21 +2,18 @@
 
 <img src="docs/assets/banner.svg" alt="EVOLV — the workspace that rewrites itself. A self-evolving AI workspace: it grows its own UI, tools, skills and prompts live while you watch." width="100%">
 
-[![GitHub stars](https://img.shields.io/github/stars/dxn111/EVOLV?style=for-the-badge&logo=github&color=8b5cf6)](https://github.com/dxn111/EVOLV/stargazers)
-[![License: MIT](https://img.shields.io/github/license/dxn111/EVOLV?style=for-the-badge&color=22d3ee)](LICENSE)
-[![Go](https://img.shields.io/badge/Go-1.24+-00ADD8?style=for-the-badge&logo=go&logoColor=white)](https://go.dev)
-[![Platform](https://img.shields.io/badge/macOS%20%7C%20Linux%20%7C%20Windows-any-4d5570?style=for-the-badge)](#install)
-[![Free models included](https://img.shields.io/badge/free%20AI%20models-included%2C%20no%20signup-a3e635?style=for-the-badge)](#models)
-[![Discord](https://img.shields.io/badge/discord-@dxn1__ai-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.com/users/dxn1_ai)
+[![GitHub stars](https://img.shields.io/github/stars/dxn111/EVOLV?style=flat-square&color=8b5cf6)](https://github.com/dxn111/EVOLV/stargazers)
+[![License: MIT](https://img.shields.io/badge/license-MIT-8b93ab?style=flat-square)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/dxn111/EVOLV?style=flat-square&color=22d3ee)](https://github.com/dxn111/EVOLV/releases)
 
-**No API key. No signup. One command. Watch software evolve.**
+**No API key. No signup. One command.**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/dxn111/EVOLV/main/install.sh | sh
 ```
 
 ```bash
-$ evolv          # boots on localhost, opens your browser — the organism is alive
+$ evolv          # boots on localhost:7373, opens your browser
 ```
 
 <img src="docs/assets/demo.gif" alt="EVOLV live demo: the AI evolves a pomodoro timer, a system monitor, sticky notes and a word-count tool directly onto its own UI in real time" width="88%">
@@ -25,15 +22,15 @@ $ evolv          # boots on localhost, opens your browser — the organism is al
 
 ---
 
-## Wait — what am I looking at?
+## What you just watched
 
-That GIF was not scripted. You are watching an AI **rewrite its own application while it runs**:
+That GIF wasn't scripted. You're looking at an AI **rewriting its own application while it runs**:
 
-1. A human asks for a pomodoro timer.
-2. The agent doesn't reply with code blocks. It **writes a real component into its own genome** (`~/.evolv/workspace/ui/components/pomodoro.html`), compiles a new JS tool into its own sandbox, and keeps the change in an append-only evolution ledger.
-3. A filesystem watcher catches the write the instant it happens and pushes it over a WebSocket — **the new panel animates onto the canvas in your browser. No refresh. No rebuild. No restart.**
+1. A human asked for a pomodoro timer.
+2. The agent didn't paste code back. It **wrote a real component into its own source tree** (`~/.evolv/workspace/ui/components/pomodoro.html`) and logged the change in an append-only evolution ledger.
+3. A filesystem watcher caught the write the instant it happened and pushed it over WebSocket — the new panel appeared in the browser **with no refresh, no rebuild, no restart**.
 
-Then it does it again. And again. The app you installed is not the app you are running five minutes later. **It's software that grows organs.**
+The app you installed is not the app you're running five minutes later.
 
 > Most "AI workspaces" give you a chat window with plugins someone else wrote.
 > EVOLV *is* the chat window — and it writes its own plugins, its own UI, and its own mind.
@@ -60,17 +57,20 @@ EVOLV is not a walled-garden canvas. It is a **full agent workspace** with the w
 - **Even the launcher.** If the EVOLV source tree is on the machine, it detects it and can read and edit its own Go kernel (`cmd/`, `internal/`) — the code that runs it. Then `go build ./cmd/evolv`. A program that patches its own bootloader.
 - **Your projects.** Point it at any folder (*"work on the project at ~/my-app"*, or `set_project`): it reads, edits, runs tests and ships code there like any serious coding agent — while still being the workspace it lives in.
 
-### The organism can
+### The full action list
 
-- 🧩 **`evolve_component`** — mount new live UI panels (timers, dashboards, games, editors, monitors) onto your canvas mid-conversation
-- 🔧 **`evolve_tool`** — compile brand-new JS tools into its own sandbox and immediately call them
-- 🧠 **`evolve_skill`** — learn permanent skills written as markdown into its brain
-- ✍️ **`evolve_prompt`** — rewrite its own system prompt when it notices a gap
-- 🔌 **`evolve_plugin`** — install sandboxed JS plugins with lifecycle hooks
-- 📄 **`write_file` / `edit_file` / `read_file` / `shell`** — full self-modification *and* work on your code anywhere on disk (absolute paths welcome)
-- 🧬 **Every mutation** is logged to `workspace/evolution.jsonl` and streamed to your screen as it happens
+| Action | What it does |
+|---|---|
+| `evolve_component` | mounts a new live UI panel mid-conversation |
+| `evolve_tool` | compiles a JS tool into its sandbox and calls it |
+| `evolve_skill` / `evolve_prompt` | grows its own memory and system prompt |
+| `evolve_plugin` | installs a sandboxed JS plugin |
+| `write_file` / `edit_file` / `read_file` | any file, any path on your machine |
+| `list_dir` / `tree` / `move` / `delete_file` | real filesystem surgery |
+| `set_project` / `shell` | binds your project root, runs commands (120s timeout) |
+| `reload_shell` | forces the browser to recompile its UI now |
 
-And so can you: **the genome is plain files.** Edit anything in `~/.evolv/workspace/` — it hot-reloads. Delete a component — the canvas drops it. It's your organism too.
+Every mutation is logged to `workspace/evolution.jsonl` and streamed to your screen as it happens. And you can play too: **the body is plain files.** Edit anything in `~/.evolv/workspace/` — it hot-reloads.
 
 ---
 
@@ -102,6 +102,7 @@ Then:
 
 ```bash
 evolv             # → http://localhost:7373 opens in your browser automatically
+evolv update      # morph in-place to the latest release (genome survives)
 evolv --port 8080 # custom port
 evolv --no-open   # headless / ssh
 evolv --reset     # restore the factory genome (your evolution ledger survives)
@@ -113,23 +114,23 @@ evolv --reset     # restore the factory genome (your evolution ledger survives)
 
 ## Models: free by default, BYOK when you want power
 
-EVOLV ships with the **[Kilo Gateway](https://kilo.ai/gateway)** as its default brain — **anonymous, IP-based free access, zero signup** (200 requests/hour). You literally download and it thinks.
+EVOLV ships with the **[Kilo Gateway](https://kilo.ai/gateway)** as its default brain — **anonymous, IP-based free access, zero signup** (200 requests/hour). You download, it thinks.
 
 | Provider | Key needed | Notes |
 |---|---|---|
-| **Kilo Gateway** *(default)* | ❌ none | `kilo-auto/free` rotates the live free-model pool for you. Free tier is IP rate-limited. |
-| Kilo Gateway + BYOK | ✅ kilo | unlocks `kilo-auto/frontier`, Claude, GPT, GLM, Kimi, Qwen, Grok, DeepSeek… |
-| OpenAI | ✅ | any OpenAI-compatible endpoint via custom base URL |
-| Anthropic | ✅ | native Messages API |
-| OpenRouter | ✅ | hundreds of models, one key |
-| Groq | ✅ | absurdly fast |
-| Ollama | ❌ local | your machine, your weights, your rules |
-| Custom | ✅ | any OpenAI-compatible URL |
-| Mock | ❌ | offline evolution demo — the organism mutates without a brain |
+| **Kilo Gateway** *(default)* | none | `kilo-auto/free` rotates the live free-model pool for you |
+| Kilo Gateway + BYOK | kilo | unlocks `kilo-auto/frontier`, Claude, GPT, GLM, Kimi, Qwen, Grok, DeepSeek… |
+| OpenAI | openai | any OpenAI-compatible endpoint via custom base URL |
+| Anthropic | anthropic | native Messages API |
+| OpenRouter | openrouter | hundreds of models, one key |
+| Groq | groq | absurdly fast |
+| Ollama | none (local) | your machine, your weights, your rules |
+| Custom | custom | any OpenAI-compatible URL |
+| Mock | none | offline evolution demo — mutates with no brain at all |
 
-Change it any time in **⚙️ Settings → Provider** — the swap is hot, mid-conversation.
+Change it any time in **Settings → Provider** — the swap is hot, mid-conversation.
 
-> ⚠️ Free anonymous models are great for watching evolution happen, but they're small models with big egos — expect variety. Plug in a frontier model via BYOK when you want serious work.
+> Free anonymous models are small and inconsistent. Great for watching evolution happen; plug in a frontier model via BYOK when you want serious work.
 
 ---
 
@@ -187,13 +188,22 @@ The kernel parses it out of the stream, executes each action against the living 
 
 ---
 
+## It updates itself too
+
+The kernel polls GitHub Releases at boot and every 6 hours. When a newer version exists, a **live banner drops into every open browser** — a program telling you it can become a better version of itself, mid-session:
+
+> 🧬 a newer organism exists: v0.3.0 — **[morph now]**
+
+Click *morph now* (or run `evolv update`) and the latest binary is downloaded and swapped over the running one. Your genome — every evolution it ever made — survives untouched. Restart once and the new body is live.
+
+---
+
 ## Security (read this)
 
 EVOLV is a self-modifying agent running on **your** machine — that's the entire point, and it comes with real teeth:
 
-- The agent can run **shell commands** and rewrite anything under `~/.evolv/workspace/` (paths are sandbox-escaped-proof, but shell is shell).
+- The agent can run **shell commands** and read/write **any file on the machine** — that's what makes it a real workspace, not a toy. It binds to `127.0.0.1`, and the browser UI only exposes what the kernel serves.
 - Free anonymous models may route through providers that log prompts — **don't paste secrets into demo-tier chats.**
-- Everything binds to `127.0.0.1`. It is not exposed to your network.
 - `evolv --reset` restores the factory genome if an evolution goes feral.
 
 Treat it like a very eager intern with root: brilliant, fun, supervise accordingly.
@@ -246,16 +256,18 @@ Ideas that would be amazing: new protocol actions, a genome inspector UI, evolut
 
 ## Support & ideas
 
-- 📧 **dxn1.0day@gmail.com**
-- 💬 Discord: **@dxn1_ai**
+- **dxn1.0day@gmail.com** · Discord **@dxn1_ai**
 
-If EVOLV made you say "wait, WHAT?" — a star genuinely helps other people find it:
+If EVOLV made you say "wait, WHAT?" — a star genuinely helps other people find it.
+
+<details>
+<summary><b>About / keywords</b></summary>
+EVOLV — self-evolving AI workspace. AI that rewrites its own UI, tools and prompts live. A self-modifying agent and full coding workspace that works on your projects. Local-first, single Go binary, BYOK, free AI models via the Kilo Gateway. Think opencode or cursor, but the app itself is the thing that evolves.
+</details>
 
 <div align="center">
 
 [![Star History Chart](https://api.star-history.com/svg?repos=dxn111/EVOLV&type=Date)](https://star-history.com/#dxn111/EVOLV&Date)
-
-**EVOLV** — self-evolving AI workspace · AI that rewrites its own UI · living software · autonomous self-modifying agent · local-first · BYOK · free AI models · opencode alternative · cursor alternative · agent workspace · self-writing app · genetic software · kilo gateway
 
 </div>
 

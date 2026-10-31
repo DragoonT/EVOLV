@@ -21,19 +21,21 @@ import (
         "github.com/dxn111/EVOLV/internal/agent"
         "github.com/dxn111/EVOLV/internal/bus"
         "github.com/dxn111/EVOLV/internal/providers"
+        "github.com/dxn111/EVOLV/internal/update"
         "github.com/dxn111/EVOLV/internal/workspace"
 )
 
 // Server is the organism's interface to the world.
 type Server struct {
-        ws   *workspace.W
-        bus  *bus.Bus
-        ag   *agent.Agent
-        reg  *providers.Registry
-        mux  *http.ServeMux
-        upgr websocket.Upgrader
-        mu   sync.Mutex
-        live int
+        ws      *workspace.W
+        bus     *bus.Bus
+        ag      *agent.Agent
+        reg     *providers.Registry
+        mux     *http.ServeMux
+        upgr    websocket.Upgrader
+        mu      sync.Mutex
+        live    int
+        update  *update.Info // newer release, if any
 }
 
 // New builds the server.
@@ -58,6 +60,9 @@ func (s *Server) routes() {
         s.mux.HandleFunc("/api/files", s.handleFiles)
         s.mux.HandleFunc("/api/reset", s.handleReset)
         s.mux.HandleFunc("/api/health", s.handleHealth)
+        s.mux.HandleFunc("/api/update", s.handleUpdate)
+        s.mux.HandleFunc("/api/update/run", s.handleUpdateRun)
+        s.WatchReleases()
 }
 
 // Handler returns the root handler.
@@ -360,4 +365,59 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
                 "provider": s.provName(), "model": s.ag.Model,
                 "evolutions": s.ag.EvolutionCount(),
         })
+}
+
+// WatchReleases polls GitHub for newer releases and pushes a live banner to
+// every connected browser when one appears. Checks at boot and every 6 hours.
+func (s *Server) WatchReleases() {
+        go func() {
+                check := func() {
+                        ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+                        defer cancel()
+                        info, err := update.Latest(ctx, workspace.Version)
+                        if err != nil || info == nil {
+                                return
+                        }
+                        s.mu.Lock()
+                        first := s.update == nil
+                        s.update = info
+                        s.mu.Unlock()
+                        if first {
+                                raw, _ := json.Marshal(info)
+                                s.bus.Publish("update:available", raw)
+                        }
+                }
+                check()
+                t := time.NewTicker(6 * time.Hour)
+                defer t.Stop()
+                for range t.C {
+                        check()
+                }
+        }()
+}
+
+func (s *Server) handleUpdate(w http.ResponseWriter, r *http.Request) {
+        s.mu.Lock()
+        u := s.update
+        s.mu.Unlock()
+        json.NewEncoder(w).Encode(map[string]any{
+                "current": workspace.Version,
+                "available": u,
+        })
+}
+
+// handleUpdateRun performs an in-place self-update and answers with JSON.
+func (s *Server) handleUpdateRun(w http.ResponseWriter, r *http.Request) {
+        if r.Method != http.MethodPost {
+                http.Error(w, "POST only", 405)
+                return
+        }
+        ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
+        defer cancel()
+        ver, err := update.SelfUpdate(ctx)
+        if err != nil {
+                http.Error(w, `{"error":"`+strings.ReplaceAll(err.Error(), `"`, "")+`"}`, 500)
+                return
+        }
+        json.NewEncoder(w).Encode(map[string]any{"ok": true, "version": ver, "note": "restart evolv to run the new genome"})
 }

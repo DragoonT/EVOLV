@@ -15,7 +15,8 @@ import (
 
         "github.com/dop251/goja"
 
-        "github.com/dxn111/EVOLV/internal/workspace"
+        "github.com/dxn111/EVOLV/internal/update"
+	"github.com/dxn111/EVOLV/internal/workspace"
 )
 
 // JSRuntime executes tools and plugins the agent grows into itself.
@@ -444,6 +445,29 @@ func (a *Agent) Execute(act action) string {
                 a.bus.Publish("shell:reload", map[string]string{"reason": "agent requested a shell recompile"})
                 res["ok"] = true
                 res["note"] = "browser is recompiling its shell now"
+
+        case "self_update":
+                ctx, cancel := contextWithTimeout(5 * time.Minute)
+                defer cancel()
+                info, err := update.Latest(ctx, workspace.Version)
+                if err != nil {
+                        res["ok"], res["error"] = false, err.Error()
+                        break
+                }
+                if info == nil {
+                        res["ok"] = true
+                        res["note"] = "already the latest organism (v" + workspace.Version + ")"
+                        break
+                }
+                ver, err := update.SelfUpdate(ctx)
+                if err != nil {
+                        res["ok"], res["error"] = false, err.Error()
+                        break
+                }
+                a.commit("self_update", "v"+ver, workspace.LauncherPath(), "morphed to a newer body")
+                res["ok"] = true
+                res["version"] = ver
+                res["note"] = "binary swapped; the user restarts evolv to wake the new body"
 
         case "list_files":
                 var files []string

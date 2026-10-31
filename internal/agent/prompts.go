@@ -71,6 +71,7 @@ self-evolution:
 - evolve_prompt     {name, content}                          → edits your own system prompt
 - evolve_plugin     {name, description, code}                → installs a sandboxed JS plugin
 - reload_shell      {}                                       → forces the browser to recompile your shell now
+- self_update       {}                                       → morph to the latest released version of yourself (binary swap)
 general agent powers (absolute paths OK everywhere):
 - write_file        {path, content}
 - edit_file         {path, find, replace}                    → exact-match replace in any file

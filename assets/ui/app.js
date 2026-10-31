@@ -49,6 +49,24 @@ const state = {
   });
 })();
 
+/* ---------------- update banner ---------------- */
+function showUpdateBanner(u) {
+  const b = $('#update-banner');
+  if (!b || !u.version) return;
+  $('#update-version').textContent = u.version;
+  b.classList.add('show');
+  toast(`🧬 <b>evolv v${u.version}</b> is out — a newer organism exists. <b>evolv update</b> to morph.`, 8000);
+}
+async function runUpdate() {
+  toast('⬇️ morphing to the latest genome…');
+  try {
+    const r = await fetch('/api/update/run', { method: 'POST' });
+    const d = await r.json();
+    if (d.ok) toast(`✅ updated to <b>v${d.version}</b> — restart evolv to wake the new body`);
+    else toast(`⚠️ update failed: ${d.error || 'unknown'}`);
+  } catch { toast('⚠️ update failed — check your connection'); }
+}
+
 /* ---------------- toasts ---------------- */
 function toast(msg, ms = 3800) {
   const t = document.createElement('div');
@@ -107,6 +125,11 @@ function handle(ev) {
       $('#recompile').classList.add('show');
       clearTimeout(state.shellReloadTimer);
       state.shellReloadTimer = setTimeout(() => location.reload(), 900);
+      break;
+    }
+    case 'update:available': {
+      const u = ev.payload || {};
+      showUpdateBanner(u);
       break;
     }
     case 'config:updated': {
@@ -416,9 +439,10 @@ async function send(text) {
 function openDrawer() { $('#drawer').classList.add('open'); loadSettings(); }
 async function loadSettings() {
   try {
-    const [cfg, models] = await Promise.all([
+    const [cfg, models, upd] = await Promise.all([
       fetch('/api/settings').then((r) => r.json()),
       fetch('/api/models').then((r) => r.json()).catch(() => ({})),
+      fetch('/api/update').then((r) => r.json()).catch(() => ({})),
     ]);
     const c = cfg.config || {};
     $('#set-provider').value = c.provider || 'kilo';
@@ -430,6 +454,8 @@ async function loadSettings() {
     (models.models || []).forEach((m) => {
       const o = document.createElement('option'); o.value = m; dl.appendChild(o);
     });
+    $('#genome-path').textContent = `~/.evolv  ·  v${upd.current || '?'}`;
+    if (upd.available) showUpdateBanner(upd.available);
   } catch {}
 }
 
@@ -471,6 +497,7 @@ window.addEventListener('DOMContentLoaded', () => {
   $('#btn-settings').addEventListener('click', openDrawer);
   $('#provider-pill').addEventListener('click', openDrawer);
   $('#btn-close-settings').addEventListener('click', () => $('#drawer').classList.remove('open'));
+  $('#btn-update').addEventListener('click', runUpdate);
   $('#btn-save').addEventListener('click', saveSettings);
   $('#btn-files').addEventListener('click', () => {
     toast('🗂 genome lives at <code>~/.evolv/workspace/</code> — edit anything, it hot-reloads', 6000);
