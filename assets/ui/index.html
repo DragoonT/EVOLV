@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EVOLV — the workspace that rewrites itself</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%238b5cf6'/%3E%3Cstop offset='1' stop-color='%2322d3ee'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='100' height='100' rx='24' fill='url(%23g)'/%3E%3Ctext x='50' y='68' font-size='54' font-weight='900' text-anchor='middle' font-family='sans-serif' fill='%2305060a'%3EE%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<canvas id="bg-canvas"></canvas>
+<div class="bg-mesh"></div>
+<div class="grain"></div>
+
+<div id="app">
+  <header>
+    <div class="logo">
+      <div class="logo-mark">E</div>
+      <div>
+        <div class="logo-word">EV<em>OLV</em></div>
+        <div class="logo-sub">self-evolving workspace</div>
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <div class="evo-counter" id="evo-counter" title="mutations committed by the organism">
+      🧬 <b id="evo-count">0</b>&nbsp;evolutions
+    </div>
+    <div class="pill" id="provider-pill" title="click to configure models">
+      <span class="dot"></span> <b id="prov-name">kilo</b> <span id="model-name">kilo-auto/free</span>
+    </div>
+    <button class="icon-btn" id="btn-files" title="genome files">🗂</button>
+    <button class="icon-btn" id="btn-settings" title="settings">⚙️</button>
+  </header>
+
+  <main>
+    <section id="chat-col">
+      <div id="chat-scroll"></div>
+      <div id="composer">
+        <div class="quick-row">
+          <button class="quick" data-q="evolve a pomodoro focus timer onto the canvas">⏱ pomodoro</button>
+          <button class="quick" data-q="evolve a sticky notes component onto the canvas">🗒 stickies</button>
+          <button class="quick" data-q="evolve a live CPU/memory dashboard component that uses the shell tool">📊 system monitor</button>
+          <button class="quick" data-q="evolve yourself: grow a new tool, skill, or component of your own choosing — surprise me">🧬 evolve freely</button>
+        </div>
+        <div class="input-wrap">
+          <textarea id="input" rows="1" placeholder="talk to the organism… (Enter to send)"></textarea>
+          <button id="send" title="send">↑</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="canvas-col">
+      <div id="canvas-head">
+        <h2>Live Canvas</h2>
+        <span class="live"><i></i> hot-reload on</span>
+        <div class="spacer"></div>
+      </div>
+      <div id="canvas-scroll">
+        <div id="canvas"></div>
+        <div id="canvas-empty">
+          <div class="big">🧬</div>
+          <h3>This canvas is the organism's body</h3>
+          <p>Ask for anything — a timer, notes, a dashboard, a game — and EVOLV grows it here as a real component, written into its own genome at <code>~/.evolv/workspace/ui/components/</code>, mounted live. No refresh. Ever.</p>
+        </div>
+      </div>
+    </section>
+
+    <aside id="stream">
+      <div id="stream-head">Evolution Stream</div>
+      <div id="stream-list"></div>
+    </aside>
+  </main>
+</div>
+
+<div id="drawer">
+  <div class="dh">⚙️ ORGANISM SETTINGS <button class="icon-btn" id="btn-close-settings">✕</button></div>
+  <div class="db">
+    <div class="field">
+      <label>Provider</label>
+      <select id="set-provider">
+        <option value="kilo">Kilo Gateway — FREE anonymous (no key, IP rate-limit)</option>
+        <option value="openai">OpenAI (BYOK)</option>
+        <option value="anthropic">Anthropic (BYOK)</option>
+        <option value="openrouter">OpenRouter (BYOK)</option>
+        <option value="groq">Groq (BYOK)</option>
+        <option value="ollama">Ollama (local)</option>
+        <option value="custom">Custom OpenAI-compatible (BYOK)</option>
+        <option value="mock">Mock — offline evolution demo</option>
+      </select>
+      <div class="hint">Default <b>kilo-auto/free</b> needs zero setup — anonymous access, 200 req/hr per IP. Add a Kilo key to unlock frontier models.</div>
+    </div>
+    <div class="field">
+      <label>Model</label>
+      <input id="set-model" list="model-list" placeholder="kilo-auto/free">
+      <datalist id="model-list"></datalist>
+    </div>
+    <div class="field">
+      <label>API Key (for this provider)</label>
+      <input id="set-key" type="password" placeholder="optional for kilo anonymous / ollama / mock">
+    </div>
+    <div class="field">
+      <label>Custom base URL (custom/ollama providers)</label>
+      <input id="set-base" placeholder="http://localhost:8000/v1">
+    </div>
+    <div class="field">
+      <label>What should EVOLV call you?</label>
+      <input id="set-username" placeholder="friend">
+    </div>
+    <button class="save-btn" id="btn-save">COMMIT TO GENOME</button>
+    <div class="divider"></div>
+    <div class="field">
+      <label>Genome location</label>
+      <div class="hint" id="genome-path">~/.evolv</div>
+      <div class="hint" style="margin-top:8px">Everything the organism is — UI, tools, skills, prompts, plugins, evolution ledger — is plain files here. Edit them; it hot-reloads. It edits them; you watch.</div>
+    </div>
+  </div>
+</div>
+
+<div id="recompile">
+  <div class="box">
+    <span class="dna">🧬</span>
+    <h3>GENOME RECOMPILING</h3>
+    <p id="recompile-path">the organism is rewriting its own shell…</p>
+  </div>
+</div>
+
+<div id="toasts"></div>
+
+<script src="/app.js"></script>
+</body>
+</html>

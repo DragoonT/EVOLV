@@ -1,0 +1,35 @@
+version: 2
+project_name: evolv
+builds:
+  - id: evolv
+    main: ./cmd/evolv
+    binary: evolv
+    env: [CGO_ENABLED=0]
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w -X github.com/dxn111/EVOLV/internal/workspace.Version={{.Version}}
+archives:
+  - formats: [tar.gz]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+checksum:
+  name_template: checksums.txt
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^chore:"
+brews:
+  - repository:
+      owner: dxn111
+      name: homebrew-tap
+    homepage: https://github.com/dxn111/EVOLV
+    description: The self-evolving AI workspace — it rewrites its own UI, tools, and prompts while you watch.
