@@ -26,6 +26,11 @@
       <div id="mind-list"></div>
     </div>
 
+    <div class="sb-sec" id="organs-sec">
+      <div class="sb-head">Organs <b id="organ-count">0</b></div>
+      <div id="organ-list"></div>
+    </div>
+
     <div class="sb-sec" id="evo-sec">
       <div class="sb-head">Evolution <b id="evo-count">0</b></div>
       <div id="stream-list"></div>
@@ -51,7 +56,7 @@
         <b id="evo-count2">0</b>&nbsp;mutations
       </div>
       <div class="spacer"></div>
-      <button class="icon-btn" id="btn-canvas" title="toggle live canvas">▦</button>
+      <span class="live" title="components hot-reload as files change"><i></i> whole page is the canvas</span>
     </header>
 
     <div id="chat-scroll">
@@ -95,26 +100,6 @@
       <div class="foot-note">EVOLV rewrites its own code while you watch — every file it touches is yours to edit too.</div>
     </div>
   </main>
-
-  <!-- ===== live canvas ===== -->
-  <section id="canvas-col">
-    <div id="canvas-head">
-      <h2>Live Canvas</h2>
-      <span class="live"><i></i> hot-reload on</span>
-      <div class="spacer"></div>
-      <button class="icon-btn" id="btn-canvas-close" title="hide">✕</button>
-    </div>
-    <div id="canvas-scroll">
-      <div id="canvas"></div>
-      <div id="canvas-empty">
-        <div class="big">⬡</div>
-        <h3>Live canvas</h3>
-        <p>Components the organism builds land here — live, while you watch.
-        Ask for a timer, a monitor, a game… or point it at <b>your own project</b>
-        anywhere on this machine and watch it work.</p>
-      </div>
-    </div>
-  </section>
 </div>
 
 <div id="drawer">
@@ -202,6 +187,19 @@
         <button class="save-btn" id="btn-genome-save">⚡ WRITE TO GENOME (ctrl+s)</button>
       </div>
     </div>
+  </div>
+</div>
+
+<div id="organ-modal">
+  <div class="om-box">
+    <div class="om-head">
+      <span>🧩 <b id="organ-title">organ</b> <span class="live"><i></i> live</span></span>
+      <div style="display:flex;gap:6px">
+        <button class="icon-btn" id="btn-organ-expand" title="grow the organ to fill the window">⤢</button>
+        <button class="icon-btn" id="btn-organ-close">✕</button>
+      </div>
+    </div>
+    <div class="om-body" id="organ-body"></div>
   </div>
 </div>
 

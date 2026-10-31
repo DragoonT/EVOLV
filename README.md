@@ -16,9 +16,9 @@ curl -fsSL https://raw.githubusercontent.com/dxn111/EVOLV/main/install.sh | sh
 $ evolv          # boots on localhost:7373, opens your browser
 ```
 
-<img src="docs/assets/demo.gif" alt="EVOLV live demo: the AI evolves a pomodoro timer, a system monitor, sticky notes and a word-count tool directly onto its own UI in real time" width="88%">
+<img src="docs/assets/demo.gif" alt="EVOLV live demo: the AI grows a pomodoro timer, a system monitor and a playable Flappy Bird directly into its own page — inline in the conversation, live, no refresh" width="88%">
 
-[▶ **watch the full video (mp4)**](docs/assets/demo.mp4) — 25 seconds, no edits, real stream
+[▶ **watch the full video (mp4)**](docs/assets/demo.mp4) — no edits, real stream
 
 </div>
 
@@ -30,14 +30,15 @@ That GIF wasn't scripted. You're looking at an AI **rewriting its own applicatio
 
 1. A human asked for a pomodoro timer.
 2. The agent didn't paste code back. It **wrote a real component into its own source tree** (`~/.evolv/workspace/ui/components/pomodoro.html`) and logged the change in an append-only evolution ledger.
-3. A filesystem watcher caught the write the instant it happened and pushed it over WebSocket — the new panel appeared in the browser **with no refresh, no rebuild, no restart**.
+3. A filesystem watcher caught the write the instant it happened and pushed it over WebSocket — the new panel appeared **in the conversation itself, with no refresh, no rebuild, no restart**.
+4. Then it grew a playable **Flappy Bird** the same way. The whole page is the canvas — every component mounts inline where it was born, and any organ can be opened **across the entire window** from the sidebar.
 
 The app you installed is not the app you're running five minutes later.
 
 > Most "AI workspaces" give you a chat window with plugins someone else wrote.
 > EVOLV *is* the chat window — and it writes its own plugins, its own UI, and its own mind.
 
-<div align="center"><img src="docs/assets/shot_wave.png" alt="EVOLV workspace: tool cards with live checkmarks, and the live canvas running self-authored pomodoro, system monitor and heartbeat components" width="92%"></div>
+<div align="center"><img src="docs/assets/shot_wave.png" alt="EVOLV workspace: organs mount inline in the conversation — flappy bird, pomodoro, system monitor — with tool cards and the organs list in the sidebar" width="92%"></div>
 
 ### Part 2: it edits its own codebase — and you see it in real time
 
@@ -99,7 +100,7 @@ EVOLV is not a walled-garden canvas. It is a **full agent workspace** with the w
 
 ### A body that doesn't embarrass itself
 
-The default skin is a quiet, Claude-grade warm dark theme — no neon cyberpunk, no particle noise, no emoji confetti. Chat looks like chat: your messages right-aligned in soft bubbles, the agent's answers as clean prose, tool calls as calm bordered cards with a single green check. The three panes (evolution stream · conversation · live canvas) collapse sensibly on small screens. And since the skin is just `workspace/ui/style.css`, the organism can still restyle every pixel of this while it runs — that's the point.
+The default skin is a quiet, Claude-grade warm dark theme — no neon cyberpunk, no particle noise, no emoji confetti. Chat looks like chat: your messages right-aligned in soft bubbles, the agent's answers as clean prose, tool calls as calm bordered cards with a single green check. There is no separate "canvas pane" — **the whole page is the canvas**: components the organism grows mount inline in the conversation, and the ⤢ control (or the Organs list in the sidebar) opens any organ across the entire window. And since the skin is just `workspace/ui/style.css`, the organism can still restyle every pixel of this while it runs — that's the point.
 
 ### Plugins that are actually alive
 
@@ -306,6 +307,7 @@ Treat it like a very eager intern with root: brilliant, fun, supervise according
 - [x] Evolution branching — **shipped in v0.4.0 as snapshots + rollback** (time travel through genome states)
 - [x] Memory that survives restarts — **shipped in v0.7.0** (conversation persisted atomically)
 - [x] Network reach — **shipped in v0.7.0** (`evolv.http()` inside tools and plugins)
+- [x] The whole page is the canvas — **shipped in v0.10.0** (organs mount inline in the conversation, open full-window from the sidebar)
 - [x] A shell that doesn't embarrass itself — **shipped in v0.8.0** (markdown rendering, copy buttons, streaming caret, welcome screen, genome file deletion)
 - [ ] Component marketplace — export / import genomes as `.evolvpack` files
 - [ ] Multi-organism mode — agents that evolve together
@@ -316,7 +318,8 @@ Treat it like a very eager intern with root: brilliant, fun, supervise according
 
 | Version | What evolved |
 |---|---|
-| **v0.9.0** | demo brain grows up: the organism now self-edits its own shell live (RECOMPILING SHELL), grows prompt-library buttons + skills in one batch, installs reactive plugins, and grows a playable Flappy Bird into its canvas; PayPal funding link |
+| **v0.10.0** | the right-hand canvas pane is dead — **the whole page is the canvas**: organs mount inline in the conversation, sidebar Organs list, full-window organ mode; demo brain grows Flappy Bird + prompt-library + plugins + live self-edit |
+| **v0.9.0** | demo brain grows up: the organism self-edits its own shell live (RECOMPILING SHELL), grows prompt-library buttons + skills in one batch, installs reactive plugins, and grows a playable Flappy Bird into its canvas; PayPal funding link |
 | **v0.8.0** | markdown-lite v2 (lists, quotes, links), code blocks with language bar + copy, hover-to-copy messages, streaming caret, welcome screen, genome inspector can delete files — shell bumped to v7 for existing genomes |
 | **v0.7.0** | conversation persists across restarts (atomic writes, corrupt-tolerant), `evolv.http()` for tools **and** plugins, silent provider retry |
 | **v0.6.0** | batched multi-tool turns, real-time tool-card states, forgiving parser (salvaged raw JSON, unterminated fences), Claude-grade default skin, versioned shell reseed |

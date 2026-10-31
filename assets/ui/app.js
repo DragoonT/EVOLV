@@ -133,7 +133,7 @@ function onFsChange(ch, evTime) {
   if (ch.kind === 'remove') {
     if (ch.zone === 'components') {
       const name = (ch.path.split('/').pop() || '').replace(/\.html$/, '');
-      if (state.mounted.has(name)) { state.mounted.get(name).remove(); state.mounted.delete(name); refreshEmpty(); }
+      unmountComponent(name);
     }
     return;
   }
@@ -147,49 +147,31 @@ function onFsChange(ch, evTime) {
   }
   if (ch.zone === 'components' && ch.path.endsWith('.html')) {
     const name = (ch.path.split('/').pop() || '').replace(/\.html$/, '');
-    mountComponent(name, true);
+    mountComponent(name, { fresh: true });
   }
 }
 
-/* ---------------- components ---------------- */
-function compRoot() { return $('#canvas'); }
+/* ---------------- organs: the WHOLE PAGE is the canvas ----------------
+Every component the organism grows mounts inline in the conversation —
+full width, right where it was born — and stays reachable in the sidebar
+Organs list. Click any organ there to open it across the entire window. */
 
-async function mountComponent(name, animate) {
-  let html;
+async function fetchOrganHTML(name) {
   try {
     const r = await fetch(`/ui/components/${encodeURIComponent(name)}.html?${Date.now()}`);
-    if (!r.ok) return;
-    html = await r.text();
-  } catch { return; }
+    if (!r.ok) return null;
+    return await r.text();
+  } catch { return null; }
+}
 
-  const existing = state.mounted.get(name);
-  let card;
-  if (existing) {
-    card = existing;
-    card.classList.remove('mutating'); void card.offsetWidth; card.classList.add('mutating');
-  } else {
-    card = document.createElement('div');
-    card.className = 'comp-card';
-    card.dataset.name = name;
-    compRoot().prepend(card);
-    state.mounted.set(name, card);
-    refreshEmpty();
-  }
-
-  // parse & graft: <style> injected, markup into body, scripts re-executed
+// graft <style> + markup + scripts from a component file into a container
+function graftOrgan(container, html) {
   const doc = new DOMParser().parseFromString(html, 'text/html');
-  const head = card.querySelector('.comp-head');
-  if (!head) {
-    card.innerHTML = `<div class="comp-head"><span class="ico">🧩</span><span><div class="name">${name}</div><div class="desc">self-authored component</div></span><span class="x" title="ask evolv to remove it">✕</span></div><div class="comp-body"></div>`;
-    card.querySelector('.x').addEventListener('click', () => send(`remove_component ${name} from the canvas via remove_component, confirm in one line`));
-  }
-  const body = card.querySelector('.comp-body');
-  body.innerHTML = '';
-
+  container.innerHTML = '';
   for (const st of Array.from(doc.querySelectorAll('style'))) {
     const s = document.createElement('style');
     s.textContent = st.textContent;
-    body.appendChild(s);
+    container.appendChild(s);
   }
   const scripts = Array.from(doc.querySelectorAll('script')).map((sc) => sc.textContent);
   const frag = document.createDocumentFragment();
@@ -197,21 +179,83 @@ async function mountComponent(name, animate) {
     if (node.nodeName === 'SCRIPT' || node.nodeName === 'STYLE') continue;
     frag.appendChild(document.importNode(node, true));
   }
-  body.appendChild(frag);
+  container.appendChild(frag);
   for (const code of scripts) {
     const s = document.createElement('script');
     s.textContent = code;
-    body.appendChild(s); // appending executes it
+    container.appendChild(s); // appending executes it
   }
-
-  if (!existing && animate) {
-    toast(`⚡ <b>${name}</b> grew onto the canvas — live, no refresh`);
-  }
-  refreshEmpty();
 }
 
-function refreshEmpty() {
-  $('#canvas-empty').style.display = state.mounted.size ? 'none' : '';
+// register an organ (sidebar chip + inline card in the chat flow)
+async function mountComponent(name, opts) {
+  const { fresh = false, inline = true } = opts || {};
+  const html = await fetchOrganHTML(name);
+  if (html == null) return;
+  state.mounted.set(name, html); // registry: name -> raw html
+  renderOrganList();
+  if (inline) mountInline(name, html, fresh);
+}
+
+function organCard(name) {
+  const card = document.createElement('div');
+  card.className = 'comp-card';
+  card.dataset.name = name;
+  card.innerHTML = `<div class="comp-head"><span class="ico">🧩</span><span><div class="name">${escapeHtml(name)}</div><div class="desc">self-authored organ — click to open full-page</div></span><span class="full" title="open across the whole window">⤢</span><span class="x" title="ask evolv to remove it">✕</span></div><div class="comp-body"></div>`;
+  card.querySelector('.x').addEventListener('click', () => send(`remove_component ${name} via remove_component, confirm in one line`));
+  card.querySelector('.full').addEventListener('click', () => openOrgan(name));
+  card.querySelector('.comp-head .name').addEventListener('click', () => openOrgan(name));
+  return card;
+}
+
+function mountInline(name, html, fresh) {
+  const scroll = $('#chat-scroll');
+  let card = scroll.querySelector(`.comp-card[data-name="${CSS.escape(name)}"]`);
+  if (card) {
+    card.classList.remove('mutating'); void card.offsetWidth; card.classList.add('mutating');
+  } else {
+    card = organCard(name);
+    scroll.appendChild(card);
+  }
+  graftOrgan(card.querySelector('.comp-body'), html);
+  if (fresh) toast(`⚡ <b>${name}</b> grew into the page — live, no refresh`);
+  scrollChat();
+}
+
+function unmountComponent(name) {
+  state.mounted.delete(name);
+  const card = $(`#chat-scroll .comp-card[data-name="${CSS.escape(name)}"]`);
+  if (card) card.remove();
+  if (state.organOpen === name) closeOrgan();
+  renderOrganList();
+}
+
+function renderOrganList() {
+  const list = $('#organ-list');
+  if (!list) return;
+  list.innerHTML = '';
+  for (const name of state.mounted.keys()) {
+    const chip = document.createElement('button');
+    chip.className = 'organ-chip';
+    chip.innerHTML = `<span>🧩</span> ${escapeHtml(name)}`;
+    chip.addEventListener('click', () => openOrgan(name));
+    list.appendChild(chip);
+  }
+  $('#organ-count').textContent = state.mounted.size;
+  $('#organs-sec').style.display = state.mounted.size ? '' : 'none';
+}
+
+function openOrgan(name) {
+  const html = state.mounted.get(name);
+  if (html == null) return;
+  state.organOpen = name;
+  $('#organ-title').textContent = name;
+  $('#organ-modal').classList.add('open');
+  graftOrgan($('#organ-body'), html);
+}
+function closeOrgan() {
+  state.organOpen = null;
+  $('#organ-modal').classList.remove('open');
 }
 
 /* ---------------- evolution stream (sidebar) ---------------- */
@@ -253,7 +297,7 @@ async function loadEvolutionHistory() {
     (d.history || []).slice().reverse().forEach((h) => {
       $('#stream-list').appendChild(evoItem(h.kind, h.name, h.description, (h.time || '').slice(11, 19)));
     });
-    (d.components || []).forEach((n) => mountComponent(n, false));
+    (d.components || []).forEach((n) => mountComponent(n, { fresh: false, inline: false }));
   } catch {}
 }
 
@@ -681,10 +725,6 @@ function setSidebar(hidden) {
   document.body.classList.toggle('sb-hidden', hidden);
   localStorage.setItem('evolv.sb', hidden ? '1' : '');
 }
-function setCanvas(hidden) {
-  document.body.classList.toggle('cv-hidden', hidden);
-  localStorage.setItem('evolv.cv', hidden ? '1' : '');
-}
 
 /* ---------------- wiring ---------------- */
 window.addEventListener('DOMContentLoaded', () => {
@@ -694,7 +734,6 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // restore panel state
   setSidebar(localStorage.getItem('evolv.sb') === '1');
-  setCanvas(localStorage.getItem('evolv.cv') === '1');
 
   $('#send').addEventListener('click', () => send());
   $('#input').addEventListener('keydown', (e) => {
@@ -737,8 +776,9 @@ window.addEventListener('DOMContentLoaded', () => {
   // layout
   $('#btn-sidebar').addEventListener('click', () => setSidebar(true));
   $('#btn-sidebar-open').addEventListener('click', () => setSidebar(false));
-  $('#btn-canvas').addEventListener('click', () => setCanvas(document.body.classList.contains('cv-hidden')));
-  $('#btn-canvas-close').addEventListener('click', () => setCanvas(true));
+  $('#btn-organ-close').addEventListener('click', closeOrgan);
+  $('#organ-modal').addEventListener('click', (e) => { if (e.target.id === 'organ-modal') closeOrgan(); });
+  $('#btn-organ-expand').addEventListener('click', () => $('#organ-modal').classList.toggle('wide'));
   $('#btn-new').addEventListener('click', async () => {
     $('#chat-scroll').innerHTML = '';
     currentAssistant = null; state.thinkingEl = null;
