@@ -857,6 +857,61 @@ function setSidebar(hidden) {
 }
 function isNarrow() { return window.matchMedia('(max-width: 820px)').matches; }
 
+/* ---------------- conversation search (ctrl+f) ---------------- */
+let searchRanges = [], searchCur = -1;
+function searchTextNodes(root) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode: (n) => (n.parentElement && n.parentElement.closest('#search-bar')) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT,
+  });
+  return walker;
+}
+function clearSearchHighlights() {
+  if (window.CSS && CSS.highlights) { CSS.highlights.delete('evolv-hit'); CSS.highlights.delete('evolv-hit-cur'); }
+  searchRanges = []; searchCur = -1;
+}
+function runSearch(q) {
+  clearSearchHighlights();
+  if (!q || !window.CSS || !CSS.highlights) { $('#search-count').textContent = '0/0'; return; }
+  const needle = q.toLowerCase();
+  const walker = searchTextNodes(document.getElementById('chat-scroll'));
+  let node;
+  while ((node = walker.nextNode())) {
+    const text = node.nodeValue.toLowerCase();
+    let idx = text.indexOf(needle);
+    while (idx !== -1) {
+      const r = document.createRange();
+      r.setStart(node, idx); r.setEnd(node, idx + needle.length);
+      searchRanges.push(r);
+      idx = text.indexOf(needle, idx + needle.length);
+    }
+  }
+  searchCur = searchRanges.length ? 0 : -1;
+  paintSearch();
+}
+function paintSearch() {
+  const n = searchRanges.length;
+  $('#search-count').textContent = n ? `${searchCur + 1}/${n}` : '0/0';
+  if (!n) { CSS.highlights.delete('evolv-hit'); CSS.highlights.delete('evolv-hit-cur'); return; }
+  CSS.highlights.set('evolv-hit', new Highlight(...searchRanges.filter((_, i) => i !== searchCur)));
+  CSS.highlights.set('evolv-hit-cur', new Highlight(searchRanges[searchCur]));
+  searchRanges[searchCur].startContainer.parentElement?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+}
+function stepSearch(dir) {
+  if (!searchRanges.length) return;
+  searchCur = (searchCur + dir + searchRanges.length) % searchRanges.length;
+  paintSearch();
+}
+function openSearch() {
+  $('#search-bar').hidden = false;
+  $('#search-input').focus(); $('#search-input').select();
+  runSearch($('#search-input').value);
+}
+function closeSearch() {
+  $('#search-bar').hidden = true;
+  clearSearchHighlights();
+  $('#input').focus();
+}
+
 /* ---------------- wiring ---------------- */
 window.addEventListener('DOMContentLoaded', () => {
   connect();
@@ -867,6 +922,14 @@ window.addEventListener('DOMContentLoaded', () => {
   setSidebar(localStorage.getItem('evolv.sb') === '1' || isNarrow());
   // tap the dark veil to close the mobile sidebar
   $('#sb-backdrop').addEventListener('click', () => setSidebar(true));
+  // conversation search
+  $('#search-input').addEventListener('input', (e) => runSearch(e.target.value));
+  $('#search-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); stepSearch(e.shiftKey ? -1 : 1); }
+  });
+  $('#search-next').addEventListener('click', () => stepSearch(1));
+  $('#search-prev').addEventListener('click', () => stepSearch(-1));
+  $('#search-close').addEventListener('click', closeSearch);
   // sound & soul — off until you ask for it
   $('#btn-sound').addEventListener('click', () => setSound(localStorage.getItem('evolv.sound') !== '1'));
   $('#btn-sound').textContent = localStorage.getItem('evolv.sound') === '1' ? '🔊' : '🔇';
@@ -936,7 +999,11 @@ window.addEventListener('DOMContentLoaded', () => {
     if (mod && e.shiftKey && e.key.toLowerCase() === 'l') {
       e.preventDefault(); $('#btn-theme').click(); return;
     }
+    if (mod && e.key.toLowerCase() === 'f' && !(document.activeElement && document.activeElement.closest('#genome-modal'))) {
+      e.preventDefault(); openSearch(); return;
+    }
     if (e.key === 'Escape') {
+      if (!$('#search-bar').hidden) { closeSearch(); return; }
       if ($('#organ-modal').classList.contains('open')) closeOrgan();
       if ($('#genome-modal').classList.contains('show')) closeGenome();
       if ($('#replay-modal').classList.contains('open')) closeReplay();

@@ -717,3 +717,21 @@ body.paper #welcome .w-mark { box-shadow: 0 8px 40px rgba(192, 95, 60, 0.18); }
 /* ---------- stop mode: the send button while the organism thinks ---------- */
 #send.stop { background: var(--danger); color: #fff; font-size: 12px; }
 #send.stop:hover { transform: scale(1.06); filter: brightness(1.08); }
+
+/* ---------- conversation search (ctrl+f) ---------- */
+#search-bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 14px; border-bottom: 1px solid var(--line-soft);
+  background: var(--bg2); flex-shrink: 0;
+}
+#search-bar[hidden] { display: none; }
+#search-glyph { font-size: 13px; opacity: .7; }
+#search-input {
+  flex: 1; background: var(--bg3); border: 1px solid var(--line);
+  border-radius: 8px; padding: 6px 12px; color: var(--text);
+  font-size: 13px; outline: none;
+}
+#search-input:focus { border-color: var(--accent); }
+#search-count { font-size: 12px; color: var(--dim); min-width: 44px; text-align: center; font-variant-numeric: tabular-nums; }
+::highlight(evolv-hit) { background: var(--accent-soft); color: inherit; }
+::highlight(evolv-hit-cur) { background: var(--accent); color: #fff8f2; border-radius: 2px; }

@@ -66,6 +66,14 @@
       <span class="live" title="components hot-reload as files change"><i></i> whole page is the canvas</span>
     </header>
 
+    <div id="search-bar" hidden>
+      <span id="search-glyph">🔍</span>
+      <input id="search-input" type="text" placeholder="search the conversation…" spellcheck="false">
+      <span id="search-count">0/0</span>
+      <button class="icon-btn" id="search-prev" title="previous match (shift+enter)">↑</button>
+      <button class="icon-btn" id="search-next" title="next match (enter)">↓</button>
+      <button class="icon-btn" id="search-close" title="close (esc)">✕</button>
+    </div>
     <div id="chat-scroll">
       <div id="welcome">
         <div class="w-mark">E</div>
@@ -104,7 +112,7 @@
         <textarea id="input" rows="1" placeholder="Message EVOLV…"></textarea>
         <button id="send" title="send">↑</button>
       </div>
-      <div class="foot-note">EVOLV rewrites its own code while you watch — every file it touches is yours to edit too. <span style="opacity:.75">· ctrl+k new chat · / focus · ctrl+shift+l daylight · 🔇 sound</span></div>
+      <div class="foot-note">EVOLV rewrites its own code while you watch — every file it touches is yours to edit too. <span style="opacity:.75">· ctrl+k new chat · / focus · ctrl+shift+l daylight · ctrl+f search · 🔇 sound</span></div>
     </div>
   </main>
 </div>
