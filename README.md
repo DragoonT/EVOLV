@@ -2,6 +2,10 @@
 
 <img src="docs/assets/banner.png" alt="EVOLV — the workspace that rewrites itself. A self-evolving AI workspace: it grows its own UI, tools, skills and prompts live while you watch." width="100%">
 
+# EVOLV — the self-evolving AI workspace that rewrites itself
+
+**EVOLV is a self-evolving AI agent workspace: a self-modifying coding agent that grows its own UI, tools, skills, prompts and plugins live while you watch.** Local-first, single Go binary, works with Ollama or any API key — and the demo below needs none.
+
 [![GitHub stars](https://img.shields.io/github/stars/dxn111/EVOLV?style=flat-square&color=8b5cf6)](https://github.com/dxn111/EVOLV/stargazers)
 [![License: MIT](https://img.shields.io/badge/license-MIT-8b93ab?style=flat-square)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/dxn111/EVOLV?style=flat-square&color=22d3ee)](https://github.com/dxn111/EVOLV/releases)
