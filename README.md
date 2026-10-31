@@ -20,7 +20,7 @@ curl -fsSL https://raw.githubusercontent.com/dxn111/EVOLV/main/install.sh | sh
 $ evolv          # boots on localhost:7373, opens your browser
 ```
 
-<img src="docs/assets/demo.gif" alt="EVOLV live demo: the AI grows a pomodoro timer, a system monitor and a playable Flappy Bird directly into its own page — inline in the conversation, live, no refresh" width="88%">
+<img src="docs/assets/demo.gif" alt="EVOLV live demo: the AI grows a pomodoro timer, a prompt library and a playable Flappy Bird directly into its own page — inline in the conversation, live, no refresh" width="88%">
 
 [▶ **watch the full video (mp4)**](docs/assets/demo.mp4) — no edits, real stream
 
@@ -42,7 +42,7 @@ The app you installed is not the app you're running five minutes later.
 > Most "AI workspaces" give you a chat window with plugins someone else wrote.
 > EVOLV *is* the chat window — and it writes its own plugins, its own UI, and its own mind.
 
-<div align="center"><img src="docs/assets/shot_wave.png" alt="EVOLV workspace: organs mount inline in the conversation — flappy bird, pomodoro, system monitor — with tool cards and the organs list in the sidebar" width="92%"></div>
+<div align="center"><img src="docs/assets/shot_wave.png" alt="EVOLV workspace: a pomodoro organ mounted inline in the conversation, with the organs list, Mind skills and evolution ledger in the sidebar" width="92%"></div>
 
 ### Part 2: it edits its own codebase — and you see it in real time
 
@@ -56,7 +56,7 @@ Components are just the surface. The second demo asks the organism to **rewrite 
 - **installed `ghost-log`, a live plugin** in its own sandbox that pops a toast every time the organism mutates;
 - **grew a playable Flappy Bird** onto its canvas. A video game, written by the app into itself, live:
 
-<div align="center"><img src="docs/assets/shot_flappy.png" alt="EVOLV grew a playable Flappy Bird onto its canvas, a prompt library panel, and a plugin in the Mind panel — all self-authored mid-conversation" width="92%"></div>
+<div align="center"><img src="docs/assets/shot_flappy.png" alt="EVOLV grew a playable Flappy Bird inline in its conversation, next to the evolution ledger and the organs list — the whole page is the canvas" width="92%"></div>
 
 And the overlay shot — the app flashing "RECOMPILING SHELL · agent requested a shell recompile" *because the agent asked it to*:
 
