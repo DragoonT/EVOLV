@@ -196,11 +196,17 @@
       </div>
     </div>
     <div class="gm-body">
-      <div id="genome-list"></div>
+      <div class="gm-side">
+        <input id="genome-filter" class="gm-filter" placeholder="⌕ filter files…" spellcheck="false">
+        <div id="genome-list"></div>
+      </div>
       <div class="gm-editor">
         <div class="gm-path">
           <span id="genome-open-path">pick a file — the organism feels every save live</span>
-          <button class="gm-del" id="btn-genome-del" title="delete this file from the genome">🗑 delete</button>
+          <span style="display:flex;gap:2px">
+            <button class="gm-del" id="btn-genome-revert" title="discard your edits — reload the genome's version" hidden>↺ revert</button>
+            <button class="gm-del" id="btn-genome-del" title="delete this file from the genome">🗑 delete</button>
+          </span>
         </div>
         <textarea id="genome-editor" spellcheck="false" placeholder="workspace files are plain text: ui/style.css, ui/components/*.html, tools/*.js, skills/*.md, plugins/*/plugin.js…"></textarea>
         <button class="save-btn" id="btn-genome-save">⚡ WRITE TO GENOME (ctrl+s)</button>

@@ -322,6 +322,7 @@ Treat it like a very eager intern with root: brilliant, fun, supervise according
 
 | Version | What evolved |
 |---|---|
+| **v0.19.5** | **genome inspector, upgraded** — file-type icons across the whole tree (🧩 organs, ⚙️ tools, 📝 skills, 🎨 skin, 🔌 plugins), a fuzzy filter box (subsequence match with highlighted glyphs, `n of m files` counter, Esc clears), unsaved-edit protection (switch/close warns, path shows ● unsaved) and a one-click ↺ revert back to the genome's own version |
 | **v0.19.0** | **autonomic nervous system** — the demo organism now evolves BY ITSELF: idle heartbeat dreams grow real organs with zero keywords (music-box synth, gravity-pool physics, presence-clock, hex-pulse generative art), one per dream, then quiet — verified live, one mutation per minute with nobody typing |
 | **v0.18.0** | **🐍 playable snake** — say "snake" and the mock brain grows a full arcade into its own canvas: 21×21 grid, arrows/WASD + swipe controls, score/best/length HUD, speed ramps every 3 foods, persistent best score; "snake" correctly outranks the generic "game"→flappy mapping |
 | **v0.17.0** | **share this conversation** — ⇪ in the header downloads the whole transcript as one standalone HTML file (dark branded layout, XSS-escaped, zero external assets) via the new `/api/export` route; shell v15 |

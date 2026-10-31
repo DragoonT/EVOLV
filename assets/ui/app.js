@@ -796,12 +796,32 @@ async function loadMind() {
 
 /* ---------------- genome inspector (watch the body, live) ---------------- */
 let genomeOpen = false, genomeFile = null, genomeDirty = false;
+
+// file-type icon: the genome is all plain text, but each organ has a shape
+function gIcon(path) {
+  const ext = (path.split('.').pop() || '').toLowerCase();
+  if (path.endsWith('plugin.js')) return '🔌';
+  if (path.includes('/')) return { html: '🧩', js: '⚙️', md: '📝', css: '🎨', json: '🧬', jsonl: '📖', txt: '📄' }[ext] || '📄';
+  return '🧬';
+}
+
+// fuzzy subsequence match → matched indices (for glyph highlighting), or null
+function fuzzyMatch(q, s) {
+  if (!q) return [];
+  const idx = [];
+  let i = 0;
+  for (let j = 0; j < s.length && i < q.length; j++) if (s[j].toLowerCase() === q[i].toLowerCase()) idx.push(j++), i++;
+  return i === q.length ? idx : null;
+}
+
 async function openGenome() {
   genomeOpen = true;
   $('#genome-modal').classList.add('show');
+  $('#genome-filter').value = '';
   await refreshGenomeList();
 }
 function closeGenome() {
+  if (genomeDirty && !confirm('unsaved edits to ' + genomeFile + ' — discard them?')) return;
   genomeOpen = false;
   $('#genome-modal').classList.remove('show');
 }
@@ -810,33 +830,57 @@ async function refreshGenomeList(changedPath) {
     const r = await fetch('/api/genome');
     const d = await r.json();
     const list = $('#genome-list');
+    const q = $('#genome-filter').value.trim();
     list.innerHTML = '';
+    let shown = 0;
     (d.files || []).forEach((f) => {
+      const hits = fuzzyMatch(q.replace(/\s+/g, ''), f);
+      if (q && !hits) return; // doesn't match the filter
+      shown++;
       const item = document.createElement('div');
       item.className = 'g-file' + (f === genomeFile ? ' active' : '');
-      item.textContent = f;
-      item.addEventListener('click', () => openGenomeFile(f));
+      item.dataset.path = f;
+      // render with icon + fuzzy-highlighted matched glyphs
+      let name = '';
+      for (let i = 0; i < f.length; i++) name += hits.includes(i) ? '<b>' + escapeHtml(f[i]) + '</b>' : escapeHtml(f[i]);
+      item.innerHTML = '<span class="g-ico">' + gIcon(f) + '</span>' + name;
+      item.addEventListener('click', () => switchGenomeFile(f));
       list.appendChild(item);
     });
-    $('#genome-count').textContent = `${(d.files || []).length} files · live`;
+    $('#genome-count').textContent = q
+      ? `${shown} of ${(d.files || []).length} files · live`
+      : `${(d.files || []).length} files · live`;
     if (changedPath) {
-      const elx = [...list.children].find((x) => x.textContent === changedPath);
+      const elx = [...list.children].find((x) => x.dataset.path === changedPath);
       if (elx) { elx.classList.add('g-flash'); setTimeout(() => elx.classList.remove('g-flash'), 1200); }
       // external change to the file being edited → reload it (unless typing)
       if (changedPath === genomeFile && !genomeDirty) openGenomeFile(genomeFile, true);
     }
   } catch {}
 }
+
+// switching files with unsaved edits → ask before throwing them away
+async function switchGenomeFile(path) {
+  if (genomeDirty && genomeFile !== path && !confirm('unsaved edits to ' + genomeFile + ' — discard and open ' + path + '?')) return;
+  openGenomeFile(path);
+}
 async function openGenomeFile(path, silent) {
   genomeFile = path; genomeDirty = false;
+  $('#btn-genome-revert').hidden = true;
   try {
     const r = await fetch('/api/files?path=' + encodeURIComponent(path));
     if (!r.ok) return;
     $('#genome-editor').value = await r.text();
     $('#genome-open-path').textContent = 'workspace/' + path;
-    document.querySelectorAll('.g-file').forEach((x) => x.classList.toggle('active', x.textContent === path));
+    document.querySelectorAll('.g-file').forEach((x) => x.classList.toggle('active', x.dataset.path === path));
     if (!silent) $('#genome-editor').focus();
   } catch {}
+}
+function markGenomeDirty() {
+  if (genomeDirty) return;
+  genomeDirty = true;
+  $('#btn-genome-revert').hidden = false;
+  $('#genome-open-path').textContent = 'workspace/' + genomeFile + '  ● unsaved';
 }
 async function saveGenomeFile() {
   if (!genomeFile) return;
@@ -845,7 +889,7 @@ async function saveGenomeFile() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path: genomeFile, content: $('#genome-editor').value }),
     });
-    if (r.ok) { genomeDirty = false; toast('⚡ written to the genome — the organism feels it live'); }
+    if (r.ok) { genomeDirty = false; $('#btn-genome-revert').hidden = true; $('#genome-open-path').textContent = 'workspace/' + genomeFile; toast('⚡ written to the genome — the organism feels it live'); }
     else toast('⚠️ write failed');
   } catch { toast('⚠️ write failed'); }
 }
@@ -994,15 +1038,29 @@ window.addEventListener('DOMContentLoaded', () => {
       if (r.ok) {
         toast(`💥 <b>${genomeFile}</b> pruned from the genome`);
         genomeFile = null;
+        genomeDirty = false;
+        $('#btn-genome-revert').hidden = true;
         $('#genome-open-path').textContent = 'pick a file — the organism feels every save live';
         $('#genome-editor').value = '';
         refreshGenomeList();
       } else toast('⚠️ delete failed');
     } catch { toast('⚠️ delete failed'); }
   });
-  $('#genome-editor').addEventListener('input', () => { genomeDirty = true; });
+  $('#genome-editor').addEventListener('input', () => { if (!genomeDirty) markGenomeDirty(); });
   $('#genome-editor').addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveGenomeFile(); }
+  });
+  // fuzzy filter: type to shrink the file tree, Esc clears
+  $('#genome-filter').addEventListener('input', () => refreshGenomeList());
+  $('#genome-filter').addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { e.stopPropagation(); e.target.value = ''; refreshGenomeList(); }
+    e.stopPropagation(); // don't fire global shortcuts while typing
+  });
+  // revert: throw away local edits, reload the genome's own version
+  $('#btn-genome-revert').addEventListener('click', () => {
+    if (!genomeFile) return;
+    openGenomeFile(genomeFile);
+    toast('↺ reverted — back to the genome\'s version');
   });
 
   // layout
