@@ -36,6 +36,26 @@ function toast(msg, ms = 3800) {
 }
 window.evolvToast = toast; // for grown components & plugins
 
+/* ---------------- sound & soul: tiny WebAudio blips (default off) ---------------- */
+let audioCtx = null;
+function blip(freq = 660, dur = 0.07, type = 'sine', gain = 0.04) {
+  if (localStorage.getItem('evolv.sound') !== '1') return;
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(gain, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
+    o.connect(g).connect(audioCtx.destination);
+    o.start(); o.stop(audioCtx.currentTime + dur);
+  } catch { /* silence is also a sound */ }
+}
+function setSound(on) {
+  localStorage.setItem('evolv.sound', on ? '1' : '');
+  $('#btn-sound').textContent = on ? '🔊' : '🔇';
+  if (on) blip(880, 0.09, 'triangle', 0.05);
+}
+
 /* ---------------- websocket: the spine ---------------- */
 function connect() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
@@ -60,8 +80,8 @@ function handle(ev) {
       }
       break;
     }
-    case 'fs:change': onFsChange(ev.payload || {}, ev.time); break;
-    case 'evolution': onEvolution(ev.payload || {}); break;
+    case 'fs:change': onFsChange(ev.payload || {}, ev.time); blip(520, 0.05, 'sine', 0.03); break;
+    case 'evolution': onEvolution(ev.payload || {}); blip(740, 0.06, 'triangle', 0.035); break;
     case 'agent:token': onToken((ev.payload || {}).text || ''); break;
     case 'agent:reasoning': onReasoning((ev.payload || {}).text || ''); break;
     case 'agent:phase': {
@@ -847,8 +867,11 @@ window.addEventListener('DOMContentLoaded', () => {
   setSidebar(localStorage.getItem('evolv.sb') === '1' || isNarrow());
   // tap the dark veil to close the mobile sidebar
   $('#sb-backdrop').addEventListener('click', () => setSidebar(true));
+  // sound & soul — off until you ask for it
+  $('#btn-sound').addEventListener('click', () => setSound(localStorage.getItem('evolv.sound') !== '1'));
+  $('#btn-sound').textContent = localStorage.getItem('evolv.sound') === '1' ? '🔊' : '🔇';
 
-  $('#send').addEventListener('click', () => { if (state.busy) stopGeneration(); else send(); });
+  $('#send').addEventListener('click', () => { if (state.busy) stopGeneration(); else { blip(660, 0.06, 'sine', 0.04); send(); } });
   $('#input').addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
   });
