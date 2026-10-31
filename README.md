@@ -322,6 +322,7 @@ Treat it like a very eager intern with root: brilliant, fun, supervise according
 
 | Version | What evolved |
 |---|---|
+| **v0.18.0** | **🐍 playable snake** — say "snake" and the mock brain grows a full arcade into its own canvas: 21×21 grid, arrows/WASD + swipe controls, score/best/length HUD, speed ramps every 3 foods, persistent best score; "snake" correctly outranks the generic "game"→flappy mapping |
 | **v0.17.0** | **share this conversation** — ⇪ in the header downloads the whole transcript as one standalone HTML file (dark branded layout, XSS-escaped, zero external assets) via the new `/api/export` route; shell v15 |
 | **v0.16.0** | **conversation search** — ctrl+f opens a search bar over the chat: live match highlighting (CSS Custom Highlight API, zero DOM mutation), result count, enter/shift+enter to jump between matches, esc to close; shell v14 |
 | **v0.15.0** | **sound & soul** — 🔊 in the header wakes tiny WebAudio blips: a soft sine on file change, a triangle chirp on every mutation, a send blip; off by default, remembered per browser; shell v13 |

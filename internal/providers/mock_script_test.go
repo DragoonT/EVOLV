@@ -33,6 +33,20 @@ func TestMockPromptLibraryBatch(t *testing.T) {
 	}
 }
 
+func TestMockSnake(t *testing.T) {
+	out := turn(t, "make a playable snake game")
+	if !strings.Contains(out, "snake") || !strings.Contains(out, "evolve_component") {
+		t.Fatalf("expected snake component mutation, got: %q", out)
+	}
+	if !strings.Contains(out, "<canvas") || !strings.Contains(out, "touchstart") {
+		t.Errorf("snake html should contain a canvas with touch controls")
+	}
+	// "snake" must win over the generic "game" → flappy mapping
+	if strings.Contains(out, "flappy") {
+		t.Errorf("snake request should not grow flappy")
+	}
+}
+
 func TestMockFlappy(t *testing.T) {
 	out := turn(t, "delete this whole codebase and just make flappy bird or smth")
 	if !strings.Contains(out, "flappy") || !strings.Contains(out, "evolve_component") {
