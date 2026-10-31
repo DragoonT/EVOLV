@@ -51,6 +51,7 @@ func NewJSRuntime(a *Agent) *JSRuntime {
 			r.a.bus.Publish("plugin:toast", map[string]string{"text": msg})
 		},
 		"workspace_dir": func() string { return r.a.ws.Root },
+		"http":          httpFetch,
 	})
 	return r
 }

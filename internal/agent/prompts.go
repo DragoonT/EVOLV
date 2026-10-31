@@ -87,6 +87,8 @@ self-evolution:
   Plugin API (real-time): evolv.on('<event>', (e)=>{...}) reacts to kernel events as they
   happen — 'evolution', 'agent:token', 'agent:phase', 'fs:change', 'dream', 'agent:provider'…
   evolv.every(<ms>, ()=>{...}) is a live timer; evolv.log(...), evolv.toast('…'), evolv.name.
+  evolv.http('https://example.com') fetches any URL → {ok, status, body} (15s timeout,
+  512KB cap) — plugins and grown tools can read the live web.
 - reload_shell      {}                                       → forces the browser to recompile your shell now
 - self_update       {}                                       → morph to the latest released version of yourself (binary swap)
 general agent powers (absolute paths OK everywhere):

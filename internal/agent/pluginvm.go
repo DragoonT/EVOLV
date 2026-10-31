@@ -58,6 +58,7 @@ func (r *JSRuntime) buildPluginVM(name, code string) (*pluginVM, error) {
 		},
 		"workspace_dir": func() string { return p.a.ws.Root },
 		"name":          name,
+		"http":          httpFetch,
 		"on": func(event string, fn goja.Value) {
 			if cb, ok := goja.AssertFunction(fn); ok {
 				// stash the callable on the VM so it isn't garbage collected

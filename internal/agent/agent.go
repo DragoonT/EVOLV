@@ -42,6 +42,7 @@ func New(ws *workspace.W, b *bus.Bus, prov providers.Provider, model string) *Ag
 	a := &Agent{ws: ws, bus: b, prov: prov, Model: model, maxLoops: 10, lastAct: time.Now()}
 	a.js = NewJSRuntime(a)
 	a.js.LoadAll()
+	a.loadMemory() // the mind remembers across restarts
 	// feed the nervous system to the plugins: every bus event lands in their
 	// sandboxes live (evolv.on), so plugins react while the organism thinks
 	sub, _ := b.Subscribe()
@@ -76,6 +77,7 @@ func (a *Agent) Reset() {
 	a.mu.Lock()
 	a.history = nil
 	a.mu.Unlock()
+	a.saveMemory() // empty history → notebook file removed
 	a.bus.Publish("agent:reset", map[string]bool{"ok": true})
 }
 
@@ -228,7 +230,7 @@ func (a *Agent) Chat(ctx context.Context, userMsg string) string {
 		msgs := append([]providers.Message{{Role: "system", Content: a.SystemPrompt()}}, hist...)
 
 		a.bus.Publish("agent:phase", map[string]string{"phase": "thinking"})
-		text, err := a.prov.Stream(ctx, a.Model, msgs, func(d providers.Delta) {
+		stream := func(d providers.Delta) {
 			if d.Err != nil {
 				return
 			}
@@ -238,13 +240,22 @@ func (a *Agent) Chat(ctx context.Context, userMsg string) string {
 			if d.Reasoning != "" {
 				a.bus.Publish("agent:reasoning", map[string]string{"text": d.Reasoning})
 			}
-		})
+		}
+		text, err := a.prov.Stream(ctx, a.Model, msgs, stream)
+		if err != nil && ctx.Err() == nil {
+			// free anonymous gateways hiccup constantly; one quiet
+			// retry before surfacing the error to the user
+			a.bus.Publish("agent:token", map[string]string{"text": "…\n\n"})
+			time.Sleep(1500 * time.Millisecond)
+			text, err = a.prov.Stream(ctx, a.Model, msgs, stream)
+		}
 		if err != nil {
 			errMsg := fmt.Sprintf("\n\n⚠️ **model error**: `%s`\n\nTry another model in Settings — free anonymous models rotate often.", err.Error())
 			a.bus.Publish("agent:token", map[string]string{"text": errMsg})
 			a.mu.Lock()
 			a.history = append(a.history, providers.Message{Role: "assistant", Content: errMsg})
 			a.mu.Unlock()
+			a.saveMemory()
 			return errMsg
 		}
 
@@ -301,6 +312,7 @@ func (a *Agent) Chat(ctx context.Context, userMsg string) string {
 		a.history = a.history[len(a.history)-60:]
 	}
 	a.mu.Unlock()
+	a.saveMemory()
 	return final
 }
 
