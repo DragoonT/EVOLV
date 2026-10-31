@@ -835,6 +835,7 @@ function setSidebar(hidden) {
   document.body.classList.toggle('sb-hidden', hidden);
   localStorage.setItem('evolv.sb', hidden ? '1' : '');
 }
+function isNarrow() { return window.matchMedia('(max-width: 820px)').matches; }
 
 /* ---------------- wiring ---------------- */
 window.addEventListener('DOMContentLoaded', () => {
@@ -842,8 +843,10 @@ window.addEventListener('DOMContentLoaded', () => {
   loadEvolutionHistory();
   loadMind();
 
-  // restore panel state
-  setSidebar(localStorage.getItem('evolv.sb') === '1');
+  // restore panel state — phones start with the sidebar folded away
+  setSidebar(localStorage.getItem('evolv.sb') === '1' || isNarrow());
+  // tap the dark veil to close the mobile sidebar
+  $('#sb-backdrop').addEventListener('click', () => setSidebar(true));
 
   $('#send').addEventListener('click', () => { if (state.busy) stopGeneration(); else send(); });
   $('#input').addEventListener('keydown', (e) => {

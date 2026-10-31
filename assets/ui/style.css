@@ -659,10 +659,29 @@ and can be opened across the entire window via the ⤢ control. */
 @keyframes toastIn { from { opacity: 0; transform: translateX(24px); } }
 .toast b { font-weight: 650; }
 
-/* ---------- responsive ---------- */
+/* ---------- sidebar backdrop (mobile overlay) ---------- */
+#sb-backdrop {
+  display: none; position: fixed; inset: 0; z-index: 54;
+  background: rgba(26, 25, 23, 0.55); backdrop-filter: blur(2px);
+}
 @media (max-width: 820px) {
   #sidebar { position: fixed; left: 0; top: 0; bottom: 0; z-index: 55; box-shadow: 12px 0 40px rgba(0,0,0,0.4); }
   body.sb-hidden #sidebar { margin-left: calc(var(--sb-w) * -1); }
+  body:not(.sb-hidden) #sb-backdrop { display: block; }
+}
+
+/* ---------- responsive ---------- */
+@media (max-width: 820px) {
+  /* full-bleed modals — the organ IS the phone */
+  #organ-modal, #diff-modal, #replay-modal, #genome-modal.show {
+    padding: 0; background: var(--bg2); backdrop-filter: none;
+  }
+  #organ-modal .om-box, #diff-modal .dm-box, #replay-modal .rp-box,
+  #genome-modal .gm-box { border-radius: 0; border: none; height: 100dvh; }
+  /* composer respects the home-indicator safe area */
+  .input-wrap { padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px)); }
+  .foot-note { font-size: 10px; padding: 0 12px calc(6px + env(safe-area-inset-bottom, 0px)); }
+  .msg .bubble { max-width: 88%; }
 }
 
 /* ---------- paper theme: the organism in daylight ---------- */
