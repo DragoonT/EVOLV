@@ -17,6 +17,12 @@ func mockScript(turn int, msgs []Message) string {
 	}
 	lower := strings.ToLower(last)
 
+	// kernel feedback: the mutation batch already landed; never treat the
+	// results JSON as a new user request (it contains action keywords)
+	if strings.HasPrefix(last, "EVOLV KERNEL") {
+		return "Batch applied — everything landed live. What should I evolve next?"
+	}
+
 	// specific component requests
 	switch {
 	case strings.Contains(lower, "you are dreaming"):

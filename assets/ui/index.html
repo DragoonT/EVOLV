@@ -3,15 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>EVOLV — the workspace that rewrites itself</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%238b5cf6'/%3E%3Cstop offset='1' stop-color='%2322d3ee'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='100' height='100' rx='24' fill='url(%23g)'/%3E%3Ctext x='50' y='68' font-size='54' font-weight='900' text-anchor='middle' font-family='sans-serif' fill='%2305060a'%3EE%3C/text%3E%3C/svg%3E">
+<title>EVOLV</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23d97757'/%3E%3Ctext x='50' y='70' font-size='56' font-weight='800' text-anchor='middle' font-family='sans-serif' fill='%231f1e1d'%3EE%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-<canvas id="bg-canvas"></canvas>
-<div class="bg-mesh"></div>
-<div class="grain"></div>
-
 <div id="app">
   <header>
     <div class="logo">
@@ -23,7 +19,7 @@
     </div>
     <div class="spacer"></div>
     <div class="evo-counter" id="evo-counter" title="mutations committed by the organism">
-      🧬 <b id="evo-count">0</b>&nbsp;evolutions
+      <b id="evo-count">0</b>&nbsp;mutations
     </div>
     <div class="pill" id="provider-pill" title="click to configure models">
       <span class="dot"></span> <b id="prov-name">kilo</b> <span id="model-name">kilo-auto/free</span>
@@ -40,12 +36,11 @@
           <button class="quick" data-q="evolve a pomodoro focus timer onto the canvas">⏱ pomodoro</button>
           <button class="quick" data-q="evolve a sticky notes component onto the canvas">🗒 stickies</button>
           <button class="quick" data-q="evolve a live CPU/memory dashboard component that uses the shell tool">📊 system monitor</button>
-          <button class="quick" data-q="make your tool call cards look exactly like Claude's — rewrite your own style.css and reload your shell">🎨 claude-style cards</button>
           <button class="quick" data-q="evolve yourself: grow a new tool, skill, or component of your own choosing — surprise me">🧬 evolve freely</button>
           <button class="quick" id="btn-dream">💭 dream now</button>
         </div>
         <div class="input-wrap">
-          <textarea id="input" rows="1" placeholder="talk to the organism… (Enter to send)"></textarea>
+          <textarea id="input" rows="1" placeholder="Message EVOLV…"></textarea>
           <button id="send" title="send">↑</button>
         </div>
       </div>
@@ -60,9 +55,11 @@
       <div id="canvas-scroll">
         <div id="canvas"></div>
         <div id="canvas-empty">
-          <div class="big">🧬</div>
-          <h3>This is a full agent workspace</h3>
-          <p>EVOLV can edit <b>every single thing</b> — these panels, its own chat shell, its tool call cards, even its launcher — and it can work on <b>your projects</b> anywhere on this machine. Everything it changes lands live. No refresh. Ever.</p>
+          <div class="big">⬡</div>
+          <h3>Live canvas</h3>
+          <p>Components the organism builds land here — live, while you watch.
+          Ask for a timer, a monitor, a game… or point it at <b>your own project</b>
+          anywhere on this machine and watch it work.</p>
         </div>
       </div>
     </section>
@@ -77,7 +74,7 @@
 </div>
 
 <div id="drawer">
-  <div class="dh">⚙️ ORGANISM SETTINGS <button class="icon-btn" id="btn-close-settings">✕</button></div>
+  <div class="dh">Settings <button class="icon-btn" id="btn-close-settings">✕</button></div>
   <div class="db">
     <div class="field">
       <label>Provider</label>
@@ -119,7 +116,7 @@
       <label class="check-row"><input type="checkbox" id="set-dream"> Dream mode — it evolves itself while you're away</label>
       <div class="hint" style="display:flex;align-items:center;gap:6px;margin-top:6px">every <input id="set-dream-mins" type="number" min="1" max="720" style="width:64px"> min of idle time, it wakes up and improves itself</div>
     </div>
-    <button class="save-btn" id="btn-save">COMMIT TO GENOME</button>
+    <button class="save-btn" id="btn-save">Save</button>
     <div class="divider"></div>
     <div class="field">
       <label>Genome location</label>
@@ -130,16 +127,16 @@
 </div>
 
 <div id="update-banner" title="the organism can morph into a newer body">
-  <span class="ub-dna">🧬</span>
-  <span>a newer organism exists: <b>v<span id="update-version">?</span></b></span>
+  <span class="ub-dna">⬡</span>
+  <span>a newer version is out: <b>v<span id="update-version">?</span></b></span>
   <button id="btn-update">morph now</button>
   <a href="https://github.com/dxn111/EVOLV/releases" target="_blank" rel="noopener">changelog ↗</a>
 </div>
 
 <div id="recompile">
   <div class="box">
-    <span class="dna">🧬</span>
-    <h3>GENOME RECOMPILING</h3>
+    <span class="dna">⬡</span>
+    <h3>RECOMPILING SHELL</h3>
     <p id="recompile-path">the organism is rewriting its own shell…</p>
   </div>
 </div>

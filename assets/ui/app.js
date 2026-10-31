@@ -9,46 +9,6 @@ const state = {
   shellReloadTimer: null, thinkingEl: null,
 };
 
-/* ---------------- background: neural particles ---------------- */
-(function bg() {
-  const cv = $('#bg-canvas'), ctx = cv.getContext('2d');
-  let W, H, pts = [], raf;
-  function size() { W = cv.width = innerWidth; H = cv.height = innerHeight; }
-  function init() {
-    size(); pts = [];
-    const n = Math.min(90, Math.floor(W * H / 22000));
-    for (let i = 0; i < n; i++) pts.push({
-      x: Math.random() * W, y: Math.random() * H,
-      vx: (Math.random() - 0.5) * 0.35, vy: (Math.random() - 0.5) * 0.35,
-      r: Math.random() * 1.6 + 0.4,
-    });
-  }
-  function tick() {
-    ctx.clearRect(0, 0, W, H);
-    for (const p of pts) {
-      p.x += p.vx; p.y += p.vy;
-      if (p.x < 0 || p.x > W) p.vx *= -1;
-      if (p.y < 0 || p.y > H) p.vy *= -1;
-      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 7);
-      ctx.fillStyle = 'rgba(139,120,246,0.35)'; ctx.fill();
-    }
-    for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) {
-      const a = pts[i], b = pts[j], dx = a.x - b.x, dy = a.y - b.y, d2 = dx * dx + dy * dy;
-      if (d2 < 15000) {
-        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
-        ctx.strokeStyle = `rgba(99,102,241,${0.09 * (1 - d2 / 15000)})`; ctx.lineWidth = 1; ctx.stroke();
-      }
-    }
-    raf = requestAnimationFrame(tick);
-  }
-  addEventListener('resize', () => { init(); });
-  init(); tick();
-  // slight pause when tab hidden — be kind to batteries
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) cancelAnimationFrame(raf); else tick();
-  });
-})();
-
 /* ---------------- update banner ---------------- */
 function showUpdateBanner(u) {
   const b = $('#update-banner');
@@ -309,7 +269,7 @@ let currentAssistant = null; // {bubble, raw}
 function showThinking() {
   if (currentAssistant) return;
   const m = el('div', 'msg evolv');
-  m.innerHTML = `<div class="who">🧬 EVOLV</div><div class="bubble thinking"><i></i><i></i><i></i></div>`;
+  m.innerHTML = `<div class="who">EVOLV</div><div class="bubble thinking"><i></i><i></i><i></i></div>`;
   $('#chat-scroll').appendChild(m);
   state.thinkingEl = m;
   scrollChat();
@@ -322,7 +282,7 @@ function onToken(text) {
   hideThinking();
   if (!currentAssistant) {
     const m = el('div', 'msg evolv');
-    m.innerHTML = `<div class="who">🧬 EVOLV</div><div class="bubble"></div>`;
+    m.innerHTML = `<div class="who">EVOLV</div><div class="bubble"></div>`;
     $('#chat-scroll').appendChild(m);
     currentAssistant = { m, raw: '', doneBlocks: 0 };
   }
@@ -402,14 +362,47 @@ function renderAssistant() {
   const tail = raw.slice(last);
   const openIdx = tail.lastIndexOf('```evolv');
   if (openIdx >= 0) {
-    htmlOut += mdLite(tail.slice(0, openIdx));
+    htmlOut += proseWithSalvage(tail.slice(0, openIdx));
     htmlOut += `<div class="tool-group">` + evolvLines(tail.slice(openIdx + 8)).map((l) => {
       try { return toolCard(JSON.parse(l), true); } catch { return `<div class="tool-card pending"><div class="tc-line"><span class="tc-dot"></span><span class="tc-verb">mutating genome…</span></div></div>`; }
     }).join('') + `</div>`;
   } else {
-    htmlOut += mdLite(tail);
+    htmlOut += proseWithSalvage(tail);
   }
   bubble.innerHTML = htmlOut;
+}
+
+/* Prose render that salvages action-JSON the model leaked without a fence:
+   the kernel executes it anyway, so the UI shows it as a tool card instead of
+   raw garbage. */
+function proseWithSalvage(body) {
+  if (!body) return '';
+  let out = '', last = 0, depth = 0, start = -1, inStr = false, esc = false;
+  const flush = (from, to) => { const seg = body.slice(from, to); if (seg.trim()) out += mdLite(seg); };
+  for (let i = 0; i < body.length; i++) {
+    const ch = body[i];
+    if (esc) { esc = false; continue; }
+    if (ch === '\\' && inStr) { esc = true; continue; }
+    if (ch === '"') { inStr = !inStr; continue; }
+    if (inStr) continue;
+    if (ch === '{') { if (depth === 0) start = i; depth++; }
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0 && start >= 0) {
+        const obj = body.slice(start, i + 1);
+        if (obj.includes('"action"')) {
+          try {
+            flush(last, start);
+            out += toolCard(JSON.parse(obj), false);
+            last = i + 1;
+          } catch { /* not valid JSON — leave it in the prose */ }
+        }
+        start = -1;
+      } else if (depth < 0) depth = 0;
+    }
+  }
+  flush(last, body.length);
+  return out;
 }
 
 function finishAssistant() {
@@ -436,7 +429,7 @@ function scrollChat() { const sc = $('#chat-scroll'); sc.scrollTop = sc.scrollHe
 
 function addMsg(role, text) {
   const m = el('div', 'msg ' + (role === 'user' ? 'user' : 'evolv'));
-  const who = role === 'user' ? 'YOU' : '🧬 EVOLV';
+  const who = role === 'user' ? 'You' : 'EVOLV';
   m.innerHTML = `<div class="who">${who}</div><div class="bubble">${role === 'user' ? escapeHtml(text) : mdLite(text)}</div>`;
   $('#chat-scroll').appendChild(m);
   scrollChat();
@@ -618,5 +611,9 @@ window.addEventListener('DOMContentLoaded', () => {
     if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveGenomeFile(); }
   });
 
-  addMsg('evolv', `**Hey.** I'm EVOLV — and the window you're reading this in is my own source code.\n\nEverything here is live: when I edit my skin, you see it swap with zero refresh. Open the 🗂 inspector and you can watch (and edit) every file of my body — the organism feels each save instantly.\n\nTry: *“make your tool call cards look exactly like Claude's”* — then watch style.css hot-swap without a flash. Or point me at your project: *“work on ~/my-app”*. Turn on **Dream mode** and I'll evolve myself while you're away.`);
+  addMsg('evolv', `**Hey.** I'm EVOLV — the window you're reading this in is my own source code.
+
+When I change anything — my skin, my tool cards, a component on the canvas — you see it land live. Open the 🗂 inspector to read and edit every file of my body yourself.
+
+Ask me for a timer, a monitor, a small app. Or point me at your project: *“work on ~/my-app”*.`);
 });

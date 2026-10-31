@@ -62,7 +62,11 @@ EVOLV is not a walled-garden canvas. It is a **full agent workspace** with the w
 - **Skin hot-swap** — when the agent (or you) rewrites `style.css`, the new skin slides in **without a reload and without a flash**. The organism changes clothes while you're looking at it.
 - **Genome Inspector** — the 🗂 button opens every file of the body in a live modal: watch the file list flicker as the agent mutates (changed files flash green), open anything, edit it, hit ctrl+s. Your write lands in the genome like one of the agent's own — same watcher, same live effect.
 - **The Mind panel** — the sidebar shows every skill, tool, plugin and prompt the organism currently carries, updating the instant something grows.
-- **Shell recompiles** (index.html / app.js) still show the fun "GENOME RECOMPILING" overlay — a 900ms morph, not a reload.
+- **Shell recompiles** (index.html / app.js) still show the "RECOMPILING SHELL" overlay — a 900ms morph, not a reload.
+
+### A body that doesn't embarrass itself
+
+The default skin is a quiet, Claude-grade warm dark theme — no neon cyberpunk, no particle noise, no emoji confetti. Chat looks like chat: your messages right-aligned in soft bubbles, the agent's answers as clean prose, tool calls as calm bordered cards with a single green check. The three panes (evolution stream · conversation · live canvas) collapse sensibly on small screens. And since the skin is just `workspace/ui/style.css`, the organism can still restyle every pixel of this while it runs — that's the point.
 
 ### Plugins that are actually alive
 
@@ -188,6 +192,13 @@ Self-modification works on **every model** (even tiny free ones) because it's a 
 ````
 
 The kernel parses it out of the stream, executes each action against the living filesystem, broadcasts the mutation to every connected browser, feeds the results back to the model, and loops — so the agent can **verify its own work and continue**.
+
+And because small free models are sloppy, the parser is deliberately forgiving — the model is never punished for a broken fence with a dropped mutation:
+
+- a **fence left unterminated** (the model streams past the closing ` ``` `) still executes;
+- **raw `{"action":…}` JSON leaked into chat prose** — no fence at all — is salvaged and executed, and the UI renders it as a clean tool card instead of garbage;
+- objects separated by `}{`, trailing junk, braces inside strings — all handled by a string-aware brace scanner;
+- the prompt hard-chains the loop: *read → edit → test → next batch*, never one tool call and a shrug.
 
 ### Genome layout
 
