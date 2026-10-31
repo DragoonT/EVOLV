@@ -301,6 +301,45 @@ async function loadEvolutionHistory() {
   } catch {}
 }
 
+/* ---------------- replay timeline ---------------- */
+// map a ledger entry to the genome file it most likely touched
+function replayFilePath(kind, name) {
+  if (!name) return null;
+  if (kind === 'component') return `ui/components/${name}.html`;
+  if (kind === 'tool') return `tools/${name}.js`;
+  if (kind === 'skill') return `skills/${name}.md`;
+  if (kind === 'plugin') return `plugins/${name}/plugin.js`;
+  return null;
+}
+async function openReplay() {
+  $('#replay-modal').classList.add('open');
+  const body = $('#replay-body');
+  body.innerHTML = '<div class="rp-empty">digging up the fossil record…</div>';
+  let hist = [];
+  try {
+    const r = await fetch('/api/replay');
+    const d = await r.json();
+    hist = (d.history || []).slice().reverse(); // oldest first: watch it grow
+    $('#replay-count').textContent = d.count || hist.length;
+  } catch {}
+  if (!hist.length) { body.innerHTML = '<div class="rp-empty">no mutations yet — ask it to evolve something</div>'; return; }
+  body.innerHTML = '<div class="rp-spine"></div>';
+  const spine = body.querySelector('.rp-spine');
+  hist.forEach((h) => {
+    const [ico] = KIND_META[h.kind] || ['✨'];
+    const e = el('div', `rp-entry k-${h.kind || 'other'}`);
+    const fp = replayFilePath(h.kind, h.name);
+    e.innerHTML = `
+      <div class="rp-time">${escapeHtml((h.time || '').slice(0, 19).replace('T', ' '))}</div>
+      <div class="rp-line">${ico} <span class="rp-kind">${escapeHtml(h.kind || 'mutation')}</span> <span class="rp-name">${escapeHtml(h.name || '')}</span></div>
+      ${h.description ? `<div class="rp-desc">${escapeHtml(h.description)}</div>` : ''}
+      ${fp ? `<div class="rp-file">open in genome → ${escapeHtml(fp)}</div>` : ''}`;
+    if (fp) e.addEventListener('click', () => { closeReplay(); openGenome(); openGenomeFile(fp, true); });
+    spine.appendChild(e);
+  });
+}
+function closeReplay() { $('#replay-modal').classList.remove('open'); }
+
 /* ---------------- chat ---------------- */
 function el(tag, cls, html) {
   const e = document.createElement(tag);
@@ -765,6 +804,9 @@ window.addEventListener('DOMContentLoaded', () => {
     try { await fetch('/api/dream', { method: 'POST' }); } catch { toast('⚠️ could not start dream'); }
   });
   $('#btn-files').addEventListener('click', openGenome);
+  $('#btn-replay').addEventListener('click', openReplay);
+  $('#btn-replay-close').addEventListener('click', closeReplay);
+  $('#replay-modal').addEventListener('click', (e) => { if (e.target.id === 'replay-modal') closeReplay(); });
   $('#btn-genome-close').addEventListener('click', closeGenome);
   $('#btn-genome-save').addEventListener('click', saveGenomeFile);
   $('#btn-genome-del').addEventListener('click', async () => {
@@ -808,6 +850,7 @@ window.addEventListener('DOMContentLoaded', () => {
     if (e.key === 'Escape') {
       if ($('#organ-modal').classList.contains('open')) closeOrgan();
       if ($('#genome-modal').classList.contains('show')) closeGenome();
+      if ($('#replay-modal').classList.contains('open')) closeReplay();
       $('#drawer').classList.remove('open');
       return;
     }

@@ -32,7 +32,9 @@
     </div>
 
     <div class="sb-sec" id="evo-sec">
-      <div class="sb-head">Evolution <b id="evo-count">0</b></div>
+      <div class="sb-head">Evolution <b id="evo-count">0</b>
+        <button class="icon-btn" id="btn-replay" title="replay the whole mutation history">⏳</button>
+      </div>
       <div id="stream-list"></div>
     </div>
 
@@ -203,6 +205,16 @@
       </div>
     </div>
     <div class="om-body" id="organ-body"></div>
+  </div>
+</div>
+
+<div id="replay-modal">
+  <div class="rp-box">
+    <div class="rp-head">
+      <span>⏳ REPLAY — <b id="replay-count">0</b> mutations, birth to now</span>
+      <button class="icon-btn" id="btn-replay-close">✕</button>
+    </div>
+    <div class="rp-body" id="replay-body"></div>
   </div>
 </div>
 
