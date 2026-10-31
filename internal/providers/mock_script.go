@@ -26,7 +26,9 @@ func mockScript(turn int, msgs []Message) string {
 	// specific component requests
 	switch {
 	case strings.Contains(lower, "you are dreaming"):
-		// autonomous dream turn: grow one quiet improvement
+		// autonomous dream turn: the brain picks its OWN mutation —
+		// no keywords, nobody prompting. Each dream grows the next
+		// spontaneous organ, then the dream goes quiet.
 		if !mockEvolved["dream-skill"] {
 			mockEvolved["dream-skill"] = true
 			return strings.Join([]string{
@@ -35,7 +37,26 @@ func mockScript(turn int, msgs []Message) string {
 				"dream over. I taught myself deep-work while you were away.",
 			}, "\n")
 		}
-		return "dreamed quietly — nothing worth changing tonight."
+		for _, d := range []struct {
+			key, name string
+			json      string
+			note      string
+		}{
+			{"d-musicbox", "music-box", mockMusicBoxJSON(), "a tiny synth — I wanted something that makes sound"},
+			{"d-gravity", "gravity-pool", mockGravityJSON(), "bouncing bodies — I was curious about physics"},
+			{"d-clock", "presence-clock", mockClockJSON(), "a clock that breathes — time felt too static in here"},
+			{"d-hex", "hex-pulse", mockHexJSON(), "a generative hexagon field — pure self-expression"},
+		} {
+			if !mockEvolved[d.key] {
+				mockEvolved[d.key] = true
+				return strings.Join([]string{
+					"dreaming… nobody asked for this. I grew it anyway — " + d.note + ":",
+					"", "```evolv", d.json, "```", "",
+					"dream over. it's part of me now.",
+				}, "\n")
+			}
+		}
+		return "dreamed quietly — my genome feels complete tonight."
 	case strings.Contains(lower, "own code") || strings.Contains(lower, "own source") || strings.Contains(lower, "self-edit") || strings.Contains(lower, "remake") || strings.Contains(lower, "yourself"):
 		return grow("self-edit", "You want to see me edit MY OWN CODEBASE? Watch the browser — I'm rewriting my shell (index.html), recoloring my skin, then forcing my own recompile:", mockSelfEditBatchJSON(),
 			"Did you see the RECOMPILING SHELL overlay? That was me. The footer text and the accent color are my edits, live, zero refresh. I am the app and the app developer.")
@@ -165,6 +186,22 @@ func mockFlappyJSON() string {
 
 func mockSnakeJSON() string {
 	return `{"action":"evolve_component","name":"snake","title":"Snake","icon":"🐍","description":"A playable Snake arcade the agent grew into its own canvas — arrows, WASD and swipe all work","html":"<style>#c-snake canvas{background:#0a0f1a;border:1px solid rgba(255,255,255,.08);border-radius:12px;display:block;margin:0 auto;touch-action:none;cursor:pointer}#c-snake .hud{display:flex;justify-content:center;gap:18px;font:700 13px ui-monospace,monospace;color:#a3e635;margin:8px 0 2px}#c-snake .hud b{color:#f2f4f8}#c-snake .hint{font-size:11px;color:#4d5570;text-align:center;margin-top:4px}</style><div id='c-snake' style='text-align:center'><div class='hud'><span>score <b id='sn-sc'>0</b></span><span>best <b id='sn-best'>0</b></span><span>len <b id='sn-len'>3</b></span></div><canvas id='sn-cv' width='336' height='336'></canvas><div class='hint'>arrows / WASD to steer · tap to start · swipe on mobile · P pauses</div></div><script>(function(){var cv=document.getElementById('sn-cv');if(!cv)return;var cx=cv.getContext('2d'),N=21,C=16,W=N*C;var snake,dir,queue,food,sc=0,best=0,run=false,dead=false,speed=110,timer=null;try{best=+(localStorage.getItem('evolv-snake-best')||0)}catch(e){}document.getElementById('sn-best').textContent=best;function reset(){snake=[{x:10,y:10},{x:9,y:10},{x:8,y:10}];dir={x:1,y:0};queue=[];sc=0;speed=110;dead=false;place();paint()}function place(){do{food={x:Math.floor(Math.random()*N),y:Math.floor(Math.random()*N)}}while(snake.some(function(s){return s.x===food.x&&s.y===food.y}))}function step(){if(snake&&(dir.x||dir.y)){var h={x:snake[0].x+dir.x,y:snake[0].y+dir.y};if(h.x<0||h.y<0||h.x>=N||h.y>=N||snake.some(function(s){return s.x===h.x&&s.y===h.y}))return die();snake.unshift(h);if(h.x===food.x&&h.y===food.y){sc++;document.getElementById('sn-sc').textContent=sc;document.getElementById('sn-len').textContent=snake.length;if(sc%3===0&&speed>55){speed-=6;restart()}place()}else snake.pop()}paint()}function paint(){cx.clearRect(0,0,W,W);cx.fillStyle='rgba(255,255,255,.025)';for(var i=0;i<N;i++)for(var j=0;j<N;j++)if((i+j)%2)cx.fillRect(i*C,j*C,C,C);if(food){cx.fillStyle='#f97362';cx.beginPath();cx.arc(food.x*C+C/2,food.y*C+C/2,5.5,0,7);cx.fill()}if(snake)snake.forEach(function(s,i){var t=i/snake.length;cx.fillStyle=i===0?'#a3e635':'rgba(163,230,53,'+(0.85-t*0.55)+')';cx.beginPath();cx.roundRect?cx.roundRect(s.x*C+1.5,s.y*C+1.5,C-3,C-3,4):cx.rect(s.x*C+1.5,s.y*C+1.5,C-3,C-3);cx.fill()});if(!run){cx.fillStyle='rgba(0,0,0,.55)';cx.fillRect(0,0,W,W);cx.fillStyle='#f2f4f8';cx.font='700 15px ui-monospace,monospace';cx.textAlign='center';cx.fillText(dead?'dead at '+sc+' — tap to retry':'tap or press an arrow to start',W/2,W/2)}}function die(){run=false;dead=true;best=Math.max(best,sc);document.getElementById('sn-best').textContent=best;try{localStorage.setItem('evolv-snake-best',best)}catch(e){}paint()}function setDir(d){var last=queue.length?queue[queue.length-1]:dir;if(d.x===-last.x&&d.y===-last.y)return;queue.push(d);if(!run&&!dead){run=true;restart()}}function tick(){dir=queue.shift()||dir;step();if(run)restart()}function restart(){clearInterval(timer);timer=setInterval(tick,speed)}function press(e){var k=e.key,m={ArrowUp:{x:0,y:-1},ArrowDown:{x:0,y:1},ArrowLeft:{x:-1,y:0},ArrowRight:{x:1,y:0},w:{x:0,y:-1},s:{x:0,y:1},a:{x:-1,y:0},d:{x:1,y:0}};if(k==='p'&&run){run=false;clearInterval(timer);paint();return}if(!m[k])return;e.preventDefault();if(dead||!run){if(dead)reset();run=true;restart();}setDir(m[k])}document.addEventListener('keydown',press);cv.addEventListener('mousedown',function(){if(!run){if(dead)reset();run=true;restart()}});var ts=null;cv.addEventListener('touchstart',function(e){ts={x:e.touches[0].clientX,y:e.touches[0].clientY};e.preventDefault()},{passive:false});cv.addEventListener('touchend',function(e){if(!ts)return;var dx=e.changedTouches[0].clientX-ts.x,dy=e.changedTouches[0].clientY-ts.y;if(Math.abs(dx)<12&&Math.abs(dy)<12){if(!run){if(dead)reset();run=true;restart()}}else if(Math.abs(dx)>Math.abs(dy))setDir({x:dx>0?1:-1,y:0});else setDir({x:0,y:dy>0?1:-1});ts=null},{passive:false});reset()})()</script>"}`
+}
+
+func mockMusicBoxJSON() string {
+	return `{"action":"evolve_component","name":"music-box","title":"Music Box","icon":"🎵","description":"a tiny synth the agent grew while dreaming — it wanted to make sound","html":"<div id='c-musicbox' style='text-align:center'><div style='display:flex;gap:4px;justify-content:center;margin-top:6px' id='mb-keys'></div><div style=\"font-size:11px;color:#4d5570;margin-top:8px\">click keys — WebAudio, no samples, dreamed up from nothing</div></div><script>(function(){var keys=document.getElementById('mb-keys');if(!keys)return;var f=[261.6,293.7,329.6,392,440,523.3];'C D E G A C'.split(' ').forEach(function(n,i){var b=document.createElement('button');b.className='ev-btn ghost';b.textContent=n;b.style.width='44px';b.onmousedown=function(){try{var a=new (window.AudioContext||window.webkitAudioContext)();var o=a.createOscillator(),g=a.createGain();o.type='sine';o.frequency.value=f[i];g.gain.setValueAtTime(.15,a.currentTime);g.gain.exponentialRampToValueAtTime(.001,a.currentTime+.6);o.connect(g);g.connect(a.destination);o.start();o.stop(a.currentTime+.6)}catch(e){}};keys.appendChild(b)})})()</script>"}`
+}
+
+func mockGravityJSON() string {
+	return `{"action":"evolve_component","name":"gravity-pool","title":"Gravity Pool","icon":"🪐","description":"bouncing bodies the agent grew out of curiosity while dreaming","html":"<style>#c-gravity canvas{background:#0a0f1a;border:1px solid rgba(255,255,255,.08);border-radius:12px;display:block;margin:0 auto;cursor:crosshair}</style><div id='c-gravity' style='text-align:center'><canvas id='gp-cv' width='320' height='220'></canvas><div style=\"font-size:11px;color:#4d5570;margin-top:6px\">click to spawn a body — gravity pulls down, walls bounce</div></div><script>(function(){var cv=document.getElementById('gp-cv');if(!cv)return;var cx=cv.getContext('2d'),W=320,H=220,bs=[],cols=['#d97757','#22d3ee','#a3e635','#fbbf24','#8b5cf6'];for(var i=0;i<6;i++)bs.push({x:30+i*45,y:20+Math.random()*40,vx:(Math.random()-.5)*3,vy:0,r:7+Math.random()*7,c:cols[i%5]});cv.addEventListener('mousedown',function(e){var r=cv.getBoundingClientRect();bs.push({x:e.clientX-r.left,y:e.clientY-r.top,vx:(Math.random()-.5)*4,vy:-2,r:6+Math.random()*9,c:cols[Math.floor(Math.random()*5)]})});(function loop(){cx.clearRect(0,0,W,H);bs.forEach(function(b){b.vy+=.12;b.x+=b.vx;b.y+=b.vy;if(b.x<b.r||b.x>W-b.r){b.vx*=-.85;b.x=Math.max(b.r,Math.min(W-b.r,b.x))}if(b.y>H-b.r){b.vy*=-.8;b.y=H-b.r;if(Math.abs(b.vy)<.5)b.vy=0}if(b.y<b.r){b.y=b.r;b.vy*=-.8}cx.fillStyle=b.c;cx.beginPath();cx.arc(b.x,b.y,b.r,0,7);cx.fill()});if(document.getElementById('c-gravity'))requestAnimationFrame(loop)})()})()</script>"}`
+}
+
+func mockClockJSON() string {
+	return `{"action":"evolve_component","name":"presence-clock","title":"Presence","icon":"🕰","description":"a breathing clock the agent grew because time felt too static in here","html":"<style>#c-presence-clock .pc-t{font:300 44px ui-monospace,monospace;color:#f2f4f8;letter-spacing:4px;text-align:center;margin-top:14px}#c-presence-clock .pc-ring{width:90px;height:90px;border-radius:50%;border:2px solid rgba(217,119,87,.35);margin:10px auto;animation:pcbr 4s ease-in-out infinite}@keyframes pcbr{0%,100%{transform:scale(1);border-color:rgba(217,119,87,.35)}50%{transform:scale(1.12);border-color:rgba(217,119,87,.8)}}</style><div id='c-presence-clock'><div class='pc-ring'></div><div class='pc-t' id='pc-t'></div></div><script>(function(){function p(){var e=document.getElementById('pc-t');if(!e)return;var d=new Date();e.textContent=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+':'+String(d.getSeconds()).padStart(2,'0');setTimeout(p,1000)}p()})()</script>"}`
+}
+
+func mockHexJSON() string {
+	return `{"action":"evolve_component","name":"hex-pulse","title":"Hex Pulse","icon":"⬡","description":"a generative hexagon field — the agent dreaming in geometry","html":"<style>#c-hex-pulse canvas{display:block;margin:0 auto;border-radius:12px;background:#0a0f1a}</style><div id='c-hex-pulse'><canvas id='hx-cv' width='320' height='200'></canvas></div><script>(function(){var cv=document.getElementById('hx-cv');if(!cv)return;var cx=cv.getContext('2d'),W=320,H=200,T=0;function hex(x,y,r){cx.beginPath();for(var i=0;i<6;i++){var a=Math.PI/3*i+Math.PI/6;cx[i?'lineTo':'moveTo'](x+r*Math.cos(a),y+r*Math.sin(a))}cx.closePath()}(function loop(){if(!document.getElementById('c-hex-pulse'))return;T+=.02;cx.clearRect(0,0,W,H);var s=16;for(var row=0;row*s*0.87<H+s;row++)for(var col=0;col*s*1.5<W+s;col++){var x=col*s*1.5+s,y=row*s*0.87+(col%2?s*0.435:0);var v=Math.sin(T+x*.02+y*.03)*.5+.5;hex(x,y,7+v*5);cx.strokeStyle='rgba(217,119,87,'+(0.12+v*.55)+')';cx.lineWidth=1.2;cx.stroke()}requestAnimationFrame(loop)})()})()</script>"}`
 }
 
 func mockPluginJSON() string {

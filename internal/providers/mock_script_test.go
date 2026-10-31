@@ -33,6 +33,35 @@ func TestMockPromptLibraryBatch(t *testing.T) {
 	}
 }
 
+func TestMockAutonomousDreams(t *testing.T) {
+	// dreams must evolve BY THEMSELVES — no keywords, one organ per dream,
+	// then quiet when the genome feels complete.
+	grown := map[string]bool{}
+	for i := 0; i < 8; i++ {
+		out := turn(t, "You are DREAMING — autonomous evolution time.")
+		if !strings.Contains(out, "```evolv") {
+			if !strings.Contains(out, "dreamed quietly") {
+				t.Errorf("dream %d: neither a mutation nor a quiet line: %q", i, out)
+			}
+			break
+		}
+		for _, want := range []string{"music-box", "gravity-pool", "presence-clock", "hex-pulse", "deep-work"} {
+			if strings.Contains(out, want) {
+				if grown[want] {
+					t.Errorf("dream %d: grew %q twice", i, want)
+				}
+				grown[want] = true
+			}
+		}
+		if len(grown) == 5 {
+			break
+		}
+	}
+	if len(grown) < 4 {
+		t.Errorf("autonomous dreams only grew %d organs, want the full spontaneous set", len(grown))
+	}
+}
+
 func TestMockSnake(t *testing.T) {
 	out := turn(t, "make a playable snake game")
 	if !strings.Contains(out, "snake") || !strings.Contains(out, "evolve_component") {
