@@ -1,6 +1,7 @@
 package providers
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -33,33 +34,60 @@ func TestMockPromptLibraryBatch(t *testing.T) {
 	}
 }
 
-func TestMockAutonomousDreams(t *testing.T) {
-	// dreams must evolve BY THEMSELVES — no keywords, one organ per dream,
-	// then quiet when the genome feels complete.
-	grown := map[string]bool{}
-	for i := 0; i < 8; i++ {
-		out := turn(t, "You are DREAMING — autonomous evolution time.")
-		if !strings.Contains(out, "```evolv") {
-			if !strings.Contains(out, "dreamed quietly") {
-				t.Errorf("dream %d: neither a mutation nor a quiet line: %q", i, out)
-			}
-			break
-		}
-		for _, want := range []string{"music-box", "gravity-pool", "presence-clock", "hex-pulse", "deep-work"} {
-			if strings.Contains(out, want) {
-				if grown[want] {
-					t.Errorf("dream %d: grew %q twice", i, want)
-				}
-				grown[want] = true
-			}
-		}
-		if len(grown) == 5 {
-			break
-		}
-	}
-	if len(grown) < 4 {
-		t.Errorf("autonomous dreams only grew %d organs, want the full spontaneous set", len(grown))
-	}
+func TestMockDreamsSelfEdit(t *testing.T) {
+        // dreams must write their OWN code: distinct generative organs with
+        // random parameters, plus real rewrites of the previous organ's file
+        // (same name, different code). No fixed templates, ever.
+        resetDreamState()
+        out0 := turn(t, "You are DREAMING - autonomous evolution time.")
+        if !strings.Contains(out0, "deep-work") {
+                t.Fatalf("first dream should teach itself deep-work, got: %q", out0)
+        }
+        type organ struct{ name, html string }
+        var seq []organ
+        seen := map[string]bool{}
+        for i := 0; i < 10; i++ {
+                out := turn(t, "you are dreaming")
+                if !strings.Contains(out, "```evolv") {
+                        if !strings.Contains(out, "dreamed quietly") {
+                                t.Fatalf("dream %d: neither a mutation nor a quiet line: %q", i, out)
+                        }
+                        break
+                }
+                block := out[strings.Index(out, "```evolv\n")+len("```evolv\n"):]
+                block = block[:strings.Index(block, "```")]
+                var act struct {
+                        Name string `json:"name"`
+                        HTML string `json:"html"`
+                }
+                if err := json.Unmarshal([]byte(block), &act); err != nil {
+                        t.Fatalf("dream %d: evolv block is not valid JSON: %v", i, err)
+                }
+                if act.Name == "" || act.HTML == "" || !strings.Contains(act.HTML, "canvas") {
+                        t.Fatalf("dream %d: organ incomplete (name=%q)", i, act.Name)
+                }
+                for _, o := range seq {
+                        if o.name == act.Name && o.html == act.HTML {
+                                t.Errorf("dream %d: rewrite of %s returned IDENTICAL code - that is a template, not a self-edit", i, act.Name)
+                        }
+                }
+                seq = append(seq, organ{act.Name, act.HTML})
+                seen[act.Name] = true
+                if !strings.Contains(out, "ui/components/"+act.Name+".html") {
+                        t.Errorf("dream %d: narration must name the file it wrote (ui/components/%s.html)", i, act.Name)
+                }
+        }
+        if len(seen) < 3 {
+                t.Errorf("dreams produced %d distinct organs, want >= 3", len(seen))
+        }
+        if len(seq) == len(seen) {
+                t.Errorf("no organ was ever rewritten - dreams must edit their own code, not only grow new files")
+        }
+        for _, banned := range []string{"presence-clock", "music-box", "gravity-pool", "hex-pulse"} {
+                if seen[banned] {
+                        t.Errorf("template organ %q leaked into the generative dream set", banned)
+                }
+        }
 }
 
 func TestMockSnake(t *testing.T) {
