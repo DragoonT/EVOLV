@@ -4,16 +4,17 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
+	"unicode/utf8"
 
 	"github.com/dxn111/EVOLV/assets"
 	"github.com/dxn111/EVOLV/internal/agent"
@@ -25,15 +26,125 @@ import (
 	"github.com/dxn111/EVOLV/internal/workspace"
 )
 
-const banner = `
-  ███████╗██╗   ██╗ ██████╗ ██╗    ██╗   ██╗
-  ██╔════╝██║   ██║██╔═══██╗██║    ██║   ██║
-  █████╗  ██║   ██║██║   ██║██║    ██║   ██║
-  ██╔══╝  ╚██╗ ██╔╝██║   ██║██║    ██║   ██║
-  ███████╗ ╚████╔╝ ╚██████╔╝███████╗╚██████╔╝
-  ╚══════╝  ╚═══╝   ╚═════╝ ╚══════╝ ╚═════╝
-        the workspace that rewrites itself
-`
+// ── colour ──────────────────────────────────────────────────────────────────
+// Everything degrades to plain text when piped, in a dumb terminal, or when
+// NO_COLOR is set — so `evolv | tee log` still looks like a normal program.
+var colorOn = os.Getenv("NO_COLOR") == "" &&
+	os.Getenv("TERM") != "dumb" &&
+	isTTY(os.Stdout)
+
+const (
+	reset  = "\033[0m"
+	bold   = "\033[1m"
+	dim    = "\033[2m"
+	violet = "\033[38;5;141m"
+	cyan   = "\033[38;5;80m"
+	pink   = "\033[38;5;213m"
+	green  = "\033[38;5;114m"
+	yellow = "\033[38;5;221m"
+	red    = "\033[38;5;203m"
+)
+
+func isTTY(f *os.File) bool {
+	fi, err := f.Stat()
+	if err != nil {
+		return false
+	}
+	return fi.Mode()&os.ModeCharDevice != 0
+}
+
+func paint(code, s string) string {
+	if !colorOn {
+		return s
+	}
+	return code + s + reset
+}
+
+// banner is the organism mark — same gradient the installer shows, so the
+// install and the first boot feel like one continuous thing.
+func banner() {
+	rows := []struct{ color, line string }{
+		{violet, `  ███████╗██╗   ██╗ ██████╗ ██╗    ██╗   ██╗`},
+		{violet, `  ██╔════╝██║   ██║██╔═══██╗██║    ██║   ██║`},
+		{cyan, `  █████╗  ██║   ██║██║   ██║██║    ██║   ██║`},
+		{cyan, `  ██╔══╝  ╚██╗ ██╔╝██║   ██║██║    ██║   ██║`},
+		{pink, `  ███████╗ ╚████╔╝ ╚██████╔╝███████╗╚██████╔╝`},
+		{pink, `  ╚══════╝  ╚═══╝   ╚═════╝ ╚══════╝ ╚═════╝`},
+	}
+	fmt.Println()
+	for _, r := range rows {
+		fmt.Println(paint(r.color, r.line))
+		if colorOn {
+			time.Sleep(30 * time.Millisecond)
+		}
+	}
+	fmt.Println()
+	fmt.Println(paint(dim, "  the workspace that rewrites itself"))
+	fmt.Println("  " + paint(dim, fmt.Sprintf("v%s  ·  %s/%s  ·  github.com/dxn111/EVOLV",
+		workspace.Version, runtime.GOOS, runtime.GOARCH)))
+	fmt.Println()
+}
+
+// ── boot card ───────────────────────────────────────────────────────────────
+// A left-rail card. Rows take a plain string for width calculation and a
+// rendered string that may carry ANSI colour, so the border always lines up.
+const cardInner = 62
+
+func cardTop() {
+	fmt.Println("  " + paint(bold, "┌"+strings.Repeat("─", cardInner)+"┐"))
+}
+
+func cardBottom() {
+	fmt.Println("  " + paint(bold, "└"+strings.Repeat("─", cardInner)+"┘"))
+}
+
+func cardRow(plain, rendered string) {
+	pad := cardInner - utf8.RuneCountInString(plain) - 2
+	if pad < 0 {
+		pad = 0
+	}
+	fmt.Printf("  %s %s%s %s\n", paint(bold, "│"), rendered, strings.Repeat(" ", pad), paint(bold, "│"))
+	if colorOn {
+		time.Sleep(18 * time.Millisecond)
+	}
+}
+
+func cardBlank() { cardRow("", "") }
+
+func cardKV(label, value, valueColor string) {
+	plain := fmt.Sprintf("  %-11s %s", label, value)
+	rendered := "  " + paint(dim, fmt.Sprintf("%-11s", label)) + " " + paint(valueColor, value)
+	cardRow(plain, rendered)
+}
+
+func cardNote(symbol, text, symbolColor string) {
+	plain := "  " + symbol + "  " + text
+	rendered := "  " + paint(symbolColor, symbol) + "  " + paint(dim, text)
+	cardRow(plain, rendered)
+}
+
+func bootCard(url, provider, model, genome string, opening, headless bool) {
+	cardTop()
+	cardNote("●", "organism online", green)
+	cardBlank()
+	cardKV("local", url, cyan)
+	cardKV("provider", provider+" · "+model, violet)
+	cardKV("genome", genome, dim)
+	cardKV("watch", "live hot-reload", green)
+	cardBlank()
+	switch {
+	case opening:
+		cardNote("→", "opening in your browser…", green)
+	case headless:
+		cardNote("!", "headless session — open the URL above", yellow)
+	default:
+		cardNote("·", "browser auto-open is off — open the URL above", dim)
+	}
+	cardBottom()
+	fmt.Println()
+	fmt.Println("  " + paint(dim, "ctrl+c pauses the organism · your genome survives"))
+	fmt.Println()
+}
 
 // runUpdate performs an in-place morph: downloads the latest release binary
 // and swaps it over the running one. The genome (~/.evolv) survives.
@@ -69,6 +180,7 @@ func main() {
 	var (
 		port    = flag.Int("port", 0, "port to serve on (0 = config/auto)")
 		noOpen  = flag.Bool("no-open", false, "do not open the browser")
+		open    = flag.Bool("open", false, "open the browser even if config disables it")
 		version = flag.Bool("version", false, "print version")
 		reset   = flag.Bool("reset", false, "reset workspace UI to factory genome")
 	)
@@ -78,8 +190,7 @@ func main() {
 		fmt.Println("evolv", workspace.Version)
 		return
 	}
-	fmt.Print(banner)
-	fmt.Printf("   v%s · github.com/dxn111/EVOLV · %s\n\n", workspace.Version, time.Now().Format("2006-01-02 15:04:05"))
+	banner()
 
 	ws, err := workspace.Load(assets.FS)
 	if err != nil {
@@ -90,7 +201,7 @@ func main() {
 		if _, err := workspace.Load(assets.FS); err != nil {
 			log.Fatalf("reseed: %v", err)
 		}
-		fmt.Println("✓ genome reset to factory UI")
+		fmt.Println("  " + paint(green, "✓") + " genome reset to factory UI")
 	}
 
 	b := bus.New()
@@ -122,20 +233,20 @@ func main() {
 	}
 
 	url := fmt.Sprintf("http://localhost:%d", portOut)
-	fmt.Printf("  ✓ organism online      %s\n", url)
-	fmt.Printf("  ✓ provider             %s · %s\n", prov.Name(), model)
-	fmt.Printf("  ✓ workspace            %s\n", ws.Root)
-	fmt.Println("  ✓ watching for mutations (live hot-reload)")
-	fmt.Println()
 
+	// The browser opens by default. `--no-open` disables it for one run, and
+	// the config's open_browser flag is an explicit opt-out. `--open` wins
+	// over the config so a stale genome can't hide the UI.
 	headless := os.Getenv("DISPLAY") == "" && os.Getenv("WAYLAND_DISPLAY") == ""
-	if ws.Config.OpenBrowser && !*noOpen && !headless {
+	opening := !*noOpen && !headless && (*open || ws.Config.OpenBrowser)
+
+	bootCard(url, prov.Name(), model, ws.Root, opening, headless)
+
+	if opening {
 		go func() {
-			time.Sleep(400 * time.Millisecond)
+			time.Sleep(350 * time.Millisecond)
 			workspace.OpenBrowser(url)
 		}()
-	} else if headless {
-		fmt.Println("  (headless session — open the URL above manually)")
 	}
 
 	go func() {
@@ -147,8 +258,6 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 	<-quit
-	fmt.Println("\n  organism paused. genome preserved at", ws.Root)
+	fmt.Println()
+	fmt.Println("  " + paint(dim, "organism paused · genome preserved at "+ws.Root))
 }
-
-var _ = json.Marshal
-var _ = strings.TrimSpace
