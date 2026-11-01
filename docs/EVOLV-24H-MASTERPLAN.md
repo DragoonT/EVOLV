@@ -1,6 +1,6 @@
 # EVOLV — 24-HOUR MASTER PLAN
 
-*Engineering plan for the autonomous evolution sprint. Generated from a full repository audit during the v0.12.0–v0.21.0 sprint; revised each release. The hourly roadmap in `/home/z/my-project/evolv-hourly-plan.md` stays authoritative for its queue — this document is the strategic layer above it.*
+*Engineering plan for the autonomous evolution sprint. Generated from a full repository audit during the v0.12.0–v0.21.0 sprint and reconciled with the v0.29+ DNA workspace work. This document is the strategic source of truth.*
 
 ---
 
@@ -13,22 +13,22 @@
 | Go kernel | `cmd/evolv`, `internal/{agent,server,workspace,bus,providers,watcher,update}` | builds + tests green at every release |
 | Agent loop | `internal/agent` — multi-turn tool loop, `commit()` ledger, dreaming flag | works; every mutation audited in `evolution.jsonl` |
 | Tool calling | JSON actions over the bus (`evolv` fenced blocks), ~20 action types | works; mocked-brain E2E every release |
-| Self-built UI | `assets/ui` shell + `workspace/ui/components/*.html` hot-remount via watcher | works; 17→18 shell versions, zero-refresh verified |
+| Self-built UI | `assets/ui` shell + `workspace/ui/components/*.html` hot-remount via watcher | works; modular shell, Workbench, Creation Library, DNA hologram, and theme-aware layout |
 | Generative dream engine | `internal/providers/mock_script.go` — parametric organ composer (5 families × 6 palettes), self-rewrites its own organ files | works; test enforces "no repeated code" |
 | Snapshots / rollback / diff | `/api/snapshots`, `/api/snapshots/diff` (LCS), restore | works |
-| Plugins | `internal/agent/pluginvm.go` (goja), live event bus access | works; sandboxing is thin — see §3 |
+| Plugins | `internal/agent/pluginvm.go` (goja), live event bus access | permission-gated HTTP/filesystem/toast bridge shipped; resource ceilings remain |
 | Update mechanism | `internal/update`, release watch, `evolv update` | works; preserves workspace |
 | Perf | virtualized ledger (DOM cap 200 + pager), rAF-batched streaming | v0.21.0, 9/9 live assertions |
 | Search, export, mobile, sound | ctrl+f search, `/api/export` standalone HTML, <820px pass, WebAudio chimes | shipped v0.14–v0.16 |
 
 ### Partially implemented / weak
 
-1. **Plugin isolation** — goja VM has bus access but no permission tiers, no resource limits, no per-plugin filesystem policy.
+1. **Plugin isolation** — explicit capability permissions ship in plugin manifests; CPU/memory ceilings and narrower filesystem policy remain.
 2. **Workspace portability** — snapshots exist locally; no export/import/share package format, no checksums/manifests.
 3. **Skill system** — skills are prompt-files; no versioning, no evaluation harness, no dedup, no decay of stale skills.
-4. **Agent planning** — the loop reacts well but has no explicit plan/task-state model for long multi-file missions; no resume-after-crash of a half-done task.
-5. **Tests** — kernel tests are real but coverage is uneven (`internal/server`, `watcher` have none); no frontend test harness (smoke tests are ad-hoc CDP scripts).
-6. **Docs** — README is strong; no generated docs site (→ v0.22.0), no API reference, no tutorial.
+4. **Agent planning** — persistent `plan.json`, `set_plan`, and `plan_advance` ship; candidate-build verification and crash-safe task resumption remain.
+5. **Tests** — kernel, provider streaming, Workbench, and DNA-agent API coverage exist; browser smoke checks still need a committed harness.
+6. **Docs** — generated docs and feature update notes ship; a generated API reference and end-to-end tutorial remain.
 
 ### Security posture
 
@@ -42,11 +42,11 @@
 
 | # | Capability | Value | Effort | Dependency | Verdict |
 |---|---|---|---|---|---|
-| P0 | Agent task-planner + persistent task state (§4A) | unlock everything | M | none | **do first** |
-| P0 | Candidate-build self-evolution loop (§4B) | the differentiator | L | planner | do in parallel |
+| P0 | Agent task-planner + persistent task state (§4A) | unlock everything | M | none | **shipped; harden resume** |
+| P0 | Candidate-build self-evolution loop (§4B) | the differentiator | L | planner | **staging, validation, archive, boot health, and guarded promotion shipped; binary swap/rollback remains** |
 | P1 | Workspace export/import package (§5) | community growth | M | snapshots | after P0 |
-| P1 | Docs site + installer `--version` (v0.22.0) | first impression | S | none | now |
-| P1 | Plugin permission tiers + limits | trust | M | audit | after P0 |
+| P1 | Docs site + installer `--version` (v0.22.0) | first impression | S | none | **shipped** |
+| P1 | Plugin permission tiers + limits | trust | M | audit | permissions shipped; limits remain |
 | P2 | Skill eval harness + versioning | quality | M | planner | later |
 | P2 | Design system consolidation (tokens, motion) | premium feel | S | none | ongoing |
 | P2 | Marketing kit + demo scripts (§9) | adoption | S | docs site | after v0.22 |
@@ -56,8 +56,8 @@
 ## 3. Engineering roadmap
 
 ### A. Autonomous agent engine
-- **Planner**: explicit `plan.json` task-state (steps, status, artifacts), rendered in the UI as a live checklist card; agent writes/reads it via a new `set_plan` action; survives restarts.
-- **Repository understanding**: `map_repo` action → tree + symbol outline (Go AST / JS heuristics) cached in workspace.
+- **Planner — shipped**: explicit `plan.json` task-state, live checklist, `set_plan`, and `plan_advance`; survives restarts.
+- **Repository understanding — shipped**: `map_repo` action → tree + symbol outline (Go AST / JS heuristics) cached in workspace.
 - **Verification loop**: new `run_tests` action parses go test / node output into structured pass-fail the agent reasons over.
 - **Completion reports**: final turn emits a structured summary card (files, tests, confidence).
 - Acceptance: mock-brain E2E where the agent completes a 3-file feature change unattended, with tests green.
@@ -72,7 +72,7 @@
 - Add `evolve_layout` action for full-shell redesigns behind a confirm.
 
 ### D. Tools / plugins / skills
-- Tool manifests with typed IO; plugin `manifest.json` with permissions (`fs:read`, `net:none`, ...), enforced in goja bridge; resource ceiling per plugin.
+- Typed tool manifests and plugin permission enforcement ship; resource ceilings per plugin remain.
 - Skills: versioned, with a 5-case eval file; dream mode prunes skills that fail eval.
 
 ### E. External project development

@@ -24,12 +24,17 @@
     --warn:#fbbf24;
     --strand-a:#5ea8ff;
     --strand-b:#b18cff;
+    --surface:#10131b;
+    --surface-2:#171b25;
+    --accent-soft:rgba(177,140,255,.16);
+    --radius:12px;
+    --font:ui-sans-serif,-apple-system,"Segoe UI",Inter,Roboto,sans-serif;
   }
   *{box-sizing:border-box}
   html,body{height:100%}
   body{
     margin:0;background:var(--bg);color:var(--text);overflow:hidden;
-    font:14px/1.5 ui-sans-serif,-apple-system,"Segoe UI",Inter,Roboto,sans-serif;
+    font:14px/1.5 var(--font);
     -webkit-font-smoothing:antialiased;
   }
   body.embedded{background:transparent}
@@ -237,6 +242,35 @@
   .notice.show{display:block}
   .notice code{font:11px/1 ui-monospace,monospace;background:rgba(0,0,0,.4);padding:2px 6px;border-radius:4px;color:#ffd88a}
 
+  /* DNA Builder inherits the host workspace design system. */
+  .dna-builder-launch{border-color:var(--line);border-radius:var(--radius);background:var(--surface);color:var(--text);box-shadow:0 10px 34px rgba(0,0,0,.18);font-family:var(--font)}
+  .dna-builder-launch:hover{border-color:var(--strand-b);background:var(--surface-2);box-shadow:0 0 0 3px var(--accent-soft)}
+  .dna-builder-launch i{background:var(--strand-b);box-shadow:0 0 12px var(--strand-b)}
+  .builder{background:color-mix(in srgb,var(--bg) 58%,transparent);backdrop-filter:blur(18px) saturate(115%)}
+  .builder-shell{border-color:var(--line);border-radius:calc(var(--radius) + 6px);background:var(--surface);box-shadow:0 30px 90px rgba(0,0,0,.32)}
+  .builder-roster{background:color-mix(in srgb,var(--bg-2) 92%,var(--surface) 8%)}
+  .builder-roster h2,.builder-head h3{letter-spacing:-.01em;text-transform:none}
+  .strand{border-color:var(--line);border-radius:var(--radius);background:var(--surface-2);font-family:var(--font);transition:.15s ease}
+  .strand:hover{border-color:color-mix(in srgb,var(--strand-b) 50%,var(--line));color:var(--text);transform:translateY(-1px)}
+  .strand.active{border-color:var(--strand-b);background:var(--accent-soft);box-shadow:inset 3px 0 var(--strand-b)}
+  .grow-strand{border-color:var(--line);border-radius:var(--radius);color:var(--muted);font-family:var(--font)}
+  .grow-strand:hover{border-color:var(--strand-b);background:var(--accent-soft)}
+  .builder-head,.builder-foot{background:color-mix(in srgb,var(--surface) 94%,var(--strand-b) 6%)}
+  .builder-head-mark{width:34px;height:34px;display:grid;place-items:center;margin-right:11px;border-radius:calc(var(--radius) * .75);background:var(--accent-soft);color:var(--strand-b);font-weight:800}
+  .builder-x{width:34px;height:34px;border:1px solid transparent;border-radius:calc(var(--radius) * .7);display:grid;place-items:center;font-family:var(--font)}
+  .builder-x:hover{background:var(--surface-2);border-color:var(--line);color:var(--text)}
+  .builder-field input,.builder-field textarea,.strand-chat input{border-color:var(--line);border-radius:var(--radius);background:var(--surface-2);font-family:var(--font)}
+  .builder-field input:focus,.builder-field textarea:focus,.strand-chat input:focus{border-color:var(--strand-b);box-shadow:0 0 0 3px var(--accent-soft)}
+  .builder-monitor div{border-radius:var(--radius);background:var(--surface-2)}
+  .builder-monitor b{color:var(--text)}
+  .clone-btn,.strand-chat button{border-color:var(--strand-b);border-radius:var(--radius);background:var(--strand-b);color:var(--bg-2);font-family:var(--font);font-weight:750}
+  .clone-btn:hover,.strand-chat button:hover{filter:brightness(1.08);box-shadow:0 0 0 3px var(--accent-soft)}
+  .clone-btn:focus-visible,.strand-chat button:focus-visible,.builder-x:focus-visible,.strand:focus-visible,.grow-strand:focus-visible{outline:2px solid var(--strand-b);outline-offset:2px}
+  .builder-feedback{min-height:16px;color:var(--muted);font-size:10px}.builder-feedback.error{color:#ef8d83}.builder-feedback.ok{color:var(--ok)}
+  body[data-host-density="compact"] .builder-roster,body[data-host-density="compact"] .builder-body{padding:16px}
+  body[data-host-density="compact"] .builder-head,body[data-host-density="compact"] .builder-foot{padding:12px 16px}
+  body[data-host-density="spacious"] .builder-roster,body[data-host-density="spacious"] .builder-body{padding:28px}
+
   @media (max-width: 980px){
     .hud{
       left:12px;right:12px;top:auto;bottom:64px;width:auto;max-height:44vh;flex-direction:row;
@@ -248,6 +282,11 @@
     .insp{left:12px;right:12px;width:auto;bottom:64px}
     .hint{left:14px;bottom:68px;gap:10px}
     .tape-label{display:none}
+  }
+  @media(max-width:760px){
+    .builder{padding:0}.builder-shell{width:100vw;height:100dvh;border:0;border-radius:0;grid-template-columns:1fr;grid-template-rows:auto 1fr}
+    .builder-roster{padding:14px;border-right:0;border-bottom:1px solid var(--line);overflow-x:auto}.builder-roster>p{display:none}.strand-list{display:flex;margin-top:10px}.strand{min-width:150px}.grow-strand{width:auto;min-width:150px;margin:0 0 0 8px}
+    .builder-main{min-height:0}.builder-grid{grid-template-columns:1fr}.builder-field.wide{grid-column:auto}.builder-monitor{grid-template-columns:repeat(3,minmax(0,1fr))}.builder-foot{flex-wrap:wrap}.strand-chat{min-width:0}
   }
 </style>
 </head>
@@ -269,7 +308,7 @@
  <div class="builder-shell">
   <aside class="builder-roster"><h2>DNA Strands</h2><p>Every card below is a living agent.</p><div class="strand-list" id="strand-list"></div><button class="grow-strand" id="grow-strand">＋ Grow New Strand</button></aside>
   <section class="builder-main">
-   <header class="builder-head"><div><h3 id="builder-title">Grow a new intelligence</h3><p id="builder-sub">Edit the inherited DNA before the strand wakes.</p></div><button class="builder-x" id="dna-builder-close">×</button></header>
+   <header class="builder-head"><span class="builder-head-mark" aria-hidden="true">◇</span><div><h3 id="builder-title">Grow a new intelligence</h3><p id="builder-sub">Edit the inherited DNA before the strand wakes.</p></div><button class="builder-x" id="dna-builder-close" aria-label="Close DNA Builder">×</button></header>
    <div class="builder-body">
     <div class="builder-monitor" id="builder-monitor" hidden><div><small>State</small><b id="bm-state">READY</b></div><div><small>Memory</small><b id="bm-memory">0</b></div><div><small>Mutations</small><b id="bm-mutations">0</b></div></div>
     <div class="builder-grid" id="builder-form">
@@ -280,7 +319,7 @@
      <div class="builder-field wide"><div class="builder-cap-title">Encoded skills</div><div class="caps" id="clone-skills"></div></div>
     </div>
    </div>
-   <footer class="builder-foot"><div class="strand-chat" id="strand-chat" hidden><input id="strand-message" placeholder="Interact with this DNA strand…"><button id="strand-send">Transmit</button></div><button class="clone-btn" id="clone-start">Clone DNA + awaken</button></footer>
+   <footer class="builder-foot"><span class="builder-feedback" id="builder-feedback" role="status" aria-live="polite"></span><div class="strand-chat" id="strand-chat" hidden><input id="strand-message" placeholder="Interact with this DNA strand…"><button id="strand-send">Transmit</button></div><button class="clone-btn" id="clone-start">Clone DNA + awaken</button></footer>
   </section>
  </div>
 </div>
@@ -394,28 +433,34 @@ function showDNAStrand(id) {
   document.getElementById('builder-title').textContent=fresh?'Grow EVOLV'+(dnaAgents.length+1):(label+' · '+(a?.name||id));
   document.getElementById('builder-sub').textContent=fresh?'Edit the inherited DNA before the strand wakes.':(a?.identity||'Living cloned DNA strand');
   if(a){document.getElementById('bm-state').textContent=a.active?'ACTIVE':'READY';document.getElementById('bm-memory').textContent=a.history;document.getElementById('bm-mutations').textContent=a.mutations;}
+  setBuilderFeedback('');
 }
-async function openDNABuilder(){document.getElementById('dna-builder').classList.add('open');document.getElementById('dna-builder').setAttribute('aria-hidden','false');await loadDNABuilder();}
-function closeDNABuilder(){document.getElementById('dna-builder').classList.remove('open');document.getElementById('dna-builder').setAttribute('aria-hidden','true');}
+function setBuilderFeedback(message,kind=''){const el=document.getElementById('builder-feedback');el.textContent=message;el.className='builder-feedback'+(kind?' '+kind:'')}
+async function responseData(response){const text=await response.text();try{return JSON.parse(text)}catch(_){return {error:text||('Request failed ('+response.status+')')}}}
+async function openDNABuilder(){const builder=document.getElementById('dna-builder');builder.classList.add('open');builder.setAttribute('aria-hidden','false');try{await loadDNABuilder();setBuilderFeedback('DNA roster synchronized','ok')}catch(error){setBuilderFeedback(error.message||'Unable to load DNA roster','error')}document.getElementById('dna-builder-close').focus()}
+function closeDNABuilder(){const builder=document.getElementById('dna-builder');builder.classList.remove('open');builder.setAttribute('aria-hidden','true');setBuilderFeedback('');document.getElementById('dna-builder-open').focus()}
 document.getElementById('dna-builder-open').onclick=openDNABuilder; document.getElementById('dna-builder-close').onclick=closeDNABuilder;
+document.getElementById('dna-builder').addEventListener('click',event=>{if(event.target.id==='dna-builder')closeDNABuilder()});
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&document.getElementById('dna-builder').classList.contains('open'))closeDNABuilder()});
 document.getElementById('grow-strand').onclick=()=>showDNAStrand('new');
-document.getElementById('clone-start').onclick=async()=>{const btn=document.getElementById('clone-start'),alias=document.getElementById('clone-name').value.trim(),name=alias||('EVOLV'+(dnaAgents.length+1));btn.disabled=true;btn.textContent='Synthesizing strand…';const pick=id=>[...document.querySelectorAll('#'+id+' input:checked')].map(x=>x.value);const payload={action:'clone',name,identity:document.getElementById('clone-identity').value,system_prompt:document.getElementById('clone-prompt').value,tools:pick('clone-tools'),skills:pick('clone-skills')};const r=await fetch(API+'/api/agents',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const out=await r.json();btn.disabled=false;btn.textContent='Clone DNA + awaken';if(r.ok){await loadDNABuilder(out.agent.id);toast('skill','EVOLV'+dnaAgents.length,'new DNA strand awakened')}else alert(out.error||'Clone failed')};
-document.getElementById('strand-send').onclick=async()=>{const input=document.getElementById('strand-message'),message=input.value.trim();if(!message||selectedDNA==='new')return;await fetch(API+'/api/agents',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'switch',id:selectedDNA})});await fetch(API+'/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message,agent:selectedDNA})});input.value='';activeDNA=selectedDNA;await loadDNABuilder(selectedDNA)};
+document.getElementById('clone-start').onclick=async()=>{const btn=document.getElementById('clone-start'),alias=document.getElementById('clone-name').value.trim(),name=alias||('EVOLV'+(dnaAgents.length+1));btn.disabled=true;btn.textContent='Synthesizing strand…';setBuilderFeedback('Encoding selected tools and skills…');try{const pick=id=>[...document.querySelectorAll('#'+id+' input:checked')].map(x=>x.value);const payload={action:'clone',name,identity:document.getElementById('clone-identity').value,system_prompt:document.getElementById('clone-prompt').value,tools:pick('clone-tools'),skills:pick('clone-skills')};const r=await fetch(API+'/api/agents',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}),out=await responseData(r);if(!r.ok)throw new Error(out.error||'Clone failed');await loadDNABuilder(out.agent.id);setBuilderFeedback('New DNA strand awakened','ok');toast('skill','EVOLV'+dnaAgents.length,'new DNA strand awakened')}catch(error){setBuilderFeedback(error.message||'Clone failed','error')}finally{btn.disabled=false;btn.textContent='Clone DNA + awaken'}};
+document.getElementById('strand-send').onclick=async()=>{const input=document.getElementById('strand-message'),message=input.value.trim();if(!message||selectedDNA==='new')return;const button=document.getElementById('strand-send');button.disabled=true;setBuilderFeedback('Transmitting to '+selectedDNA+'…');try{const switched=await fetch(API+'/api/agents',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'switch',id:selectedDNA})});if(!switched.ok)throw new Error((await responseData(switched)).error||'Unable to switch strand');const sent=await fetch(API+'/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message,agent:selectedDNA})});if(!sent.ok)throw new Error((await responseData(sent)).error||'Transmission failed');input.value='';activeDNA=selectedDNA;await loadDNABuilder(selectedDNA);setBuilderFeedback('Transmission accepted','ok')}catch(error){setBuilderFeedback(error.message||'Transmission failed','error')}finally{button.disabled=false}};
 
 function syncHostTheme(){
   try{
     const host=parent.document.body,cs=parent.getComputedStyle(host),root=document.documentElement,get=n=>cs.getPropertyValue(n).trim();
-    const map={'--bg':'--bg','--bg2':'--bg-2','--text':'--text','--dim':'--muted','--faint':'--dim'};
+    const map={'--bg':'--bg','--bg2':'--bg-2','--bg3':'--surface','--bg4':'--surface-2','--text':'--text','--dim':'--muted','--faint':'--dim','--accent-soft':'--accent-soft','--radius':'--radius','--font':'--font'};
     Object.entries(map).forEach(([from,to])=>{const value=get(from);if(value)root.style.setProperty(to,value)});
     const line=get('--line'),soft=get('--line-soft'),accent=get('--accent');
     if(soft||line)root.style.setProperty('--line',soft||line); if(line)root.style.setProperty('--line-2',line);
     if(accent){root.style.setProperty('--strand-a',accent);root.style.setProperty('--strand-b',accent)}
     root.style.setProperty('--panel','color-mix(in srgb,var(--bg-2) 86%,transparent)');
     document.body.dataset.hostAppearance=host.dataset.appearance||'';
+    document.body.dataset.hostDensity=host.dataset.density||'';
   }catch(_){}
 }
 syncHostTheme();
-try{new MutationObserver(syncHostTheme).observe(parent.document.body,{attributes:true,attributeFilter:['class','style','data-appearance']})}catch(_){}
+try{new MutationObserver(syncHostTheme).observe(parent.document.body,{attributes:true,attributeFilter:['class','style','data-appearance','data-density']})}catch(_){}
 
 /* ---------- genome vocabulary ---------- */
 

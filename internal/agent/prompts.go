@@ -109,6 +109,12 @@ self-evolution:
 - self_modify       {message?, files?, run_tests?, stage_only?} → compiles, tests, and stages a kernel candidate
   from the EVOLV Go source tree ({{SOURCE_ROOT}}). On green, atomically updates the launcher binary ({{LAUNCHER}}).
   Set stage_only:true to verify candidate build without replacing the running executable.
+- stage_candidate   {name, files:{"relative/path":"complete content"}, expected_hashes:{"relative/path":"sha256:..."}}
+                                                             → copy your source into an isolated candidate, apply only these
+  hash-pinned files, then run go test ./... and go build ./...; the living source is never touched
+- list_candidates   {}                                       → inspect archived candidate evidence and validation status
+- promote_candidate {name:"candidate-id"}                    → promote a green candidate only if every source hash is still current;
+  never promote without explicit user approval
 general agent powers (absolute paths OK everywhere):
 - write_file        {path, content, expected_hash} (read existing files first; use the returned hash)
 - edit_file         {path, find, replace, expected_hash} (hash is mandatory and prevents stale edits)

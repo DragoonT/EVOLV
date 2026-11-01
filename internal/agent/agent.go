@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/dxn111/EVOLV/internal/bus"
+	"github.com/dxn111/EVOLV/internal/candidate"
 	"github.com/dxn111/EVOLV/internal/providers"
 	"github.com/dxn111/EVOLV/internal/workspace"
 )
@@ -148,12 +149,14 @@ type action struct {
 	Depth          int               `json:"depth"`
 	Cwd            string            `json:"cwd"`
 	Command        string            `json:"command"`
-	Framework      string            `json:"framework"`
+Framework      string            `json:"framework"`
 	Args           map[string]any    `json:"args"`
 	Steps          []planStepArg     `json:"steps"`
 	Schema         map[string]string `json:"schema"`
 	Perms          []string          `json:"perms"`
 	Files          []fileMutation    `json:"files,omitempty"`
+	FilesMap       map[string]string `json:"files_map,omitempty"`
+	ExpectedHashes map[string]string `json:"expected_hashes,omitempty"`
 	Summary        string            `json:"summary,omitempty"`
 	Status         string            `json:"status,omitempty"`
 	FilesList      []string          `json:"files_list,omitempty"`
@@ -167,6 +170,10 @@ type action struct {
 	SourceRoot     string            `json:"source_root,omitempty"`
 	TargetLauncher string            `json:"target_launcher,omitempty"`
 	TestPkg        string            `json:"test_pkg,omitempty"`
+}
+
+func (a *Agent) candidateManager() *candidate.Manager {
+	return &candidate.Manager{WS: a.ws, SourceRoot: workspace.DetectSourceRoot()}
 }
 
 // planStepArg is one step of a set_plan action as it arrives over the wire.

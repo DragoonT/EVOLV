@@ -4,6 +4,18 @@ This update turns EVOLV's accumulated mutations into a manageable, theme-aware w
 
 ## Highlights
 
+### Candidate evolution safety
+
+- `stage_candidate` copies the detected EVOLV source into `workspace/candidates/<id>/source` and never edits the running tree.
+- Every replacement file must include the SHA-256 hash of the live source it was based on.
+- Each candidate runs `go test ./...` and `go build ./...` with bounded execution time; output, duration, changed paths, and hashes are archived in `manifest.json`.
+- EVOLV candidates also compile a standalone executable, launch it with an isolated home and temporary loopback port, and require an HTTP 200 response from `/api/health` before becoming ready.
+- The smoke-test process is always terminated after the probe; its isolated runtime files and compiled artifact remain with the candidate evidence.
+- Failed candidates remain inspectable but cannot be promoted.
+- Promotion is explicit, revalidates every live source hash before the first write, and aborts if the source changed after staging.
+- Promotion writes recoverable backups, re-runs the full Go test/build gate against the updated live tree, and automatically restores every written file if a write or post-promotion check fails.
+- The Creation Library includes a Candidates view with validation evidence, changed files, status, and a confirmed promotion control.
+
 ### Live DNA experience
 
 - A slowly animated DNA strand remains visible beneath the application layers.
@@ -19,6 +31,9 @@ This update turns EVOLV's accumulated mutations into a manageable, theme-aware w
 - Selected capabilities use a restrained green glow that remains clear across themes.
 - New strands receive stable names in sequence: EVOLV2, EVOLV3, and so on.
 - Each strand has separate profile data and conversation memory, can be monitored, and can be selected for interaction.
+- Clone IDs cannot overwrite an existing strand, and encoded capabilities are validated against the current genome before the clone is persisted.
+- The builder now consumes the host workspace's surface, accent, typography, radius, density, and light/dark palette tokens instead of carrying a separate purple theme.
+- Builder controls share the main app's focus, hover, input, button, and feedback patterns, with mobile reflow, backdrop/Escape close behavior, and inline request errors.
 
 ### Creation Library
 
@@ -49,11 +64,13 @@ This update turns EVOLV's accumulated mutations into a manageable, theme-aware w
 | --- | --- |
 | `GET /api/agents` | List the main DNA and cloned agent profiles. |
 | `POST /api/agents` | Create a numbered DNA clone with identity, prompt, tools, and skills. |
-| `POST /api/agents/select` | Switch the active DNA strand. |
+| `POST /api/agents` with `action: "switch"` | Switch the active DNA strand. |
 | `GET /api/creations` | Return the normalized creation inventory and evolution history. |
-| `POST /api/creations/action` | Pin, archive, enable, or disable a creation. |
+| `POST /api/creations` | Pin, archive, enable, or disable a creation. |
 | `GET /api/widgets` | Return widget state for dashboard controls. |
 | `POST /api/widgets` | Enable or disable a grown widget. |
+| `GET /api/candidates` | List archived candidate builds and their test evidence. |
+| `POST /api/candidates` | Explicitly promote a ready candidate after fresh hash validation. |
 
 ## Persistence and compatibility
 
@@ -76,3 +93,5 @@ This update turns EVOLV's accumulated mutations into a manageable, theme-aware w
 - Browser scripts pass `node --check`.
 - Repository whitespace is checked with `git diff --check`.
 - Focused server tests cover the workbench-only initialization path; the existing full Windows suite still depends on isolated `~/.evolv` state and a POSIX `sh` executable.
+- DNA-agent API tests cover the single-main initial roster, stable numbering, persistence across restart, capability normalization, duplicate rejection, and unavailable-runtime behavior.
+- The branch includes upstream reasoning-token streaming and clean installer extraction changes merged from `upstream/main`.
