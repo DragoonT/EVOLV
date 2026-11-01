@@ -1,0 +1,1389 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>EVOLV · DNA Genome</title>
+<style>
+  :root{
+    --bg:#06070a;
+    --bg-2:#0a0d14;
+    --panel:rgba(12,15,22,.78);
+    --line:rgba(255,255,255,.075);
+    --line-2:rgba(255,255,255,.14);
+    --text:#e9edf5;
+    --muted:#8891a3;
+    --dim:#5c6473;
+    --organ:#ffb055;
+    --tool:#3fd9c9;
+    --skill:#86e08b;
+    --prompt:#ff6fa5;
+    --plugin:#ffd45c;
+    --skin:#7dd3fc;
+    --ok:#4ade80;
+    --warn:#fbbf24;
+    --strand-a:#5ea8ff;
+    --strand-b:#b18cff;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;background:var(--bg);color:var(--text);overflow:hidden;
+    font:14px/1.5 ui-sans-serif,-apple-system,"Segoe UI",Inter,Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  body.embedded{background:transparent}
+  body.embedded .vignette{opacity:.72}
+  body.embedded .grain{opacity:.025}
+  body.ambient .brand,body.ambient .hud,body.ambient .insp,body.ambient .hint,
+  body.ambient .tape-wrap,body.ambient .toast,body.ambient .notice,body.ambient .dna-builder-launch,body.ambient .builder{display:none!important}
+  body.ambient .vignette{opacity:.38}
+  body.ambient .grain{display:none}
+  canvas#helix{position:fixed;inset:0;width:100%;height:100%;display:block}
+
+  /* atmosphere */
+  .vignette{
+    position:fixed;inset:0;pointer-events:none;
+    background:
+      radial-gradient(120% 90% at 50% 40%, rgba(60,90,160,.14), transparent 62%),
+      radial-gradient(100% 100% at 50% 50%, transparent 42%, rgba(0,0,0,.55) 100%);
+    mix-blend-mode:normal;
+  }
+  .grain{
+    position:fixed;inset:0;pointer-events:none;opacity:.05;
+    background-image:repeating-linear-gradient(0deg, rgba(255,255,255,.6) 0 1px, transparent 1px 3px);
+    mix-blend-mode:overlay;
+  }
+
+  /* top-left title */
+  .brand{
+    position:fixed;left:26px;top:22px;z-index:5;pointer-events:none;
+    display:flex;align-items:center;gap:13px;
+  }
+  .brand .mark{
+    width:38px;height:38px;border-radius:11px;display:grid;place-items:center;
+    background:linear-gradient(160deg,#1b2740,#0d1420);
+    border:1px solid var(--line-2);
+    font-weight:800;font-size:18px;color:#b9d2ff;
+    box-shadow:0 0 26px rgba(94,168,255,.20), inset 0 1px 0 rgba(255,255,255,.08);
+  }
+  .brand h1{margin:0;font-size:15px;letter-spacing:.16em;font-weight:600;text-transform:uppercase}
+  .brand h1 a{color:inherit;text-decoration:none;transition:color .15s;pointer-events:auto}
+  .brand h1 a:hover{color:#bcd6ff}
+  .brand p{margin:2px 0 0;font-size:11.5px;color:var(--muted);letter-spacing:.03em}
+  .dna-builder-launch{position:fixed;z-index:10;left:50%;top:20px;transform:translateX(-50%);display:flex;align-items:center;gap:9px;padding:10px 17px;border:1px solid rgba(177,140,255,.38);border-radius:999px;background:linear-gradient(135deg,rgba(94,168,255,.14),rgba(177,140,255,.16));color:#eaf0ff;box-shadow:0 10px 35px rgba(40,20,90,.28),inset 0 1px rgba(255,255,255,.08);backdrop-filter:blur(18px);cursor:pointer;font:700 11px/1 ui-sans-serif;letter-spacing:.12em;text-transform:uppercase}
+  .dna-builder-launch:hover{border-color:#b18cff;box-shadow:0 0 32px rgba(177,140,255,.26)}
+  .dna-builder-launch i{width:8px;height:8px;border-radius:50%;background:#b18cff;box-shadow:0 0 12px #b18cff}
+  .builder{position:fixed;inset:0;z-index:30;display:none;place-items:center;padding:24px;background:rgba(2,3,8,.66);backdrop-filter:blur(22px) saturate(130%)}
+  .builder.open{display:grid}.builder-shell{width:min(1120px,96vw);height:min(760px,92vh);display:grid;grid-template-columns:270px 1fr;overflow:hidden;border:1px solid color-mix(in srgb,var(--strand-b) 32%,var(--line));border-radius:22px;background:linear-gradient(145deg,color-mix(in srgb,var(--bg-2) 97%,var(--strand-a) 3%),color-mix(in srgb,var(--bg-2) 95%,var(--strand-b) 5%));box-shadow:0 35px 120px rgba(0,0,0,.42),0 0 80px color-mix(in srgb,var(--strand-b) 13%,transparent)}
+  .builder [hidden]{display:none!important}
+  .builder-roster{padding:22px;border-right:1px solid var(--line);overflow:auto}.builder-roster h2{margin:0;font-size:14px;letter-spacing:.16em;text-transform:uppercase}.builder-roster>p{margin:5px 0 18px;color:var(--muted);font-size:11px}.strand-list{display:grid;gap:8px}.strand{display:flex;align-items:center;gap:9px;width:100%;padding:10px;border:1px solid var(--line);border-radius:11px;background:color-mix(in srgb,var(--bg-2) 90%,var(--text) 3%);color:var(--muted);cursor:pointer;text-align:left}.strand.active{border-color:color-mix(in srgb,var(--strand-b) 58%,var(--line));color:var(--text);background:color-mix(in srgb,var(--strand-b) 13%,var(--bg-2))}.strand-orb{width:25px;height:25px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,var(--strand-b) 18%,color-mix(in srgb,var(--strand-b) 30%,var(--bg)) 60%,var(--bg));box-shadow:0 0 16px color-mix(in srgb,var(--strand-b) 50%,transparent)}.strand b{display:block;font-size:12px;letter-spacing:.08em}.strand small{display:block;font-size:9px;color:var(--dim);margin-top:2px}
+  .grow-strand{width:100%;margin-top:12px;padding:9px;border:1px dashed color-mix(in srgb,var(--strand-b) 45%,var(--line));border-radius:10px;background:transparent;color:var(--muted);cursor:pointer;font:700 9px/1.3 inherit;letter-spacing:.12em;text-transform:uppercase}.grow-strand:hover{color:var(--text);background:color-mix(in srgb,var(--strand-b) 10%,transparent)}
+  .builder-main{display:grid;grid-template-rows:auto 1fr auto;min-width:0}.builder-head{display:flex;align-items:center;padding:18px 22px;border-bottom:1px solid var(--line)}.builder-head h3{margin:0;font-size:16px}.builder-head p{margin:2px 0 0;color:var(--muted);font-size:11px}.builder-x{margin-left:auto;border:0;background:transparent;color:var(--muted);font-size:20px;cursor:pointer}.builder-body{padding:22px;overflow:auto}.builder-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.builder-field{display:grid;gap:6px}.builder-field.wide{grid-column:1/-1}.builder-field label,.builder-cap-title{font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--dim)}.builder-field input,.builder-field textarea,.strand-chat input{width:100%;border:1px solid var(--line-2);border-radius:10px;background:color-mix(in srgb,var(--bg) 72%,transparent);color:var(--text);padding:10px 12px;font:12px/1.5 inherit;outline:none}.builder-field textarea{min-height:92px;resize:vertical}.builder-field input:focus,.builder-field textarea:focus{border-color:var(--strand-b);box-shadow:0 0 0 3px color-mix(in srgb,var(--strand-b) 12%,transparent)}.caps{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}.cap{position:relative}.cap input{position:absolute;opacity:0}.cap span{display:flex;align-items:center;gap:5px;padding:6px 9px;border:1px solid var(--line);border-radius:999px;color:var(--muted);font-size:10px;cursor:pointer;transition:color .15s,border-color .15s,background .15s,box-shadow .15s,transform .15s}.cap span:hover{border-color:color-mix(in srgb,var(--ok) 38%,var(--line));color:var(--text)}.cap input:checked+span{color:color-mix(in srgb,var(--ok) 72%,var(--text));border-color:color-mix(in srgb,var(--ok) 72%,var(--line));background:color-mix(in srgb,var(--ok) 14%,var(--bg-2));box-shadow:0 0 0 1px color-mix(in srgb,var(--ok) 18%,transparent),0 0 14px color-mix(in srgb,var(--ok) 22%,transparent)}.cap input:checked+span::before{content:'✓';display:grid;place-items:center;width:13px;height:13px;border-radius:50%;background:var(--ok);color:#07120a;font-size:8px;font-weight:900}.cap input:focus-visible+span{outline:2px solid var(--ok);outline-offset:2px}
+  .builder-foot{display:flex;align-items:center;gap:10px;padding:15px 22px;border-top:1px solid var(--line)}.clone-btn{margin-left:auto;padding:10px 17px;border:1px solid rgba(177,140,255,.5);border-radius:10px;background:linear-gradient(135deg,#345ea8,#7757bd);color:white;cursor:pointer;font-weight:700}.clone-btn:disabled{opacity:.5}.strand-chat{display:flex;gap:8px;width:100%}.strand-chat button{border:1px solid var(--line-2);border-radius:9px;background:rgba(177,140,255,.14);color:#eee;padding:0 14px;cursor:pointer}.builder-monitor{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px}.builder-monitor div{padding:12px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.025)}.builder-monitor small{display:block;color:var(--dim);font-size:8px;letter-spacing:.14em;text-transform:uppercase}.builder-monitor b{font:18px/1.4 ui-monospace;color:#dcd3ff}
+
+  /* right HUD */
+  .hud{
+    position:fixed;right:20px;top:20px;bottom:64px;width:322px;z-index:6;
+    display:flex;flex-direction:column;gap:12px;
+    pointer-events:none;
+  }
+  .card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:14px;
+    backdrop-filter:blur(18px) saturate(140%);
+    -webkit-backdrop-filter:blur(18px) saturate(140%);
+    box-shadow:0 18px 50px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.05);
+    pointer-events:auto;
+  }
+  .card.pad{padding:13px 14px}
+  .card-head{
+    display:flex;align-items:center;justify-content:space-between;
+    font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim);
+    margin-bottom:9px;
+  }
+
+  /* status */
+  .status{display:flex;align-items:center;gap:9px;font-size:12px}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--dim);flex:0 0 auto}
+  .dot.live{background:var(--ok);box-shadow:0 0 0 0 rgba(74,222,128,.6);animation:pulse 2.4s infinite}
+  .dot.busy{background:var(--warn);animation:pulse 1.1s infinite}
+  .dot.down{background:#ef4444}
+  @keyframes pulse{
+    0%{box-shadow:0 0 0 0 currentColor;opacity:1}
+    70%{box-shadow:0 0 0 7px transparent;opacity:.85}
+    100%{box-shadow:0 0 0 0 transparent;opacity:1}
+  }
+  .status .phase{color:var(--muted);font-variant-numeric:tabular-nums}
+  .status .sep{color:var(--dim)}
+  .model{
+    margin-top:8px;font:11.5px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .model b{color:#b7c4dd;font-weight:600}
+
+  /* stats */
+  .stats{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border-radius:10px;overflow:hidden}
+  .stat{background:#0c0f16;padding:10px 12px}
+  .stat .k{font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+  .stat .v{font:600 20px/1.25 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-variant-numeric:tabular-nums;color:#dce6f7;margin-top:1px}
+  .stat .v small{font-size:11px;color:var(--dim);font-weight:400;margin-left:3px}
+
+  /* legend */
+  .legend{display:flex;flex-direction:column;gap:6px}
+  .lg{display:flex;align-items:center;gap:9px;font-size:11.5px;color:var(--muted)}
+  .lg .base{
+    width:17px;height:17px;border-radius:5px;display:grid;place-items:center;
+    font:700 10px/1 ui-monospace,monospace;color:#06070a;flex:0 0 auto;
+  }
+  .lg .n{margin-left:auto;color:var(--dim);font-variant-numeric:tabular-nums;font-size:11px}
+
+  /* feed */
+  .feed-card{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+  .feed{list-style:none;margin:0;padding:0;overflow-y:auto;flex:1 1 auto;min-height:0;
+        scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.14) transparent}
+  .feed::-webkit-scrollbar{width:6px}
+  .feed::-webkit-scrollbar-thumb{background:rgba(255,255,255,.13);border-radius:3px}
+  .fi{display:flex;align-items:center;gap:8px;padding:6px 2px;border-bottom:1px solid rgba(255,255,255,.045)}
+  .fi:last-child{border-bottom:0}
+  .fi .pin{width:5px;height:5px;border-radius:50%;flex:0 0 auto;background:var(--dim)}
+  .fi .nm{font-size:11.5px;color:#c9d3e6;flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .fi .kd{font:9.5px/1 ui-monospace,monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);flex:0 0 auto}
+  .fi .tm{font:10px/1 ui-monospace,monospace;color:#4d5566;flex:0 0 auto;width:42px;text-align:right}
+  .fi.dream .nm::before{content:"🌙 ";font-size:9px}
+  .fi.fresh{animation:slideIn .5s ease both}
+  @keyframes slideIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+
+  /* bottom tape */
+  .tape-wrap{
+    position:fixed;left:0;right:0;bottom:0;height:56px;z-index:5;
+    background:linear-gradient(to top, rgba(6,7,10,.96), rgba(6,7,10,.55) 60%, transparent);
+    border-top:1px solid rgba(255,255,255,.055);
+    display:flex;align-items:center;overflow:hidden;
+  }
+  .tape-label{
+    flex:0 0 auto;padding:0 16px 0 26px;font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim);
+    white-space:nowrap;
+  }
+  .tape-clip{flex:1 1 auto;overflow:hidden;position:relative}
+  .tape-track{display:flex;gap:7px;width:max-content;will-change:transform;animation:tape 140s linear infinite}
+  .tape-track span{font:600 12px/1 ui-monospace,monospace;padding:3px 0;opacity:.85}
+  .tape-track span.gap{opacity:.28;padding:0 4px}
+  @keyframes tape{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+
+  /* hint */
+  .hint{
+    position:fixed;left:26px;bottom:74px;z-index:5;display:flex;gap:16px;flex-wrap:wrap;
+    font-size:10.5px;color:var(--dim);letter-spacing:.04em;pointer-events:none;
+  }
+  .hint kbd{
+    font:10px/1 ui-monospace,monospace;background:rgba(255,255,255,.06);border:1px solid var(--line);
+    border-radius:4px;padding:2px 5px;color:#9aa4b8;margin-right:4px;
+  }
+  .hint button{
+    pointer-events:auto;font:inherit;color:#9aa4b8;background:rgba(255,255,255,.045);
+    border:1px solid var(--line);border-radius:7px;padding:4px 10px;cursor:pointer;transition:.15s;
+  }
+  .hint button:hover{background:rgba(255,255,255,.1);color:#dce6f7}
+  .hint button.on{border-color:rgba(94,168,255,.5);color:#bcd6ff;background:rgba(94,168,255,.13)}
+
+  /* inspector */
+  .insp{
+    position:fixed;right:20px;bottom:70px;width:322px;z-index:8;
+    transform:translateY(14px) scale(.98);opacity:0;pointer-events:none;
+    transition:transform .22s cubic-bezier(.2,.8,.2,1),opacity .18s ease;
+  }
+  .insp.show{transform:none;opacity:1;pointer-events:auto}
+  .insp .inh{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+  .insp .inh .sw{width:9px;height:9px;border-radius:3px;flex:0 0 auto}
+  .insp .inh h3{margin:0;font-size:13.5px;font-weight:600;flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .insp .kind{font:9.5px/1 ui-monospace,monospace;letter-spacing:.1em;text-transform:uppercase;padding:3px 7px;border-radius:5px;border:1px solid var(--line-2);color:var(--muted)}
+  .insp .path{font:10.5px/1.5 ui-monospace,monospace;color:var(--dim);word-break:break-all;margin:0 0 8px}
+  .insp .desc{font-size:11.5px;color:#a9b3c6;margin:0 0 9px;line-height:1.55}
+  .insp pre{
+    margin:0;max-height:150px;overflow:auto;background:rgba(0,0,0,.42);border:1px solid var(--line);
+    border-radius:8px;padding:9px 10px;font:10.5px/1.55 ui-monospace,monospace;color:#93a1ba;
+    scrollbar-width:thin;
+  }
+  .insp .acts{display:flex;gap:7px;margin-top:9px}
+  .insp .acts a, .insp .acts button{
+    font:10.5px/1 inherit;color:#9aa4b8;background:rgba(255,255,255,.05);border:1px solid var(--line);
+    border-radius:6px;padding:6px 10px;cursor:pointer;text-decoration:none;transition:.15s;
+  }
+  .insp .acts a:hover, .insp .acts button:hover{background:rgba(255,255,255,.11);color:#dce6f7}
+  .insp .x{margin-left:auto;background:none;border:0;color:var(--dim);cursor:pointer;font-size:15px;line-height:1;padding:0 2px}
+  .insp .x:hover{color:#e9edf5}
+
+  /* toast */
+  .toast{
+    position:fixed;left:50%;top:22px;transform:translate(-50%,-14px);z-index:9;
+    display:flex;align-items:center;gap:9px;padding:9px 15px;border-radius:11px;
+    background:rgba(16,22,34,.94);border:1px solid rgba(94,168,255,.32);
+    box-shadow:0 14px 44px rgba(0,0,0,.6), 0 0 26px rgba(94,168,255,.16);
+    font-size:12px;opacity:0;pointer-events:none;transition:opacity .22s, transform .28s cubic-bezier(.2,.8,.2,1);
+    max-width:70vw;
+  }
+  .toast.show{opacity:1;transform:translate(-50%,0)}
+  .toast .sw{width:8px;height:8px;border-radius:3px;flex:0 0 auto}
+  .toast b{font-weight:600;color:#e9f0ff}
+
+  /* offline notice */
+  .notice{
+    position:fixed;left:50%;bottom:96px;transform:translateX(-50%);z-index:9;max-width:min(620px,88vw);
+    padding:13px 17px;border-radius:12px;background:rgba(24,18,12,.95);
+    border:1px solid rgba(251,191,36,.34);color:#e8d9b8;font-size:12px;line-height:1.6;display:none;
+  }
+  .notice.show{display:block}
+  .notice code{font:11px/1 ui-monospace,monospace;background:rgba(0,0,0,.4);padding:2px 6px;border-radius:4px;color:#ffd88a}
+
+  @media (max-width: 980px){
+    .hud{
+      left:12px;right:12px;top:auto;bottom:64px;width:auto;max-height:44vh;flex-direction:row;
+    }
+    .hud .stack{display:flex;flex-direction:column;gap:10px;flex:0 0 46%}
+    .feed-card{flex:1 1 auto}
+    .brand{left:14px;top:14px}
+    .brand p{display:none}
+    .insp{left:12px;right:12px;width:auto;bottom:64px}
+    .hint{left:14px;bottom:68px;gap:10px}
+    .tape-label{display:none}
+  }
+</style>
+</head>
+<body>
+<canvas id="helix"></canvas>
+<div class="vignette"></div>
+<div class="grain"></div>
+
+<div class="brand">
+  <div class="mark">E</div>
+  <div>
+    <h1><a href="/" title="back to the organism">DNA Genome</a></h1>
+    <p>live map of the organism's body</p>
+  </div>
+</div>
+<button class="dna-builder-launch" id="dna-builder-open"><i></i>DNA Builder</button>
+
+<div class="builder" id="dna-builder" aria-hidden="true">
+ <div class="builder-shell">
+  <aside class="builder-roster"><h2>DNA Strands</h2><p>Every card below is a living agent.</p><div class="strand-list" id="strand-list"></div><button class="grow-strand" id="grow-strand">＋ Grow New Strand</button></aside>
+  <section class="builder-main">
+   <header class="builder-head"><div><h3 id="builder-title">Grow a new intelligence</h3><p id="builder-sub">Edit the inherited DNA before the strand wakes.</p></div><button class="builder-x" id="dna-builder-close">×</button></header>
+   <div class="builder-body">
+    <div class="builder-monitor" id="builder-monitor" hidden><div><small>State</small><b id="bm-state">READY</b></div><div><small>Memory</small><b id="bm-memory">0</b></div><div><small>Mutations</small><b id="bm-mutations">0</b></div></div>
+    <div class="builder-grid" id="builder-form">
+     <div class="builder-field"><label>Optional strand alias</label><input id="clone-name" maxlength="60" placeholder="e.g. Nova, Researcher, Builder"></div>
+     <div class="builder-field"><label>Core identity</label><input id="clone-identity" maxlength="240" placeholder="A precise research-oriented intelligence"></div>
+     <div class="builder-field wide"><label>System prompt / prime directive</label><textarea id="clone-prompt" placeholder="Define how this mind thinks, communicates, and evolves…"></textarea></div>
+     <div class="builder-field wide"><div class="builder-cap-title">Encoded tools</div><div class="caps" id="clone-tools"></div></div>
+     <div class="builder-field wide"><div class="builder-cap-title">Encoded skills</div><div class="caps" id="clone-skills"></div></div>
+    </div>
+   </div>
+   <footer class="builder-foot"><div class="strand-chat" id="strand-chat" hidden><input id="strand-message" placeholder="Interact with this DNA strand…"><button id="strand-send">Transmit</button></div><button class="clone-btn" id="clone-start">Clone DNA + awaken</button></footer>
+  </section>
+ </div>
+</div>
+
+<div class="hud">
+  <div class="stack" style="display:flex;flex-direction:column;gap:12px">
+    <div class="card pad">
+      <div class="status">
+        <span class="dot" id="dot"></span>
+        <span id="conn">connecting…</span>
+        <span class="sep">·</span>
+        <span class="phase" id="phase">idle</span>
+      </div>
+      <div class="model" id="model"><b>—</b></div>
+    </div>
+
+    <div class="card pad">
+      <div class="card-head"><span>specimen</span><span id="uptime"></span></div>
+      <div class="stats">
+        <div class="stat"><div class="k">organs</div><div class="v" id="s-organs">0</div></div>
+        <div class="stat"><div class="k">mutations</div><div class="v" id="s-mut">0</div></div>
+        <div class="stat"><div class="k">snapshots</div><div class="v" id="s-snap">0</div></div>
+        <div class="stat"><div class="k">version</div><div class="v" id="s-ver">—</div></div>
+      </div>
+    </div>
+
+    <div class="card pad">
+      <div class="card-head"><span>nucleotides</span><span id="genes"></span></div>
+      <div class="legend" id="legend"></div>
+    </div>
+  </div>
+
+  <div class="card pad feed-card">
+    <div class="card-head"><span>mutation stream</span><span id="feed-count"></span></div>
+    <ul class="feed" id="feed"></ul>
+  </div>
+</div>
+
+<div class="insp card pad" id="insp">
+  <div class="inh">
+    <span class="sw" id="i-sw"></span>
+    <h3 id="i-name">—</h3>
+    <span class="kind" id="i-kind">—</span>
+    <button class="x" id="i-close" title="close">✕</button>
+  </div>
+  <p class="path" id="i-path"></p>
+  <p class="desc" id="i-desc" style="display:none"></p>
+  <pre id="i-code">loading…</pre>
+  <div class="acts">
+    <a id="i-raw" target="_blank" rel="noreferrer">raw source ↗</a>
+    <button id="i-copy">copy path</button>
+  </div>
+</div>
+
+<div class="hint">
+  <span><kbd>drag</kbd>rotate</span>
+  <span><kbd>wheel</kbd>zoom</span>
+  <span><kbd>click</kbd>inspect a gene</span>
+  <button id="btn-open">unwind helix</button>
+  <button id="btn-reset">reset view</button>
+</div>
+
+<div class="tape-wrap">
+  <div class="tape-label">base sequence · 5′ → 3′</div>
+  <div class="tape-clip"><div class="tape-track" id="tape"></div></div>
+</div>
+
+<div class="toast" id="toast"><span class="sw" id="t-sw"></span><b id="t-name"></b><span id="t-kind" style="color:#8891a3"></span></div>
+<div class="notice" id="notice"></div>
+
+<script>
+"use strict";
+
+/* ────────────────────────────────────────────────────────────────
+   EVOLV · DNA Genome
+   Renders the organism's living genome as a real B-DNA double helix:
+   right-handed, 10.5 bp per turn, sugar-phosphate backbones, base pairs
+   meeting on the axis with hydrogen bonds. Every base pair is one real
+   file in ~/.evolv/workspace. Mutations append base pairs live over WS.
+   ──────────────────────────────────────────────────────────────── */
+
+const PARAMS = new URLSearchParams(location.search);
+const EMBEDDED = PARAMS.get('embed') === '1';
+if (EMBEDDED) document.body.classList.add('embedded');
+const AMBIENT = PARAMS.get('ambient') === '1';
+if (AMBIENT) document.body.classList.add('ambient');
+const TRANSPARENT = EMBEDDED || AMBIENT;
+const API = (PARAMS.get('api') ||
+  (location.protocol.indexOf('http') === 0 ? location.origin : 'http://127.0.0.1:7374')
+).replace(/\/+$/, '');
+const WS_URL = API.replace(/^http/, 'ws') + '/ws';
+
+/* ---------- multi-strand DNA builder ---------- */
+let dnaAgents = [], activeDNA = 'main', selectedDNA = 'main';
+const dnaEsc = value => String(value == null ? '' : value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function loadDNABuilder(select) {
+  const data = await fetch(API + '/api/agents', {cache:'no-store'}).then(r => r.json());
+  dnaAgents = data.agents || []; activeDNA = data.active || 'main';
+  const list = document.getElementById('strand-list'); list.innerHTML = '';
+  dnaAgents.forEach((a,index) => { const label='EVOLV'+(a.number||index+1), alias=a.id==='main'?'Prime':a.name; const b=document.createElement('button'); b.className='strand '+(selectedDNA===a.id?'active':''); b.dataset.dna=a.id; b.dataset.label=label; b.innerHTML='<span class="strand-orb"></span><span><b>'+label+'</b><small>'+(a.active?'● active · ':'')+dnaEsc(alias)+'</small></span>'; list.appendChild(b); });
+  list.querySelectorAll('[data-dna]').forEach(b => b.onclick=()=>showDNAStrand(b.dataset.dna));
+  const caps=(id,items,kind)=>{ const host=document.getElementById(id); host.innerHTML=''; (items||[]).forEach(name=>{const l=document.createElement('label');l.className='cap';l.innerHTML='<input type="checkbox" value="'+dnaEsc(name)+'" checked><span>'+dnaEsc(name)+'</span>';host.appendChild(l)}); };
+  caps('clone-tools',data.tools,'tool'); caps('clone-skills',data.skills,'skill');
+  showDNAStrand(select || selectedDNA);
+}
+function showDNAStrand(id) {
+  selectedDNA=id; document.querySelectorAll('.strand').forEach(b=>b.classList.toggle('active',b.dataset.dna===id));
+  const fresh=id==='new', a=dnaAgents.find(x=>x.id===id);
+  document.getElementById('builder-form').hidden=!fresh; document.getElementById('clone-start').hidden=!fresh; document.getElementById('builder-monitor').hidden=fresh; document.getElementById('strand-chat').hidden=fresh;
+  const index=dnaAgents.findIndex(x=>x.id===id), label=index>=0?'EVOLV'+(a?.number||index+1):'';
+  document.getElementById('builder-title').textContent=fresh?'Grow EVOLV'+(dnaAgents.length+1):(label+' · '+(a?.name||id));
+  document.getElementById('builder-sub').textContent=fresh?'Edit the inherited DNA before the strand wakes.':(a?.identity||'Living cloned DNA strand');
+  if(a){document.getElementById('bm-state').textContent=a.active?'ACTIVE':'READY';document.getElementById('bm-memory').textContent=a.history;document.getElementById('bm-mutations').textContent=a.mutations;}
+}
+async function openDNABuilder(){document.getElementById('dna-builder').classList.add('open');document.getElementById('dna-builder').setAttribute('aria-hidden','false');await loadDNABuilder();}
+function closeDNABuilder(){document.getElementById('dna-builder').classList.remove('open');document.getElementById('dna-builder').setAttribute('aria-hidden','true');}
+document.getElementById('dna-builder-open').onclick=openDNABuilder; document.getElementById('dna-builder-close').onclick=closeDNABuilder;
+document.getElementById('grow-strand').onclick=()=>showDNAStrand('new');
+document.getElementById('clone-start').onclick=async()=>{const btn=document.getElementById('clone-start'),alias=document.getElementById('clone-name').value.trim(),name=alias||('EVOLV'+(dnaAgents.length+1));btn.disabled=true;btn.textContent='Synthesizing strand…';const pick=id=>[...document.querySelectorAll('#'+id+' input:checked')].map(x=>x.value);const payload={action:'clone',name,identity:document.getElementById('clone-identity').value,system_prompt:document.getElementById('clone-prompt').value,tools:pick('clone-tools'),skills:pick('clone-skills')};const r=await fetch(API+'/api/agents',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const out=await r.json();btn.disabled=false;btn.textContent='Clone DNA + awaken';if(r.ok){await loadDNABuilder(out.agent.id);toast('skill','EVOLV'+dnaAgents.length,'new DNA strand awakened')}else alert(out.error||'Clone failed')};
+document.getElementById('strand-send').onclick=async()=>{const input=document.getElementById('strand-message'),message=input.value.trim();if(!message||selectedDNA==='new')return;await fetch(API+'/api/agents',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'switch',id:selectedDNA})});await fetch(API+'/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message,agent:selectedDNA})});input.value='';activeDNA=selectedDNA;await loadDNABuilder(selectedDNA)};
+
+function syncHostTheme(){
+  try{
+    const host=parent.document.body,cs=parent.getComputedStyle(host),root=document.documentElement,get=n=>cs.getPropertyValue(n).trim();
+    const map={'--bg':'--bg','--bg2':'--bg-2','--text':'--text','--dim':'--muted','--faint':'--dim'};
+    Object.entries(map).forEach(([from,to])=>{const value=get(from);if(value)root.style.setProperty(to,value)});
+    const line=get('--line'),soft=get('--line-soft'),accent=get('--accent');
+    if(soft||line)root.style.setProperty('--line',soft||line); if(line)root.style.setProperty('--line-2',line);
+    if(accent){root.style.setProperty('--strand-a',accent);root.style.setProperty('--strand-b',accent)}
+    root.style.setProperty('--panel','color-mix(in srgb,var(--bg-2) 86%,transparent)');
+    document.body.dataset.hostAppearance=host.dataset.appearance||'';
+  }catch(_){}
+}
+syncHostTheme();
+try{new MutationObserver(syncHostTheme).observe(parent.document.body,{attributes:true,attributeFilter:['class','style','data-appearance']})}catch(_){}
+
+/* ---------- genome vocabulary ---------- */
+
+const KINDS = {
+  component: { letter: 'A', color: '#ffb055', label: 'organ',      kind: 'Organ'  },
+  tool:      { letter: 'T', color: '#3fd9c9', label: 'tool',       kind: 'Tool'   },
+  skill:     { letter: 'G', color: '#86e08b', label: 'skill',      kind: 'Skill'  },
+  prompt:    { letter: 'C', color: '#ff6fa5', label: 'prompt',     kind: 'Prompt' },
+  plugin:    { letter: 'A', color: '#ffd45c', label: 'plugin',     kind: 'Plugin' },
+  skin:      { letter: 'T', color: '#7dd3fc', label: 'skin',       kind: 'Skin'   },
+  file:      { letter: 'G', color: '#94a3b8', label: 'file',       kind: 'File'   }
+};
+const COMPLEMENT = { A: 'T', T: 'A', G: 'C', C: 'G' };
+const STRAND_A_COLOR = '#5ea8ff';
+const STRAND_B_COLOR = '#b18cff';
+
+const kindMeta = (k) => KINDS[k] || KINDS.file;
+
+/* workspace-relative path -> organ kind, or null when the file isn't part of
+   the living body (manifests, ledgers, backups). */
+function classify(rawPath) {
+  const p = String(rawPath).replace(/\\/g, '/');
+  if (/\.(broken|stale)[-. ]/.test(p)) return null;
+  if (p.indexOf('ui/components/') === 0 && p.endsWith('.html')) return 'component';
+  if (p.indexOf('plugins/') === 0 && p.endsWith('/plugin.js')) return 'plugin';
+  if (p.indexOf('tools/') === 0 && p.endsWith('.js')) return 'tool';
+  if (p.indexOf('skills/') === 0 && p.endsWith('.md')) return 'skill';
+  if (p.indexOf('prompts/') === 0 && p.endsWith('.md')) return 'prompt';
+  if (p === 'ui/style.css') return 'skin';
+  return null;
+}
+
+function organName(p) {
+  const clean = String(p).replace(/\\/g, '/');
+  const base = clean.split('/').pop() || clean;
+  return base.replace(/\.(html|js|md|css)$/, '');
+}
+
+function hash32(s) {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+  return h >>> 0;
+}
+
+function baseFor(kind, name) {
+  if (kind === 'plugin' || kind === 'skin') {
+    return ['A', 'T', 'G', 'C'][hash32(kind + ':' + name) % 4];
+  }
+  return kindMeta(kind).letter;
+}
+
+/* ---------- state ---------- */
+
+const state = {
+  organs: [],          // { idx, kind, name, path, base, comp, born, meta }
+  order: new Map(),    // path -> stable index (growth appends)
+  nextIdx: 0,
+  history: [],
+  snapshots: 0,
+  version: '—',
+  provider: '', model: '',
+  phase: 'idle',
+  connected: false,
+  dreaming: false,
+  hover: -1,
+  selected: -1,
+  open: 0,             // 0 = helix, 1 = unwound ladder
+  openTarget: 0,
+  zoom: 1,
+  rotY: 0.6,
+  tilt: 0.13,
+  dragging: false,
+  lastX: 0, lastY: 0,
+  dragVel: 0
+};
+
+/* ---------- dom ---------- */
+
+const $ = (id) => document.getElementById(id);
+const canvas = $('helix');
+const ctx = canvas.getContext('2d', { alpha: TRANSPARENT });
+const dpr = Math.min(2, window.devicePixelRatio || 1);
+
+let W = 0, H = 0, cx = 0, cy = 0;
+
+function resize() {
+  W = canvas.clientWidth; H = canvas.clientHeight;
+  canvas.width = Math.floor(W * dpr);
+  canvas.height = Math.floor(H * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  // centre the specimen in the pane the HUD leaves free, above the tape bar
+  const hudGutter = !AMBIENT && W >= 980 ? 360 : 0;
+  cx = (W - hudGutter) / 2 + (hudGutter ? 16 : 0);
+  cy = (H - 60) / 2;
+  bakeBackground();
+}
+window.addEventListener('resize', resize);
+
+/* ---------- background bake (cheap: drawn once per resize) ---------- */
+
+let bgCanvas = null;
+function bakeBackground() {
+  bgCanvas = document.createElement('canvas');
+  bgCanvas.width = Math.max(1, Math.floor(W * dpr));
+  bgCanvas.height = Math.max(1, Math.floor(H * dpr));
+  const g = bgCanvas.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  if (!TRANSPARENT) {
+    const lin = g.createLinearGradient(0, 0, 0, H);
+    lin.addColorStop(0, '#05060a');
+    lin.addColorStop(.55, '#080b12');
+    lin.addColorStop(1, '#05060a');
+    g.fillStyle = lin;
+    g.fillRect(0, 0, W, H);
+  }
+
+  // faint molecular grid
+  g.strokeStyle = 'rgba(120,160,230,.045)';
+  g.lineWidth = 1;
+  const step = 46;
+  for (let x = (W % step) / 2; x < W; x += step) {
+    g.beginPath(); g.moveTo(x + .5, 0); g.lineTo(x + .5, H); g.stroke();
+  }
+  for (let y = (H % step) / 2; y < H; y += step) {
+    g.beginPath(); g.moveTo(0, y + .5); g.lineTo(W, y + .5); g.stroke();
+  }
+
+  // ambient bloom behind the specimen
+  const bloom = g.createRadialGradient(cx, cy, 0, cx, cy, Math.max(W, H) * .52);
+  bloom.addColorStop(0, 'rgba(60,110,190,.13)');
+  bloom.addColorStop(.45, 'rgba(40,70,140,.05)');
+  bloom.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = bloom;
+  g.fillRect(0, 0, W, H);
+}
+
+/* ---------- glow sprites ---------- */
+
+const glowCache = new Map();
+function glowSprite(color) {
+  if (glowCache.has(color)) return glowCache.get(color);
+  const S = 64;
+  const c = document.createElement('canvas');
+  c.width = c.height = S;
+  const g = c.getContext('2d');
+  const rad = g.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S / 2);
+  rad.addColorStop(0, color);
+  rad.addColorStop(.28, hexA(color, .55));
+  rad.addColorStop(.62, hexA(color, .12));
+  rad.addColorStop(1, hexA(color, 0));
+  g.fillStyle = rad;
+  g.fillRect(0, 0, S, S);
+  glowCache.set(color, c);
+  return c;
+}
+function hexA(hex, a) {
+  const h = hex.replace('#', '');
+  const n = parseInt(h.length === 3 ? h.split('').map(x => x + x).join('') : h, 16);
+  return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+}
+function shade(hex, f) {
+  const h = hex.replace('#', '');
+  const n = parseInt(h.length === 3 ? h.split('').map(x => x + x).join('') : h, 16);
+  const r = Math.min(255, Math.round(((n >> 16) & 255) * f));
+  const g = Math.min(255, Math.round(((n >> 8) & 255) * f));
+  const b = Math.min(255, Math.round((n & 255) * f));
+  return 'rgb(' + r + ',' + g + ',' + b + ')';
+}
+
+/* ---------- geometry ---------- */
+
+const GEO = {
+  rise: 1.0,        // axial rise per base pair (world units)
+  radius: 3.9,      // helix radius (real B-DNA is 2.94x the rise; slightly fuller to read on screen)
+  bpPerTurn: 10.5,  // real B-DNA
+  camDist: 26
+};
+
+function focalFor(n) {
+  const span = Math.max(1, (n - 1) * GEO.rise);
+  const paneW = W - (W >= 980 ? 360 : 0);
+  // fit against the NEAR face of the helix: perspective magnifies it, so
+  // fitting on the axis plane would clip the first and last base pairs.
+  const near = Math.max(4, GEO.camDist - GEO.radius);
+  const fitH = 0.90 * (H - 70) * near / span;
+  const fitW = 0.30 * paneW * near / GEO.radius;
+  return Math.min(fitH, fitW) * state.zoom;
+}
+
+/* per-frame projection basis */
+let cosY = 1, sinY = 0, cosT = 1, sinT = 0, focal = 800;
+
+function proj(x, y, z) {
+  const x1 = x * cosY - z * sinY;
+  const z1 = x * sinY + z * cosY;
+  const y1 = y * cosT - z1 * sinT;
+  const z2 = y * sinT + z1 * cosT;
+  const zc = z2 + GEO.camDist;
+  if (zc < 0.7) return null;
+  const s = focal / zc;
+  return { x: cx + x1 * s, y: cy - y1 * s, s: s, zc: zc, depth: (zc - (GEO.camDist - GEO.radius)) / (2 * GEO.radius) };
+}
+
+/* ---------- drawing ---------- */
+
+let pulseT = 0;
+const hitboxes = [];
+
+function draw(now) {
+  if (TRANSPARENT) ctx.clearRect(0, 0, W, H);
+  ctx.drawImage(bgCanvas, 0, 0, W, H);
+
+  const n = state.organs.length;
+  hitboxes.length = 0;
+  if (n === 0) { drawEmpty(); return; }
+
+  cosY = Math.cos(state.rotY); sinY = Math.sin(state.rotY);
+  cosT = Math.cos(state.tilt); sinT = Math.sin(state.tilt);
+  focal = focalFor(n);
+
+  const open = state.open;
+  const span = (n - 1) * GEO.rise;
+  const top = span / 2;
+  const twist = 2 * Math.PI / GEO.bpPerTurn * (1 - open * 0.985);
+  const R = GEO.radius * (1 - open * 0.06);
+
+  /* expression pulse travelling down the strand */
+  pulseT = (now / 1000) % 7 / 7;
+  const pulseY = top - pulseT * (span + 6);
+
+  const prims = [];
+  const glows = [];
+
+  const nodes = new Array(n);
+  for (let i = 0; i < n; i++) {
+    const organ = state.organs[i];
+    const y = top - i * GEO.rise;
+    const th = i * twist;
+    const ax = R * Math.cos(th), az = R * Math.sin(th);
+    const pA = proj(ax, y, az);
+    const pB = proj(-ax, y, -az);
+    const pMid = proj(0, y, 0);
+    if (!pA || !pB || !pMid) { nodes[i] = null; continue; }
+
+    const wob = Math.abs(y - pulseY);
+    const pulse = Math.max(0, 1 - wob / 2.2);
+    const age = (now - organ.born) / 1000;
+    const grow = age < 0.85 ? easeOut(Math.min(1, age / 0.85)) : 1;
+    const fresh = age < 1.6 ? Math.max(0, 1 - age / 1.6) : 0;
+
+    nodes[i] = { y: y, ax: ax, az: az, pA: pA, pB: pB, pMid: pMid, pulse: pulse, grow: grow, fresh: fresh, organ: organ };
+
+    // ---- base pair halves (sugar-phosphate to axis)
+    const meta = kindMeta(organ.kind);
+    const mid = (a, b, t) => proj(
+      (-ax) * t + ax * (1 - t),
+      y,
+      (-az) * t + az * (1 - t)
+    );
+    // t measured from A (0) to B (1); strand half leaves a small gap at center
+    const a0 = proj(ax, y, az);
+    const a1 = mid(ax, az, 0.44);
+    const b0 = proj(-ax, y, -az);
+    const b1 = mid(ax, az, 0.56);
+    const lw = Math.max(1.15, 0.17 * pA.s) * (0.62 + 0.38 * (1 - clamp01(pA.depth))) * grow;
+    if (a0 && a1) {
+      prims.push({
+        z: (a0.zc + a1.zc) / 2,
+        draw: () => {
+          ctx.strokeStyle = shade(meta.color, 0.62 + 0.38 * (1 - clamp01(pA.depth)) + pulse * 0.5 + fresh * 1.1);
+          ctx.lineWidth = Math.max(1.1, lw);
+          ctx.lineCap = 'round';
+          ctx.beginPath(); ctx.moveTo(a0.x, a0.y); ctx.lineTo(a1.x, a1.y); ctx.stroke();
+        }
+      });
+    }
+    if (b0 && b1) {
+      prims.push({
+        z: (b0.zc + b1.zc) / 2,
+        draw: () => {
+          ctx.strokeStyle = shade(meta.color, 0.5 + 0.3 * (1 - clamp01(pB.depth)));
+          ctx.globalAlpha = 0.72;
+          ctx.lineWidth = Math.max(1.1, lw * 0.9);
+          ctx.lineCap = 'round';
+          ctx.beginPath(); ctx.moveTo(b0.x, b0.y); ctx.lineTo(b1.x, b1.y); ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
+      });
+    }
+
+    // ---- hydrogen bonds at the axis (2 for A-T, 3 for G-C)
+    if (pMid) {
+      const bonds = (organ.base === 'A' || organ.base === 'T') ? 2 : 3;
+      prims.push({
+        z: pMid.zc - 0.01,
+        draw: () => {
+          const s = pMid.s;
+          const dx = (pB.x - pA.x), dy = (pB.y - pA.y);
+          const len = Math.hypot(dx, dy) || 1;
+          const ux = dx / len, uy = dy / len;      // along the rung
+          const nx = -uy, ny = ux;                  // perpendicular
+          const gap = Math.min(16, len * 0.14);
+          ctx.strokeStyle = 'rgba(226,236,255,' + (0.30 + 0.35 * pulse) + ')';
+          ctx.lineWidth = Math.max(0.8, 0.9 * s * 0.14);
+          for (let b = 0; b < bonds; b++) {
+            const off = bonds === 1 ? 0 : (b - (bonds - 1) / 2) * Math.max(2.2, gap * 0.55);
+            const px = pMid.x + nx * off, py = pMid.y + ny * off;
+            ctx.beginPath();
+            ctx.moveTo(px - ux * gap * 0.32, py - uy * gap * 0.32);
+            ctx.lineTo(px + ux * gap * 0.32, py + uy * gap * 0.32);
+            ctx.stroke();
+          }
+        }
+      });
+    }
+
+    // ---- backbone: segments to the next pair, one per strand
+    const segW = (p) => Math.max(1.6, 0.26 * p.s * grow);
+
+    if (i < n - 1) {
+      const nextTh = (i + 1) * twist;
+      const nextY = top - (i + 1) * GEO.rise;
+      const nA = proj(R * Math.cos(nextTh), nextY, R * Math.sin(nextTh));
+      const nB = proj(-R * Math.cos(nextTh), nextY, -R * Math.sin(nextTh));
+
+      if (nA) {
+        const w = segW(pA);
+        const d = clamp01((pA.depth + nA.depth) / 2);
+        prims.push({
+          z: (pA.zc + nA.zc) / 2 - 0.02,
+          draw: () => {
+            ctx.lineCap = 'round';
+            ctx.strokeStyle = 'rgba(94,168,255,.22)';
+            ctx.lineWidth = w * 1.9;
+            ctx.beginPath(); ctx.moveTo(pA.x, pA.y); ctx.lineTo(nA.x, nA.y); ctx.stroke();
+            ctx.strokeStyle = shade(STRAND_A_COLOR, 0.55 + 0.45 * (1 - d) + pulse * 0.45);
+            ctx.lineWidth = w;
+            ctx.beginPath(); ctx.moveTo(pA.x, pA.y); ctx.lineTo(nA.x, nA.y); ctx.stroke();
+            ctx.strokeStyle = 'rgba(255,255,255,' + (0.10 + 0.16 * (1 - d)) + ')';
+            ctx.lineWidth = Math.max(0.7, w * 0.30);
+            ctx.beginPath(); ctx.moveTo(pA.x, pA.y); ctx.lineTo(nA.x, nA.y); ctx.stroke();
+          }
+        });
+      }
+      if (nB) {
+        const w = segW(pB);
+        const d = clamp01((pB.depth + nB.depth) / 2);
+        prims.push({
+          z: (pB.zc + nB.zc) / 2 - 0.02,
+          draw: () => {
+            ctx.lineCap = 'round';
+            ctx.strokeStyle = 'rgba(177,140,255,.20)';
+            ctx.lineWidth = w * 1.9;
+            ctx.beginPath(); ctx.moveTo(pB.x, pB.y); ctx.lineTo(nB.x, nB.y); ctx.stroke();
+            ctx.strokeStyle = shade(STRAND_B_COLOR, 0.52 + 0.42 * (1 - d) + pulse * 0.40);
+            ctx.lineWidth = w;
+            ctx.beginPath(); ctx.moveTo(pB.x, pB.y); ctx.lineTo(nB.x, nB.y); ctx.stroke();
+            ctx.strokeStyle = 'rgba(255,255,255,' + (0.08 + 0.14 * (1 - d)) + ')';
+            ctx.lineWidth = Math.max(0.7, w * 0.30);
+            ctx.beginPath(); ctx.moveTo(pB.x, pB.y); ctx.lineTo(nB.x, nB.y); ctx.stroke();
+          }
+        });
+      }
+    }
+
+    // ---- nucleotide spheres (drawn in the additive glow pass too)
+    const dotR = Math.max(1.4, 0.24 * pA.s * grow);
+    const sel = (state.selected === i || state.hover === i);
+    if (sel) {
+      prims.push({
+        z: Math.min(pA.zc, pB.zc) - 0.05,
+        draw: () => {
+          ctx.strokeStyle = 'rgba(255,255,255,.85)';
+          ctx.lineWidth = 1.4;
+          const midx = (pA.x + pB.x) / 2, midy = (pA.y + pB.y) / 2;
+          const rad = Math.max(16, Math.hypot(pB.x - pA.x, pB.y - pA.y) * 0.56);
+          ctx.beginPath(); ctx.arc(midx, midy, rad, 0, Math.PI * 2); ctx.stroke();
+          ctx.strokeStyle = hexA(meta.color, .5);
+          ctx.lineWidth = 5;
+          ctx.beginPath(); ctx.arc(midx, midy, rad, 0, Math.PI * 2); ctx.stroke();
+        }
+      });
+    }
+
+    for (const p of [pA, pB]) {
+      prims.push({
+        z: p.zc - 0.03,
+        draw: () => {
+          const shadeF = 0.62 + 0.38 * (1 - clamp01(p.depth));
+          ctx.fillStyle = shade(meta.color, shadeF + fresh * 0.6);
+          ctx.beginPath(); ctx.arc(p.x, p.y, dotR, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = 'rgba(255,255,255,' + (0.30 + 0.4 * (1 - clamp01(p.depth))) + ')';
+          ctx.beginPath(); ctx.arc(p.x - dotR * 0.30, p.y - dotR * 0.30, dotR * 0.34, 0, Math.PI * 2); ctx.fill();
+        }
+      });
+      glows.push({ x: p.x, y: p.y, r: dotR * (5.2 + fresh * 7 + pulse * 3), color: meta.color, a: (0.30 + 0.5 * (1 - clamp01(p.depth)) + fresh * 0.7 + pulse * 0.3) * grow });
+    }
+
+    // epigentic halo for plugins
+    if (organ.kind === 'plugin' && pMid) {
+      prims.push({
+        z: pMid.zc - 0.04,
+        draw: () => {
+          ctx.strokeStyle = 'rgba(255,212,92,' + (0.5 + 0.3 * pulse) + ')';
+          ctx.lineWidth = 1;
+          ctx.setLineDash([2, 3]);
+          ctx.beginPath(); ctx.arc(pMid.x, pMid.y, Math.max(7, 0.62 * pMid.s), 0, Math.PI * 2); ctx.stroke();
+          ctx.setLineDash([]);
+        }
+      });
+    }
+
+    // hitbox
+    hitboxes.push({
+      i: i,
+      x: (pA.x + pB.x) / 2,
+      y: (pA.y + pB.y) / 2,
+      r: Math.max(9, Math.hypot(pB.x - pA.x, pB.y - pA.y) * 0.5)
+    });
+  }
+
+  // ---- painter's algorithm
+  prims.sort((a, b) => b.z - a.z);
+  for (let i = 0; i < prims.length; i++) prims[i].draw();
+
+  // ---- additive glow pass
+  ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < glows.length; i++) {
+    const g = glows[i];
+    const sprite = glowSprite(g.color);
+    ctx.globalAlpha = Math.max(0, Math.min(1, g.a));
+    ctx.drawImage(sprite, g.x - g.r, g.y - g.r, g.r * 2, g.r * 2);
+  }
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
+
+  // ---- labels when unwound
+  if (open > 0.62) drawLabels(nodes, open);
+
+  // ---- axis caps
+  drawCaps(nodes);
+}
+
+function drawLabels(nodes, open) {
+  const n = nodes.length;
+  if (n < 1) return;
+  let spacing = 999;
+  for (let i = 0; i < n; i++) {
+    const a = nodes[i], b = nodes[i + 1];
+    if (a && b) { spacing = Math.abs(b.pA.y - a.pA.y); break; }
+  }
+  if (spacing < 10) return;
+  const alpha = clamp01((open - 0.62) / 0.3);
+  ctx.textBaseline = 'middle';
+  ctx.font = '500 10px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+  for (let i = 0; i < n; i++) {
+    const nd = nodes[i];
+    if (!nd) continue;
+    const meta = kindMeta(nd.organ.kind);
+    const right = nd.pA.x > nd.pB.x;
+    const px = (right ? nd.pA.x : nd.pB.x) + (right ? 13 : -13);
+    const label = nd.organ.name.length > 26 ? nd.organ.name.slice(0, 25) + '…' : nd.organ.name;
+    ctx.globalAlpha = alpha * 0.95;
+    ctx.textAlign = right ? 'left' : 'right';
+    ctx.fillStyle = '#c3cee2';
+    ctx.fillText(label, px, nd.pMid.y);
+    ctx.fillStyle = hexA(meta.color, .85);
+    ctx.font = '700 9px ui-monospace, monospace';
+    ctx.fillText(nd.organ.base + '·' + nd.organ.comp, right ? px + ctx.measureText(label).width + 52 : px - ctx.measureText(label).width - 46, nd.pMid.y);
+    ctx.font = '500 10px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+  }
+  ctx.globalAlpha = 1;
+  ctx.textAlign = 'left';
+}
+
+function drawCaps(nodes) {
+  // small inscription above the helix
+  const first = nodes.find(Boolean);
+  if (!first) return;
+  ctx.save();
+  ctx.globalAlpha = 0.5;
+  ctx.strokeStyle = 'rgba(140,170,220,.30)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([1, 4]);
+  ctx.beginPath();
+  ctx.moveTo(cx - 34, first.pMid.y - 20);
+  ctx.lineTo(cx + 34, first.pMid.y - 20);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawEmpty() {
+  ctx.save();
+  ctx.fillStyle = 'rgba(136,145,163,.75)';
+  ctx.font = '13px ui-monospace, monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('no organs in the genome yet — ask the organism to grow one', cx, cy);
+  ctx.restore();
+}
+
+const easeOut = (t) => 1 - Math.pow(1 - t, 3);
+const clamp01 = (v) => v < 0 ? 0 : v > 1 ? 1 : v;
+
+/* ---------- animation loop ---------- */
+
+let lastFrame = performance.now();
+function loop(now) {
+  const dt = Math.min(0.05, (now - lastFrame) / 1000);
+  lastFrame = now;
+
+  if (!state.dragging) {
+    state.rotY += ((AMBIENT ? 0.075 : 0.20) + state.dragVel) * dt * (1 - state.open * 0.85);
+    state.dragVel *= 0.94;
+  }
+  const target = state.openTarget;
+  state.open += (target - state.open) * Math.min(1, dt * 5.2);
+  if (Math.abs(target - state.open) < 0.001) state.open = target;
+
+  draw(now);
+  requestAnimationFrame(loop);
+}
+
+/* ---------- interaction ---------- */
+
+canvas.addEventListener('pointerdown', (e) => {
+  state.dragging = true;
+  state.lastX = e.clientX; state.lastY = e.clientY;
+  canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener('pointermove', (e) => {
+  if (state.dragging) {
+    const dx = e.clientX - state.lastX;
+    const dy = e.clientY - state.lastY;
+    state.lastX = e.clientX; state.lastY = e.clientY;
+    state.rotY += dx * 0.0075;
+    state.tilt = Math.max(-0.75, Math.min(0.75, state.tilt + dy * 0.0035));
+    state.dragVel = dx * 0.09;
+  } else {
+    const h = hitTest(e.clientX, e.clientY);
+    state.hover = h;
+    canvas.style.cursor = h >= 0 ? 'pointer' : 'grab';
+  }
+});
+canvas.addEventListener('pointerup', (e) => {
+  state.dragging = false;
+  try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+});
+canvas.addEventListener('pointerleave', () => { state.dragging = false; state.hover = -1; });
+canvas.addEventListener('click', (e) => {
+  const h = hitTest(e.clientX, e.clientY);
+  if (h >= 0) select(h); else deselect();
+});
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  state.zoom = Math.max(0.45, Math.min(4.5, state.zoom * (e.deltaY > 0 ? 0.92 : 1.08)));
+}, { passive: false });
+canvas.style.cursor = 'grab';
+
+function hitTest(px, py) {
+  let best = -1, bestD = Infinity;
+  for (let i = 0; i < hitboxes.length; i++) {
+    const h = hitboxes[i];
+    const d = Math.hypot(h.x - px, h.y - py);
+    if (d < Math.max(h.r, 15) && d < bestD) { bestD = d; best = h.i; }
+  }
+  return best;
+}
+
+$('btn-open').addEventListener('click', (e) => {
+  state.openTarget = state.openTarget > 0.5 ? 0 : 1;
+  e.currentTarget.classList.toggle('on', state.openTarget > 0.5);
+  e.currentTarget.textContent = state.openTarget > 0.5 ? 'coil helix' : 'unwind helix';
+});
+$('btn-reset').addEventListener('click', () => {
+  state.rotY = 0.6; state.tilt = 0.13; state.zoom = 1;
+  state.openTarget = 0;
+  $('btn-open').classList.remove('on');
+  $('btn-open').textContent = 'unwind helix';
+});
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') deselect();
+  if (e.key === 'r' || e.key === 'R') $('btn-reset').click();
+  if (e.key === 'u' || e.key === 'U') $('btn-open').click();
+});
+
+/* ---------- inspector ---------- */
+
+let codeToken = 0;
+async function select(idx) {
+  const organ = state.organs[idx];
+  if (!organ) return;
+  state.selected = idx;
+  const meta = kindMeta(organ.kind);
+  const insp = $('insp');
+  insp.classList.add('show');
+  $('i-sw').style.background = meta.color;
+  $('i-name').textContent = organ.name;
+  $('i-kind').textContent = meta.label;
+  $('i-kind').style.color = meta.color;
+  $('i-path').textContent = 'workspace/' + organ.path.replace(/\\/g, '/');
+  const desc = organ.meta && organ.meta.description;
+  $('i-desc').style.display = desc ? 'block' : 'none';
+  $('i-desc').textContent = desc || '';
+  $('i-raw').href = API + '/api/files?path=' + encodeURIComponent(organ.path.replace(/\\/g, '/'));
+  $('i-code').textContent = 'loading…';
+
+  const token = ++codeToken;
+  try {
+    const r = await fetch(API + '/api/files?path=' + encodeURIComponent(organ.path.replace(/\\/g, '/')), { cache: 'no-store' });
+    if (token !== codeToken) return;
+    if (!r.ok) { $('i-code').textContent = 'source unavailable (' + r.status + ')'; return; }
+    const txt = await r.text();
+    if (token !== codeToken) return;
+    const lines = txt.split(/\r?\n/).slice(0, 16);
+    $('i-code').textContent = lines.join('\n') + (txt.split(/\r?\n/).length > 16 ? '\n…' : '');
+  } catch (err) {
+    if (token === codeToken) $('i-code').textContent = 'source unavailable — ' + err.message;
+  }
+}
+function deselect() {
+  state.selected = -1;
+  $('insp').classList.remove('show');
+}
+$('i-close').addEventListener('click', deselect);
+$('i-copy').addEventListener('click', async () => {
+  const organ = state.organs[state.selected];
+  if (!organ) return;
+  try {
+    await navigator.clipboard.writeText(organ.path.replace(/\\/g, '/'));
+    $('i-copy').textContent = 'copied';
+    setTimeout(() => { $('i-copy').textContent = 'copy path'; }, 1300);
+  } catch (_) {}
+});
+
+/* ---------- data ---------- */
+
+async function getJSON(path) {
+  const r = await fetch(API + path, { cache: 'no-store' });
+  if (!r.ok) throw new Error(path + ' → ' + r.status);
+  return r.json();
+}
+
+async function refresh() {
+  try {
+    const [genome, mind, evolution, snapshots, health] = await Promise.all([
+      getJSON('/api/genome').catch(() => ({ files: [] })),
+      getJSON('/api/mind').catch(() => null),
+      getJSON('/api/evolution').catch(() => ({ history: [], count: 0 })),
+      getJSON('/api/snapshots').catch(() => ({ snapshots: [] })),
+      getJSON('/api/health').catch(() => null)
+    ]);
+
+    hideNotice();
+    applyGenome(genome.files || []);
+    applyEvolution(evolution.history || [], evolution.count);
+    applyMind(mind);
+    applyMeta(snapshots, health);
+    renderFeed();
+    renderTape();
+    renderLegend();
+  } catch (err) {
+    showNotice(err);
+  }
+}
+
+function applyGenome(files) {
+  // stable append order: first sighting claims the next rung index
+  const now = performance.now();
+  const seen = new Set();
+  const next = [];
+
+  for (const f of files) {
+    const kind = classify(f);
+    if (!kind) continue;
+    const key = f.replace(/\\/g, '/');
+    seen.add(key);
+    if (!state.order.has(key)) state.order.set(key, state.nextIdx++);
+
+    const existing = state.organs.find((o) => o.path === key);
+    if (existing) { next.push(existing); continue; }
+    const name = organName(f);
+    const base = baseFor(kind, name);
+    next.push({
+      idx: state.order.get(key),
+      kind: kind,
+      name: name,
+      path: key,
+      base: base,
+      comp: COMPLEMENT[base],
+      born: now,
+      meta: null
+    });
+  }
+
+  next.sort((a, b) => a.idx - b.idx);
+  state.organs = next;
+
+  // re-attach descriptions from the ledger
+  for (const o of state.organs) {
+    if (o.meta) continue;
+    for (let i = state.history.length - 1; i >= 0; i--) {
+      const h = state.history[i];
+      if (!h || h.name !== o.name) continue;
+      if (!kindsAlign(h.kind, o.kind)) continue;
+      o.meta = h;
+      break;
+    }
+  }
+
+  if (state.selected >= state.organs.length) deselect();
+  $('s-organs').textContent = String(state.organs.length);
+  $('genes').textContent = state.organs.length + ' bp';
+}
+
+function kindsAlign(ledgerKind, organKind) {
+  if (ledgerKind === organKind) return true;
+  if (ledgerKind === 'edit' && organKind === 'component') return true;
+  if (ledgerKind === 'file' && (organKind === 'skin' || organKind === 'component')) return true;
+  return false;
+}
+
+function applyEvolution(history, count) {
+  state.history = history.slice().reverse(); // newest first
+  const n = typeof count === 'number' ? count : history.length;
+  animateNumber($('s-mut'), n);
+}
+
+function applyMind(mind) {
+  if (!mind) return;
+  if (typeof mind.snapshots === 'number') animateNumber($('s-snap'), mind.snapshots);
+  state.snapshots = mind.snapshots || 0;
+}
+
+function applyMeta(snapshots, health) {
+  if (health) {
+    state.version = health.version || state.version;
+    state.provider = health.provider || state.provider;
+    state.model = health.model || state.model;
+    $('s-ver').textContent = (state.version || '—').replace(/^v/, '');
+    $('s-ver').style.fontSize = '17px';
+    $('model').innerHTML = '<b>' + esc(state.provider || '—') + '</b> · ' + esc(state.model || '—');
+  }
+  if (snapshots && snapshots.current) $('uptime').textContent = 'tip ' + snapshots.current.slice(-6);
+  else if (Array.isArray(snapshots && snapshots.snapshots)) {
+    animateNumber($('s-snap'), snapshots.snapshots.length);
+  }
+  if (snapshots && Array.isArray(snapshots.snapshots)) animateNumber($('s-snap'), snapshots.snapshots.length);
+}
+
+function animateNumber(el, value) {
+  const from = parseInt(el.textContent.replace(/[^\d]/g, ''), 10) || 0;
+  if (from === value || document.hidden) { el.textContent = String(value); return; }
+  const t0 = performance.now();
+  const dur = 420;
+  const step = (t) => {
+    const k = Math.min(1, (t - t0) / dur);
+    const v = Math.round(from + (value - from) * easeOut(k));
+    el.textContent = String(v);
+    if (k < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+/* ---------- hud rendering ---------- */
+
+function renderLegend() {
+  const counts = {};
+  for (const o of state.organs) counts[o.kind] = (counts[o.kind] || 0) + 1;
+  const rows = ['component', 'tool', 'skill', 'prompt', 'plugin', 'skin'];
+  const host = $('legend');
+  host.innerHTML = rows.map((k) => {
+    const m = kindMeta(k);
+    const c = counts[k] || 0;
+    return '<div class="lg">' +
+      '<span class="base" style="background:' + m.color + '">' + m.letter + '</span>' +
+      '<span>' + m.label + '</span>' +
+      '<span class="n">' + c + '</span>' +
+    '</div>';
+  }).join('');
+}
+
+function renderFeed() {
+  const host = $('feed');
+  const items = state.history.slice(0, 60);
+  host.innerHTML = items.map((h) => {
+    const kind = h.kind === 'edit' ? 'component' : (h.kind === 'file' ? 'skin' : h.kind);
+    const m = kindMeta(kind);
+    return '<li class="fi' + (h.dream ? ' dream' : '') + '">' +
+      '<span class="pin" style="background:' + m.color + '"></span>' +
+      '<span class="nm" title="' + esc(h.description || h.name || '') + '">' + esc(h.name || '—') + '</span>' +
+      '<span class="kd">' + esc(h.kind || '') + '</span>' +
+      '<time class="tm">' + timeAgo(h.time) + '</time>' +
+    '</li>';
+  }).join('');
+  $('feed-count').textContent = state.history.length ? state.history.length + ' logged' : '';
+}
+
+function renderTape() {
+  const host = $('tape');
+  if (!state.organs.length) { host.innerHTML = ''; return; }
+  const seq = state.organs.map((o) => {
+    const m = kindMeta(o.kind);
+    return '<span style="color:' + m.color + '" title="' + esc(o.name + ' · ' + m.label) + '">' + o.base + '</span>';
+  });
+  const chunk = seq.join('') + '<span class="gap">|</span>';
+  host.innerHTML = chunk + chunk;
+}
+
+function timeAgo(iso) {
+  if (!iso) return '';
+  const t = new Date(iso).getTime();
+  if (!t) return '';
+  const d = Math.max(0, (Date.now() - t) / 1000);
+  if (d < 60) return Math.round(d) + 's';
+  if (d < 3600) return Math.round(d / 60) + 'm';
+  if (d < 86400) return Math.round(d / 3600) + 'h';
+  return Math.round(d / 86400) + 'd';
+}
+
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+/* ---------- toast ---------- */
+
+let toastTimer = null;
+function toast(kind, name, label) {
+  const m = kindMeta(kind);
+  $('t-sw').style.background = m.color;
+  $('t-name').textContent = name;
+  $('t-kind').textContent = ' · ' + (label || m.label);
+  const el = $('toast');
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 3200);
+}
+
+function showNotice(err) {
+  const el = $('notice');
+  el.innerHTML = '<b>Endpoint unreachable.</b> ' + esc(API) + ' did not answer (' + esc(err.message) + ').<br>' +
+    'Open this page from the organism itself: <code>' + esc(API) + '/ui/genome.html</code>';
+  el.classList.add('show');
+  setConn('down');
+}
+function hideNotice() { $('notice').classList.remove('show'); }
+
+/* ---------- live: websocket spine ---------- */
+
+let ws = null;
+let retry = 0;
+let refreshTimer = null;
+
+function scheduleRefresh(delay) {
+  clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(refresh, delay || 320);
+}
+
+function setConn(mode) {
+  const dot = $('dot');
+  dot.className = 'dot ' + mode;
+  $('conn').textContent = mode === 'live' ? 'live' : mode === 'busy' ? 'active' : mode === 'down' ? 'offline' : 'reconnecting…';
+}
+
+function connect() {
+  try { ws = new WebSocket(WS_URL); } catch (err) { setConn('down'); return; }
+
+  ws.onopen = () => {
+    retry = 0;
+    state.connected = true;
+    setConn('live');
+    scheduleRefresh(120);
+  };
+  ws.onclose = () => {
+    state.connected = false;
+    setConn('down');
+    retry = Math.min(retry + 1, 8);
+    setTimeout(connect, 700 * retry);
+  };
+  ws.onerror = () => { try { ws.close(); } catch (_) {} };
+
+  ws.onmessage = (e) => {
+    let ev; try { ev = JSON.parse(e.data); } catch (_) { return; }
+    handleEvent(ev);
+  };
+}
+
+function handleEvent(ev) {
+  const p = ev.payload || {};
+  switch (ev.type) {
+    case 'hello': {
+      if (p.agent) {
+        state.provider = p.agent.provider || state.provider;
+        state.model = p.agent.model || state.model;
+        $('model').innerHTML = '<b>' + esc(state.provider) + '</b> · ' + esc(state.model);
+      }
+      break;
+    }
+    case 'evolution': {
+      const kind = p.kind || 'file';
+      const name = p.name || 'mutation';
+      // optimistic append so a new organ appears the instant it is born
+      if (['component', 'tool', 'skill', 'prompt', 'plugin'].indexOf(kind) >= 0) {
+        const guessPath = guessOrganPath(kind, name);
+        if (guessPath && !state.organs.some((o) => o.path === guessPath)) {
+          const base = baseFor(kind, name);
+          state.organs.push({
+            idx: state.nextIdx++,
+            kind: kind,
+            name: name,
+            path: guessPath,
+            base: base,
+            comp: COMPLEMENT[base],
+            born: performance.now(),
+            meta: p
+          });
+          state.order.set(guessPath, state.nextIdx - 1);
+          $('s-organs').textContent = String(state.organs.length);
+          $('genes').textContent = state.organs.length + ' bp';
+          renderTape(); renderLegend();
+        }
+      }
+      toast(kind, name, p.dream ? 'dreamed into being' : null);
+      scheduleRefresh(420);
+      break;
+    }
+    case 'fs:change': {
+      const zone = p.zone || '';
+      if (['components', 'tools', 'skills', 'prompts', 'plugins', 'ui'].indexOf(zone) >= 0) scheduleRefresh(520);
+      break;
+    }
+    case 'agent:phase': {
+      state.phase = p.phase || 'idle';
+      $('phase').textContent = state.phase;
+      setConn(state.phase === 'thinking' || state.phase === 'evolving' ? 'busy' : (state.connected ? 'live' : 'down'));
+      break;
+    }
+    case 'dream': {
+      state.dreaming = p.state === 'start';
+      if (state.dreaming) { $('phase').textContent = 'dreaming'; setConn('busy'); }
+      break;
+    }
+    case 'shell:reload': {
+      scheduleRefresh(150);
+      break;
+    }
+  }
+}
+
+function guessOrganPath(kind, name) {
+  switch (kind) {
+    case 'component': return 'ui/components/' + name + '.html';
+    case 'tool': return 'tools/' + name + '.js';
+    case 'skill': return 'skills/' + name + '.md';
+    case 'prompt': return 'prompts/' + name + '.md';
+    case 'plugin': return 'plugins/' + name + '/plugin.js';
+    default: return null;
+  }
+}
+
+/* ---------- boot ---------- */
+
+resize();
+renderLegend();
+requestAnimationFrame(loop);
+refresh();
+connect();
+</script>
+</body>
+</html>

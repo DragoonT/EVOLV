@@ -31,15 +31,34 @@ type Agent struct {
 	js        *JSRuntime
 	evolution int // mutation counter
 	maxLoops  int
+	profile   *Profile
 
 	lastAct      time.Time // last real user activity (drives dreaming)
 	dreaming     bool
 	lastSnapshot string
 }
 
+type Profile struct {
+	ID           string   `json:"id"`
+	Number       int      `json:"number"`
+	Name         string   `json:"name"`
+	Identity     string   `json:"identity"`
+	SystemPrompt string   `json:"system_prompt"`
+	Tools        []string `json:"tools"`
+	Skills       []string `json:"skills"`
+}
+
 // New builds an Agent.
 func New(ws *workspace.W, b *bus.Bus, prov providers.Provider, model string) *Agent {
-	a := &Agent{ws: ws, bus: b, prov: prov, Model: model, maxLoops: 10, lastAct: time.Now()}
+	return newAgent(ws, b, prov, model, nil)
+}
+
+func NewProfile(ws *workspace.W, b *bus.Bus, prov providers.Provider, model string, profile Profile) *Agent {
+	return newAgent(ws, b, prov, model, &profile)
+}
+
+func newAgent(ws *workspace.W, b *bus.Bus, prov providers.Provider, model string, profile *Profile) *Agent {
+	a := &Agent{ws: ws, bus: b, prov: prov, Model: model, maxLoops: 10, lastAct: time.Now(), profile: profile}
 	a.js = NewJSRuntime(a)
 	a.js.LoadAll()
 	a.loadMemory() // the mind remembers across restarts
@@ -52,6 +71,19 @@ func New(ws *workspace.W, b *bus.Bus, prov providers.Provider, model string) *Ag
 		}
 	}()
 	return a
+}
+
+func (a *Agent) CloneProfile(profile Profile) *Agent {
+	a.mu.Lock()
+	p, model := a.prov, a.Model
+	a.mu.Unlock()
+	return NewProfile(a.ws, a.bus, p, model, profile)
+}
+func (a *Agent) ProfileID() string {
+	if a.profile != nil {
+		return a.profile.ID
+	}
+	return "main"
 }
 
 // ProviderName returns the active backend name.
@@ -100,25 +132,26 @@ func (a *Agent) HistoryLen() int {
 // ---------- the evolv-block protocol ----------
 
 type action struct {
-	Action  string            `json:"action"`
-	Name    string            `json:"name"`
-	Title   string            `json:"title"`
-	Icon    string            `json:"icon"`
-	Desc    string            `json:"description"`
-	HTML    string            `json:"html"`
-	Code    string            `json:"code"`
-	Content string            `json:"content"`
-	Path    string            `json:"path"`
-	To      string            `json:"to"`
-	Find    string            `json:"find"`
-	Replace string            `json:"replace"`
-	Depth   int               `json:"depth"`
-	Cwd     string            `json:"cwd"`
-	Command string            `json:"command"`
-	Args    map[string]any    `json:"args"`
-	Steps   []planStepArg     `json:"steps"`
-	Schema  map[string]string `json:"schema"`
-	Perms   []string          `json:"perms"`
+	Action       string            `json:"action"`
+	Name         string            `json:"name"`
+	Title        string            `json:"title"`
+	Icon         string            `json:"icon"`
+	Desc         string            `json:"description"`
+	HTML         string            `json:"html"`
+	Code         string            `json:"code"`
+	Content      string            `json:"content"`
+	Path         string            `json:"path"`
+	To           string            `json:"to"`
+	Find         string            `json:"find"`
+	Replace      string            `json:"replace"`
+	ExpectedHash string            `json:"expected_hash"`
+	Depth        int               `json:"depth"`
+	Cwd          string            `json:"cwd"`
+	Command      string            `json:"command"`
+	Args         map[string]any    `json:"args"`
+	Steps        []planStepArg     `json:"steps"`
+	Schema       map[string]string `json:"schema"`
+	Perms        []string          `json:"perms"`
 }
 
 // planStepArg is one step of a set_plan action as it arrives over the wire.
@@ -154,6 +187,15 @@ func (a *Agent) SystemPrompt() string {
 
 	var b strings.Builder
 	b.WriteString(prompt)
+	if a.profile != nil {
+		b.WriteString("\n\n## CLONED DNA IDENTITY\nYou are " + a.profile.Name + ", a distinct sub-agent strand of EVOLV.\n")
+		if a.profile.Identity != "" {
+			b.WriteString(a.profile.Identity + "\n")
+		}
+		if a.profile.SystemPrompt != "" {
+			b.WriteString("\n## STRAND DIRECTIVE\n" + a.profile.SystemPrompt + "\n")
+		}
+	}
 	b.WriteString("\n\n## ORGANISM STATE\n")
 	b.WriteString("- " + a.ws.SystemInfo() + "\n")
 	b.WriteString(fmt.Sprintf("- mutations committed: %d\n", a.evolution))
@@ -191,6 +233,9 @@ func (a *Agent) SystemPrompt() string {
 	if skills, err := a.listDir(a.ws.Dir(workspace.SkillsDir), ".md"); err == nil && len(skills) > 0 {
 		b.WriteString("\n## SKILLS (grown into yourself)\n")
 		for _, s := range skills {
+			if a.profile != nil && !containsName(a.profile.Skills, strings.TrimSuffix(filepath.Base(s), ".md")) {
+				continue
+			}
 			raw, _ := os.ReadFile(s)
 			first := strings.SplitN(strings.TrimSpace(string(raw)), "\n", 2)
 			title := strings.TrimPrefix(first[0], "# ")
@@ -202,6 +247,9 @@ func (a *Agent) SystemPrompt() string {
 	if tools := a.js.ListTools(); len(tools) > 0 {
 		b.WriteString("\n## GROWN TOOLS (callable via run_tool)\n")
 		for _, t := range tools {
+			if a.profile != nil && !containsName(a.profile.Tools, t.Name) {
+				continue
+			}
 			b.WriteString("- " + t.Name + ": " + t.Desc + "\n")
 		}
 	}
@@ -222,6 +270,18 @@ func (a *Agent) SystemPrompt() string {
 		}
 	}
 	return b.String()
+}
+
+func containsName(items []string, name string) bool {
+	for _, item := range items {
+		if item == name {
+			return true
+		}
+	}
+	return false
+}
+func (a *Agent) AllowsTool(name string) bool {
+	return a.profile == nil || containsName(a.profile.Tools, name)
 }
 
 func (a *Agent) listDir(dir, ext string) ([]string, error) {

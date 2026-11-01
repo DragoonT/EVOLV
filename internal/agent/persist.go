@@ -15,6 +15,11 @@ import (
 
 // memoryFile is the workspace-relative path of the persisted conversation.
 func (a *Agent) memoryFile() string {
+	if a.profile != nil && a.profile.ID != "" {
+		dir := filepath.Join(a.ws.Dir(workspace.WorkspaceDir), "agents", a.profile.ID)
+		_ = os.MkdirAll(dir, 0o755)
+		return filepath.Join(dir, "conversation.json")
+	}
 	return filepath.Join(a.ws.Dir(workspace.WorkspaceDir), "conversation.json")
 }
 

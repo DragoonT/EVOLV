@@ -2,6 +2,7 @@ package agent
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -62,13 +63,27 @@ func TestEditFile(t *testing.T) {
 	a := testAgent(t)
 	p := filepath.Join(a.ws.Root, "t.txt")
 	os.WriteFile(p, []byte("alpha beta"), 0o644)
-	res := execOK(t, a, action{Action: "edit_file", Path: p, Find: "beta", Replace: "gamma"})
+	res := execOK(t, a, action{Action: "edit_file", Path: p, Find: "beta", Replace: "gamma", ExpectedHash: contentHash([]byte("alpha beta"))})
 	if res["ok"] != true || res["replacements"].(float64) != 1 {
 		t.Fatalf("edit_file: %v", res)
 	}
 	raw, _ := os.ReadFile(p)
 	if string(raw) != "alpha gamma" {
 		t.Fatalf("content=%q", raw)
+	}
+}
+
+func TestEditFileRejectsStaleHash(t *testing.T) {
+	a := testAgent(t)
+	p := filepath.Join(a.ws.Root, "stale.txt")
+	os.WriteFile(p, []byte("newer"), 0o644)
+	res := execOK(t, a, action{Action: "edit_file", Path: p, Find: "newer", Replace: "lost", ExpectedHash: contentHash([]byte("older"))})
+	if res["ok"] != false || !strings.Contains(fmt.Sprint(res["error"]), "stale-write guard") {
+		t.Fatalf("stale edit was not rejected: %v", res)
+	}
+	raw, _ := os.ReadFile(p)
+	if string(raw) != "newer" {
+		t.Fatalf("stale edit changed content: %q", raw)
 	}
 }
 
