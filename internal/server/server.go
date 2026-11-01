@@ -62,6 +62,7 @@ func (s *Server) routes() {
         s.mux.HandleFunc("/api/settings", s.handleSettings)
         s.mux.HandleFunc("/api/models", s.handleModels)
         s.mux.HandleFunc("/api/evolution", s.handleEvolution)
+        s.mux.HandleFunc("/api/plan", s.handlePlan)
         s.mux.HandleFunc("/api/replay", s.handleReplay)
         s.mux.HandleFunc("/api/mind", s.handleMind)
         s.mux.HandleFunc("/api/genome", s.handleGenome)
@@ -445,6 +446,11 @@ func dedupe(in []string) []string {
                 }
         }
         return out
+}
+
+// handlePlan serves the agent's current task plan (or null when none).
+func (s *Server) handlePlan(w http.ResponseWriter, r *http.Request) {
+        json.NewEncoder(w).Encode(s.ws.ReadPlan())
 }
 
 func (s *Server) handleEvolution(w http.ResponseWriter, r *http.Request) {

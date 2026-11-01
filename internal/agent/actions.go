@@ -493,6 +493,48 @@ func (a *Agent) Execute(act action) string {
                 res["ok"] = true
                 res["note"] = "browser is recompiling its shell now"
 
+        case "set_plan":
+                // persistent task state: the agent declares/updates its plan and
+                // the UI renders it live; plan.json survives restarts
+                if len(act.Steps) == 0 {
+                        res["ok"], res["error"] = false, "set_plan needs steps:[{title,status}]"
+                        break
+                }
+                plan := workspace.Plan{Title: strings.TrimSpace(act.Title)}
+                for _, s := range act.Steps {
+                        t := strings.TrimSpace(s.Title)
+                        if t == "" {
+                                continue
+                        }
+                        st := strings.ToLower(strings.TrimSpace(s.Status))
+                        switch st {
+                        case "doing", "done":
+                        default:
+                                st = "todo"
+                        }
+                        plan.Steps = append(plan.Steps, workspace.PlanStep{Title: t, Status: st})
+                }
+                if len(plan.Steps) == 0 {
+                        res["ok"], res["error"] = false, "set_plan steps need titles"
+                        break
+                }
+                if err := a.ws.WritePlan(plan); err != nil {
+                        res["ok"], res["error"] = false, err.Error()
+                        break
+                }
+                done := 0
+                for _, s := range plan.Steps {
+                        if s.Status == "done" {
+                                done++
+                        }
+                }
+                a.bus.Publish("plan", map[string]any{
+                        "title": plan.Title, "steps": act.Steps,
+                        "done": done, "total": len(plan.Steps),
+                })
+                res["ok"] = true
+                res["note"] = fmt.Sprintf("plan updated: %d/%d steps done", done, len(plan.Steps))
+
         case "self_update":
                 ctx, cancel := contextWithTimeout(5 * time.Minute)
                 defer cancel()
