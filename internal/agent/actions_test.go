@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -15,6 +16,7 @@ func testAgent(t *testing.T) *Agent {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	ws, err := workspace.Load(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -79,9 +81,14 @@ func TestSetProjectAndShellCwd(t *testing.T) {
 	if res["ok"] != true || a.ws.Config.ProjectDir != proj {
 		t.Fatalf("set_project: %v", res)
 	}
-	res = execOK(t, a, action{Action: "shell", Command: "pwd"})
-	if res["output"] != proj+"\n" {
-		t.Fatalf("shell cwd: %v", res)
+	cmd := "pwd"
+	if runtime.GOOS == "windows" {
+		cmd = "cd"
+	}
+	res = execOK(t, a, action{Action: "shell", Command: cmd})
+	out := strings.TrimRight(res["output"].(string), "\r\n")
+	if !strings.EqualFold(out, proj) {
+		t.Fatalf("shell cwd: got %q, want %q", out, proj)
 	}
 }
 
@@ -136,6 +143,7 @@ func TestSnapshotAndRollback(t *testing.T) {
 func TestSnapshotRestoreWorkspace(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	ws, err := workspace.Load(nil)
 	if err != nil {
 		t.Fatal(err)

@@ -17,6 +17,7 @@ func newWbServer(t *testing.T) (*Server, string) {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	ws, err := workspace.Load(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -124,23 +125,30 @@ func TestWbBinaryRefused(t *testing.T) {
 // TestWbEscapeRejected: path traversal and symlink escapes must fail.
 func TestWbEscapeRejected(t *testing.T) {
 	s, proj := newWbServer(t)
-	// a symlink pointing outside the project
-	outside := t.TempDir()
-	os.WriteFile(filepath.Join(outside, "secret.txt"), []byte("top secret"), 0o644)
-	os.Symlink(outside, filepath.Join(proj, "leak"))
-	rec := httptest.NewRecorder()
-	s.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "/api/wb/read?path=leak/secret.txt", nil))
-	if rec.Code != 400 {
-		t.Fatalf("symlink escape allowed: %d %s", rec.Code, rec.Body.String())
-	}
-	// classic traversal shapes
-	for _, p := range []string{"../outside.txt", "a/../../b.txt"} {
-		rec := httptest.NewRecorder()
-		s.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "/api/wb/read?path="+p, nil))
-		if rec.Code == 200 {
-			t.Fatalf("traversal allowed: %s", p)
+
+	t.Run("symlink", func(t *testing.T) {
+		outside := t.TempDir()
+		os.WriteFile(filepath.Join(outside, "secret.txt"), []byte("top secret"), 0o644)
+		if err := os.Symlink(outside, filepath.Join(proj, "leak")); err != nil {
+			t.Skip("skipping symlink test on platform without symlink privilege:", err)
 		}
-	}
+		rec := httptest.NewRecorder()
+		s.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "/api/wb/read?path=leak/secret.txt", nil))
+		if rec.Code != 400 {
+			t.Fatalf("symlink escape allowed: %d %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("traversal", func(t *testing.T) {
+		// classic traversal shapes
+		for _, p := range []string{"../outside.txt", "a/../../b.txt"} {
+			rec := httptest.NewRecorder()
+			s.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "/api/wb/read?path="+p, nil))
+			if rec.Code == 200 {
+				t.Fatalf("traversal allowed: %s", p)
+			}
+		}
+	})
 }
 
 // TestWbRenameDelete: rename refuses clobber; delete refuses the root.

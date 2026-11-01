@@ -97,7 +97,7 @@ func collectFiles(root string) (map[string]string, error) {
 		if err != nil {
 			return nil // file vanished mid-walk
 		}
-		out[rel] = string(raw)
+		out[filepath.ToSlash(rel)] = string(raw)
 		return nil
 	})
 	return out, err
