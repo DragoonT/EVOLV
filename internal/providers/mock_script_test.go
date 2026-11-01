@@ -131,50 +131,84 @@ func TestMockZenRecolor(t *testing.T) {
 	}
 }
 
-// TestMockPlanScenario: "make a plan" walks declare → progress → done,
-// each turn emitting a valid set_plan action with valid step statuses.
+// TestMockPlanScenario: "make a plan" walks declare → advance → close.
+// Stage 1 declares via set_plan; stages 2-3 use plan_advance (one call =
+// one step of progress); stage 3 emits two advances closing the plan.
 func TestMockPlanScenario(t *testing.T) {
 	resetDreamState()
 	defer resetDreamState()
 	msgs := []Message{{Role: "user", Content: "make a plan"}}
-	for stage, want := range []struct {
-		doing, done int
-	}{
-		{1, 1}, // declare: 1 done, 1 doing
-		{1, 2}, // progress: 1 doing, 2 done
-		{0, 4}, // final: all done
-	} {
-		out := mockScript(stage+1, msgs)
-		blk := evolvBlock(t, out)
-		var act struct {
-			Action string `json:"action"`
+
+	// stage 1: full set_plan declaration
+	out := mockScript(1, msgs)
+	blk := evolvBlock(t, out)
+	var act struct {
+		Action string `json:"action"`
+		Title  string `json:"title"`
+		Steps  []struct {
 			Title  string `json:"title"`
-			Steps  []struct {
-				Title  string `json:"title"`
-				Status string `json:"status"`
-			} `json:"steps"`
+			Status string `json:"status"`
+		} `json:"steps"`
+	}
+	if err := json.Unmarshal([]byte(blk), &act); err != nil {
+		t.Fatalf("stage 1: set_plan not valid JSON: %v\n%s", err, blk)
+	}
+	if act.Action != "set_plan" || act.Title == "" || len(act.Steps) != 4 {
+		t.Fatalf("stage 1: bad set_plan: %s", blk)
+	}
+	done, doing, todo := 0, 0, 0
+	for _, s := range act.Steps {
+		switch s.Status {
+		case "done":
+			done++
+		case "doing":
+			doing++
+		case "todo":
+			todo++
+		default:
+			t.Fatalf("stage 1: bad status %q", s.Status)
 		}
-		if err := json.Unmarshal([]byte(blk), &act); err != nil {
-			t.Fatalf("stage %d: set_plan not valid JSON: %v\n%s", stage+1, err, blk)
-		}
-		if act.Action != "set_plan" || act.Title == "" || len(act.Steps) != 4 {
-			t.Fatalf("stage %d: bad set_plan: %s", stage+1, blk)
-		}
-		done, doing, todo := 0, 0, 0
-		for _, s := range act.Steps {
-			switch s.Status {
-			case "done":
-				done++
-			case "doing":
-				doing++
-			case "todo":
-				todo++
-			default:
-				t.Fatalf("stage %d: bad status %q", stage+1, s.Status)
+	}
+	if done != 1 || doing != 1 || done+doing+todo != 4 {
+		t.Fatalf("stage 1: got done=%d doing=%d todo=%d", done, doing, todo)
+	}
+
+	// planAdvanceBlocks extracts all plan_advance actions from evolv fences
+	planAdvanceBlocks := func(out string) []string {
+		var acts []string
+		for {
+			i := strings.Index(out, "```evolv")
+			if i < 0 {
+				break
 			}
+			rest := out[i+8:]
+			j := strings.Index(rest, "```")
+			if j < 0 {
+				t.Fatalf("unterminated evolv block in:\n%s", out)
+			}
+			acts = append(acts, strings.TrimSpace(rest[:j]))
+			out = rest[j+3:]
 		}
-		if done != want.done || doing != want.doing || done+doing+todo != 4 {
-			t.Fatalf("stage %d: got done=%d doing=%d todo=%d, want %+v", stage+1, done, doing, todo, want)
+		return acts
+	}
+
+	// stage 2: exactly one plan_advance, no set_plan rewrite
+	out = mockScript(2, msgs)
+	blocks := planAdvanceBlocks(out)
+	if len(blocks) != 1 || !strings.Contains(blocks[0], `"plan_advance"`) {
+		t.Fatalf("stage 2: want exactly one plan_advance, got %q", blocks)
+	}
+
+	// stage 3: two plan_advances close the remaining two steps
+	out = mockScript(3, msgs)
+	blocks = planAdvanceBlocks(out)
+	if len(blocks) != 2 {
+		t.Fatalf("stage 3: want two plan_advances, got %d", len(blocks))
+	}
+	for _, b := range blocks {
+		var a map[string]any
+		if err := json.Unmarshal([]byte(b), &a); err != nil || a["action"] != "plan_advance" {
+			t.Fatalf("stage 3: bad advance block: %q", b)
 		}
 	}
 }

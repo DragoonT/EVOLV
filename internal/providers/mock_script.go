@@ -137,31 +137,22 @@ func mockPlanTurn() string {
 			"```", "",
 			"Plan declared. Say it again and watch the steps advance.",
 		}, "\n")
-	case 2: // progress
-		steps = []string{
-			step("understand the request", "done"),
-			step("design the data flow", "done"),
-			step("implement + test", "doing"),
-			step("wire the UI", "todo"),
-		}
+	case 2: // progress — one call, one step: the new plan_advance loop
 		return strings.Join([]string{
-			"Two steps down — the data flow is designed, implementation is running:",
+			"One step down. No need to rewrite the plan — `plan_advance` closes the current step and pulls the next one into doing:",
 			"", "```evolv",
-			`{"action":"set_plan","title":"grow a feature end-to-end",` + `"steps":[` + strings.Join(steps, ",") + `]}`,
+			`{"action":"plan_advance"}`,
 			"```", "",
-			"Watch the sidebar: ☑ ☑ ◐ ○. Same plan file, live update.",
+			"Watch the sidebar: ☑ ☐→◐. One call = one step of progress.",
 		}, "\n")
-	default: // done
-		steps = []string{
-			step("understand the request", "done"),
-			step("design the data flow", "done"),
-			step("implement + test", "done"),
-			step("wire the UI", "done"),
-		}
+	default: // done — two advances in one breath close the plan
 		return strings.Join([]string{
-			"Final update — the whole plan is green:",
+			"Closing it out — two more advances and the whole plan is green:",
 			"", "```evolv",
-			`{"action":"set_plan","title":"grow a feature end-to-end",` + `"steps":[` + strings.Join(steps, ",") + `]}`,
+			`{"action":"plan_advance"}`,
+			"```", "",
+			"```evolv",
+			`{"action":"plan_advance"}`,
 			"```", "",
 			"4/4 done. That checklist was my own task state, persisted in my workspace — it would have survived a restart mid-mission.",
 		}, "\n")
