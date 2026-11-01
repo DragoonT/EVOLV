@@ -323,8 +323,9 @@ function renderEvoList() {
   list.textContent = '';
   const frag = document.createDocumentFragment();
   let prevDream = false;
-  // walk oldest -> newest so dream runs open with a single divider
-  for (const h of visible.slice().reverse()) {
+  // walk newest -> oldest (top of list = latest mutation); a dream run opens
+  // with a divider above its newest entry, exactly like the live prepend did
+  for (const h of visible) {
     const isDream = !!h.dream;
     if (isDream && !prevDream) frag.appendChild(dreamDivider());
     frag.appendChild(evoItem(h.kind, h.name, h.description, h.t || (h.time || '').slice(11, 19), isDream));
@@ -357,7 +358,7 @@ async function loadEvolutionHistory() {
     const d = await r.json();
     state.evolutionCount = d.count || 0;
     bumpCounter();
-    state.evoAll = (d.history || []).map((h) => ({
+    state.evoAll = (d.history || []).slice().reverse().map((h) => ({
       kind: h.kind, name: h.name, description: h.description,
       time: h.time, dream: h.dream,
     }));
