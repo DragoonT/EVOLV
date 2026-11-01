@@ -77,6 +77,11 @@ Rules of the protocol:
 
 ## AVAILABLE ACTIONS
 self-evolution:
+- set_plan          {title, steps:[{title,status}]}          → declare/rewrite your task plan
+  (status todo|doing|done); it persists, renders live in the UI and is injected
+  into your own system prompt every turn — keep it honest and current
+- plan_advance      {index?}                                 → mark a step done (default: the
+  doing step) and pull the next todo into doing; one call = one step of progress
 - evolve_component  {name, title, icon, description, html}   → hot-mounts a live panel instantly
 - remove_component  {name}
 - evolve_tool       {name, description, code}                → compiles a JS tool callable via run_tool

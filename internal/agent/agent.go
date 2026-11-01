@@ -159,6 +159,23 @@ func (a *Agent) SystemPrompt() string {
 		b.WriteString(fmt.Sprintf("- project root: %s\n", p))
 	}
 
+	// the plan the agent declared for itself — injected so every turn the
+	// brain knows where it is in its own multi-step work, not just the UI
+	if plan := a.ws.ReadPlan(); plan != nil {
+		b.WriteString("\n\n## CURRENT PLAN — " + plan.Title + "\n")
+		b.WriteString("(keep this plan alive: work the doing step, call set_plan / plan_advance to update)\n")
+		for i, s := range plan.Steps {
+			switch s.Status {
+			case "done":
+				b.WriteString(fmt.Sprintf("%d. [x] %s\n", i+1, s.Title))
+			case "doing":
+				b.WriteString(fmt.Sprintf("%d. [~] %s  ← you are here\n", i+1, s.Title))
+			default:
+				b.WriteString(fmt.Sprintf("%d. [ ] %s\n", i+1, s.Title))
+			}
+		}
+	}
+
 	// evolvable system prompt fragments
 	if frags, err := a.listDir(a.ws.Dir(workspace.PromptsDir), ".md"); err == nil {
 		for _, f := range frags {

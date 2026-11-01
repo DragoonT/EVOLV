@@ -488,6 +488,58 @@ func (a *Agent) Execute(act action) string {
 		res["path"] = abs
 		res["note"] = "project bound; takes effect next turn"
 
+	case "plan_advance":
+		// one-call progress: mark a step done (by index, default = the
+		// doing step), then pull the next todo into doing — the agent's
+		// loop through its own plan without re-sending the whole thing
+		plan := a.ws.ReadPlan()
+		if plan == nil {
+			res["ok"], res["error"] = false, "no plan — declare one with set_plan first"
+			break
+		}
+		changed := false
+		idx := -1
+		if n, ok := act.Args["index"].(float64); ok && n >= 0 && int(n) < len(plan.Steps) {
+			idx = int(n)
+		} else {
+			for i, s := range plan.Steps {
+				if s.Status == "doing" {
+					idx = i
+					break
+				}
+			}
+		}
+		if idx < 0 {
+			res["ok"], res["error"] = false, "nothing is doing and no index given"
+			break
+		}
+		if plan.Steps[idx].Status != "done" {
+			plan.Steps[idx].Status = "done"
+			changed = true
+		}
+		// start the next todo, if the doing slot is free
+		if !hasDoing(plan.Steps) {
+			for i, s := range plan.Steps {
+				if s.Status == "todo" {
+					plan.Steps[i].Status = "doing"
+					changed = true
+					break
+				}
+			}
+		}
+		if !changed {
+			res["ok"] = true
+			res["note"] = "plan already fully advanced"
+			break
+		}
+		if err := a.ws.WritePlan(*plan); err != nil {
+			res["ok"], res["error"] = false, err.Error()
+			break
+		}
+		publishPlan(a, plan)
+		res["ok"] = true
+		res["step"] = plan.Steps[idx].Title
+
 	case "reload_shell":
 		a.bus.Publish("shell:reload", map[string]string{"reason": "agent requested a shell recompile"})
 		res["ok"] = true
@@ -522,18 +574,9 @@ func (a *Agent) Execute(act action) string {
 			res["ok"], res["error"] = false, err.Error()
 			break
 		}
-		done := 0
-		for _, s := range plan.Steps {
-			if s.Status == "done" {
-				done++
-			}
-		}
-		a.bus.Publish("plan", map[string]any{
-			"title": plan.Title, "steps": act.Steps,
-			"done": done, "total": len(plan.Steps),
-		})
+		publishPlan(a, &plan)
 		res["ok"] = true
-		res["note"] = fmt.Sprintf("plan updated: %d/%d steps done", done, len(plan.Steps))
+		res["note"] = fmt.Sprintf("plan updated: %d/%d steps done", countDone(plan.Steps), len(plan.Steps))
 
 	case "self_update":
 		ctx, cancel := contextWithTimeout(5 * time.Minute)
@@ -666,4 +709,33 @@ func (a *Agent) resolvePath(p string, res *map[string]any) (string, bool) {
 	}
 	(*res)["path"] = abs
 	return abs, true
+}
+
+// ---------- plan helpers ----------
+
+// publishPlan emits the canonical plan bus event after any plan mutation.
+func publishPlan(a *Agent, p *workspace.Plan) {
+	a.bus.Publish("plan", map[string]any{
+		"title": p.Title, "steps": p.Steps,
+		"done": countDone(p.Steps), "total": len(p.Steps),
+	})
+}
+
+func countDone(steps []workspace.PlanStep) int {
+	n := 0
+	for _, s := range steps {
+		if s.Status == "done" {
+			n++
+		}
+	}
+	return n
+}
+
+func hasDoing(steps []workspace.PlanStep) bool {
+	for _, s := range steps {
+		if s.Status == "doing" {
+			return true
+		}
+	}
+	return false
 }
