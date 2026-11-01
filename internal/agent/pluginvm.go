@@ -23,14 +23,23 @@ import (
 // fires due timers, so handlers never race the plugin's own top-level code.
 
 type pluginVM struct {
-	name     string
-	a        *Agent
-	vm       *goja.Runtime
-	mu       sync.Mutex
-	events   chan bus.Event
-	handlers map[string][]goja.Callable
-	timers   []timer
-	perms    map[string]bool
+	name         string
+	a            *Agent
+	vm           *goja.Runtime
+	mu           sync.Mutex
+	events       chan bus.Event
+	handlers     map[string][]goja.Callable
+	timers       []timer
+	perms        map[string]bool
+	loadTimeout  time.Duration
+	eventTimeout time.Duration
+}
+
+// SetEventTimeout sets the execution timeout for event handlers and timer callbacks.
+func (p *pluginVM) SetEventTimeout(d time.Duration) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.eventTimeout = d
 }
 
 // pluginCaps is every gateable capability a plugin can request.
@@ -58,8 +67,23 @@ const pluginEventQueue = 128
 // Callers holding JSRuntime.mu must not re-lock it. Does NOT start the loop.
 func (r *JSRuntime) buildPluginVM(name, code string, perms []string) (*pluginVM, error) {
 	vm := goja.New()
-	p := &pluginVM{name: name, a: r.a, vm: vm, events: make(chan bus.Event, pluginEventQueue),
-		handlers: map[string][]goja.Callable{}, perms: map[string]bool{}}
+	vm.SetMaxCallStackSize(DefaultMaxCallStackSize)
+
+	loadTimeout := r.pluginLoadTimeout
+	if loadTimeout <= 0 {
+		loadTimeout = DefaultPluginLoadTimeout
+	}
+
+	p := &pluginVM{
+		name:         name,
+		a:            r.a,
+		vm:           vm,
+		events:       make(chan bus.Event, pluginEventQueue),
+		handlers:     map[string][]goja.Callable{},
+		perms:        map[string]bool{},
+		loadTimeout:  loadTimeout,
+		eventTimeout: DefaultPluginEventTimeout,
+	}
 	for _, c := range perms {
 		p.perms[strings.TrimSpace(strings.ToLower(c))] = true
 	}
@@ -110,7 +134,11 @@ func (r *JSRuntime) buildPluginVM(name, code string, perms []string) (*pluginVM,
 	if err := vm.Set("evolv", api); err != nil {
 		return nil, err
 	}
-	if _, err := vm.RunString("(function(){" + code + "\n})();"); err != nil {
+	err := runWithTimeout(vm, loadTimeout, func() error {
+		_, runErr := vm.RunString("(function(){\n" + code + "\n})();")
+		return runErr
+	})
+	if err != nil {
 		return nil, err
 	}
 	return p, nil
@@ -143,8 +171,22 @@ func (p *pluginVM) loop() {
 		p.mu.Unlock()
 		for _, tm := range due {
 			p.mu.Lock()
-			_, _ = tm.fn(goja.Undefined(), goja.Undefined())
+			timeout := p.eventTimeout
+			if timeout <= 0 {
+				timeout = DefaultPluginEventTimeout
+			}
+			err := runWithTimeout(p.vm, timeout, func() error {
+				_, callErr := tm.fn(goja.Undefined(), goja.Undefined())
+				return callErr
+			})
 			p.mu.Unlock()
+			if err != nil && p.a != nil && p.a.bus != nil {
+				p.a.bus.Publish("plugin:error", map[string]string{
+					"plugin": p.name,
+					"type":   "timer",
+					"error":  err.Error(),
+				})
+			}
 		}
 	}
 }
@@ -158,11 +200,25 @@ func (p *pluginVM) fire(eventType string, payload json.RawMessage) {
 		obj = string(payload)
 	}
 	arg := p.vm.ToValue(obj)
+	timeout := p.eventTimeout
+	if timeout <= 0 {
+		timeout = DefaultPluginEventTimeout
+	}
 	p.mu.Unlock()
 	for _, fn := range fns {
 		p.mu.Lock()
-		_, _ = fn(goja.Undefined(), arg)
+		err := runWithTimeout(p.vm, timeout, func() error {
+			_, callErr := fn(goja.Undefined(), arg)
+			return callErr
+		})
 		p.mu.Unlock()
+		if err != nil && p.a != nil && p.a.bus != nil {
+			p.a.bus.Publish("plugin:error", map[string]string{
+				"plugin": p.name,
+				"type":   "event:" + eventType,
+				"error":  err.Error(),
+			})
+		}
 	}
 }
 
