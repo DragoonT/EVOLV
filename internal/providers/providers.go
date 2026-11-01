@@ -113,12 +113,38 @@ type oaiChunk struct {
 		Delta struct {
 			Content   string `json:"content"`
 			Reasoning string `json:"reasoning"`
+			// reasoning_content is what DeepSeek, vLLM, Groq, Together and
+			// most self-hosted reasoning models use instead of "reasoning".
+			ReasoningContent string `json:"reasoning_content"`
 		} `json:"delta"`
 		FinishReason *string `json:"finish_reason"`
 	} `json:"choices"`
 	Error *struct {
 		Message string `json:"message"`
 	} `json:"error"`
+}
+
+// oaiFullResp is the non-streaming shape some gateways return even when
+// stream:true is requested.
+type oaiFullResp struct {
+	Choices []struct {
+		Message struct {
+			Content          string `json:"content"`
+			Reasoning        string `json:"reasoning"`
+			ReasoningContent string `json:"reasoning_content"`
+		} `json:"message"`
+	} `json:"choices"`
+	Error *struct {
+		Message string `json:"message"`
+	} `json:"error"`
+}
+
+// reasoningOf picks the first non-empty reasoning field across the dialects.
+func reasoningOf(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
 }
 
 func (o *openaiCompat) Stream(ctx context.Context, model string, msgs []Message, onDelta func(Delta)) (string, error) {
@@ -154,7 +180,57 @@ func (o *openaiCompat) Stream(ctx context.Context, model string, msgs []Message,
 	}
 
 	var full strings.Builder
-	sc := bufio.NewScanner(resp.Body)
+	if err := o.consumeStream(resp, &full, onDelta); err != nil {
+		return full.String(), err
+	}
+	if onDelta != nil {
+		onDelta(Delta{Done: true})
+	}
+	return full.String(), nil
+}
+
+// consumeStream reads either an SSE token stream or a single JSON body. Some
+// gateways ignore stream:true and answer with one complete chat completion,
+// which used to look like an empty reply.
+func (o *openaiCompat) consumeStream(resp *http.Response, full *strings.Builder, onDelta func(Delta)) error {
+	ct := resp.Header.Get("Content-Type")
+	if strings.Contains(ct, "text/event-stream") {
+		return o.consumeSSE(resp.Body, full, onDelta)
+	}
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	if err != nil {
+		return err
+	}
+	// A few gateways stream with the wrong content type but still use SSE.
+	if bytes.Contains(raw, []byte("data:")) {
+		return o.consumeSSE(bytes.NewReader(raw), full, onDelta)
+	}
+	return o.consumeJSON(raw, full, onDelta)
+}
+
+func (o *openaiCompat) consumeJSON(raw []byte, full *strings.Builder, onDelta func(Delta)) error {
+	var fr oaiFullResp
+	if err := json.Unmarshal(raw, &fr); err != nil {
+		return fmt.Errorf("%s: unreadable response: %w", o.name, err)
+	}
+	if fr.Error != nil {
+		return fmt.Errorf("%s: %s", o.name, fr.Error.Message)
+	}
+	if len(fr.Choices) == 0 {
+		return fmt.Errorf("%s: empty response", o.name)
+	}
+	m := fr.Choices[0].Message
+	if m.Content != "" {
+		full.WriteString(m.Content)
+	}
+	if onDelta != nil && (m.Content != "" || m.Reasoning != "" || m.ReasoningContent != "") {
+		onDelta(Delta{Content: m.Content, Reasoning: reasoningOf(m.Reasoning, m.ReasoningContent)})
+	}
+	return nil
+}
+
+func (o *openaiCompat) consumeSSE(r io.Reader, full *strings.Builder, onDelta func(Delta)) error {
+	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 1<<20), 1<<20)
 	for sc.Scan() {
 		line := sc.Text()
@@ -170,34 +246,32 @@ func (o *openaiCompat) Stream(ctx context.Context, model string, msgs []Message,
 			continue
 		}
 		if ch.Error != nil {
-			return full.String(), fmt.Errorf("%s: %s", o.name, ch.Error.Message)
+			return fmt.Errorf("%s: %s", o.name, ch.Error.Message)
 		}
-		if len(ch.Choices) > 0 {
-			d := ch.Choices[0].Delta
-			dv := Delta{}
-			if d.Content != "" {
-				full.WriteString(d.Content)
-				dv.Content = d.Content
-			}
-			if d.Reasoning != "" {
-				dv.Reasoning = d.Reasoning
-			}
-			if dv.Content != "" || dv.Reasoning != "" && onDelta != nil {
-				onDelta(dv)
-			}
+		if len(ch.Choices) == 0 {
+			continue
+		}
+		d := ch.Choices[0].Delta
+		dv := Delta{
+			Content:   d.Content,
+			Reasoning: reasoningOf(d.Reasoning, d.ReasoningContent),
+		}
+		if dv.Content != "" {
+			full.WriteString(dv.Content)
+		}
+		if onDelta != nil && (dv.Content != "" || dv.Reasoning != "") {
+			onDelta(dv)
 		}
 	}
-	if onDelta != nil {
-		onDelta(Delta{Done: true})
-	}
-	return full.String(), sc.Err()
+	return sc.Err()
 }
 
 // ---------- Anthropic native ----------
 
 type anthropic struct {
-	apiKey string
-	client *http.Client
+	apiKey  string
+	client  *http.Client
+	baseURL string // overridable in tests; defaults to the real endpoint
 }
 
 func (a *anthropic) Name() string { return "anthropic" }
@@ -212,12 +286,23 @@ func (a *anthropic) Models(ctx context.Context) ([]string, error) {
 type antStreamEvent struct {
 	Type  string `json:"type"`
 	Delta struct {
-		Type string `json:"type"`
-		Text string `json:"text"`
+		Type     string `json:"type"`
+		Text     string `json:"text"`
+		Thinking string `json:"thinking"`
 	} `json:"delta"`
 	Error *struct {
 		Message string `json:"message"`
 	} `json:"error"`
+}
+
+// anthropicThinking reports whether extended thinking was opted into. It stays
+// off by default so ordinary chats keep their current latency and cost.
+func anthropicThinking() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("EVOLV_THINKING"))) {
+	case "1", "on", "true", "yes":
+		return true
+	}
+	return false
 }
 
 func (a *anthropic) Stream(ctx context.Context, model string, msgs []Message, onDelta func(Delta)) (string, error) {
@@ -231,27 +316,54 @@ func (a *anthropic) Stream(ctx context.Context, model string, msgs []Message, on
 			rest = append(rest, m)
 		}
 	}
-	body := map[string]any{
-		"model":      model,
-		"max_tokens": 8192,
-		"stream":     true,
-		"messages":   rest,
+	build := func(thinking bool) []byte {
+		body := map[string]any{
+			"model":      model,
+			"max_tokens": 8192,
+			"stream":     true,
+			"messages":   rest,
+		}
+		if s := strings.TrimSpace(system.String()); s != "" {
+			body["system"] = s
+		}
+		if thinking {
+			body["thinking"] = map[string]any{"type": "enabled", "budget_tokens": 2048}
+		}
+		raw, _ := json.Marshal(body)
+		return raw
 	}
-	if s := strings.TrimSpace(system.String()); s != "" {
-		body["system"] = s
+	send := func(raw []byte) (*http.Response, error) {
+		endpoint := a.baseURL
+		if endpoint == "" {
+			endpoint = "https://api.anthropic.com/v1/messages"
+		}
+		req, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(raw))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("x-api-key", a.apiKey)
+		req.Header.Set("anthropic-version", "2023-06-01")
+		return a.client.Do(req)
 	}
-	raw, _ := json.Marshal(body)
-	req, err := http.NewRequestWithContext(ctx, "POST", "https://api.anthropic.com/v1/messages", bytes.NewReader(raw))
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-api-key", a.apiKey)
-	req.Header.Set("anthropic-version", "2023-06-01")
 
-	resp, err := a.client.Do(req)
+	thinking := anthropicThinking()
+	resp, err := send(build(thinking))
 	if err != nil {
 		return "", err
+	}
+	if thinking && resp.StatusCode == http.StatusBadRequest {
+		// The model does not accept extended thinking — retry plainly rather
+		// than failing the turn.
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		resp.Body.Close()
+		if !strings.Contains(strings.ToLower(string(b)), "thinking") {
+			return "", fmt.Errorf("anthropic http %d: %s", resp.StatusCode, strings.TrimSpace(string(b)))
+		}
+		resp, err = send(build(false))
+		if err != nil {
+			return "", err
+		}
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
@@ -273,7 +385,12 @@ func (a *anthropic) Stream(ctx context.Context, model string, msgs []Message, on
 		}
 		switch ev.Type {
 		case "content_block_delta":
-			if ev.Delta.Text != "" {
+			switch {
+			case ev.Delta.Type == "thinking_delta" || (ev.Delta.Thinking != "" && ev.Delta.Text == ""):
+				if ev.Delta.Thinking != "" && onDelta != nil {
+					onDelta(Delta{Reasoning: ev.Delta.Thinking})
+				}
+			case ev.Delta.Text != "":
 				full.WriteString(ev.Delta.Text)
 				if onDelta != nil {
 					onDelta(Delta{Content: ev.Delta.Text})
@@ -303,6 +420,17 @@ func (m *mock) Models(ctx context.Context) ([]string, error) {
 func (m *mock) Stream(ctx context.Context, model string, msgs []Message, onDelta func(Delta)) (string, error) {
 	m.turn++
 	script := mockScript(m.turn, msgs)
+	// a short streamed "thought" so the reasoning panel is visible offline
+	if onDelta != nil {
+		for _, w := range []string{"reading the request", " · inspecting the living workspace", " · drafting a response"} {
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-time.After(30 * time.Millisecond):
+			}
+			onDelta(Delta{Reasoning: w})
+		}
+	}
 	// stream it word by word for the full live effect
 	words := strings.SplitAfter(script, " ")
 	for _, w := range words {
