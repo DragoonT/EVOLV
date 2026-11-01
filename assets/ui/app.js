@@ -83,6 +83,7 @@ function handle(ev) {
     }
     case 'fs:change': onFsChange(ev.payload || {}, ev.time); blip(520, 0.05, 'sine', 0.03); break;
     case 'evolution': onEvolution(ev.payload || {}); blip(740, 0.06, 'triangle', 0.035); break;
+    case 'plan': onPlan(ev.payload || {}); blip(620, 0.05, 'sine', 0.03); break;
     case 'agent:token': onToken((ev.payload || {}).text || ''); break;
     case 'agent:reasoning': onReasoning((ev.payload || {}).text || ''); break;
     case 'agent:phase': {
@@ -587,6 +588,7 @@ const ACTION_META = {
   list_dir: ['📂', 'list dir'], tree: ['🌲', 'tree'],
   delete_file: ['💥', 'delete'], move: ['📦', 'move'],
   set_project: ['🎯', 'bind project'], reload_shell: ['🔄', 'recompile shell'],
+  set_plan: ['🗺️', 'plan'],
   snapshot: ['🧊', 'freeze genome'], rollback: ['⏪', 'rewind genome'],
   shell: ['❖', 'shell'], self_update: ['🦋', 'self update'],
 };
@@ -869,6 +871,28 @@ async function saveSettings() {
   } catch { toast('⚠️ could not save settings'); }
 }
 
+/* ---------------- plan panel (the agent's live task checklist) ---------------- */
+const PLAN_ICON = { todo: '○', doing: '◐', done: '☑' };
+function renderPlan(p) {
+  const sec = $('#plan-sec'), list = $('#plan-list'), stats = $('#plan-stats');
+  if (!sec || !p || !p.steps || !p.steps.length) { if (sec) sec.hidden = true; return; }
+  const done = p.steps.filter((s) => s.status === 'done').length;
+  sec.hidden = false;
+  stats.textContent = `${done}/${p.steps.length}`;
+  list.innerHTML = p.steps.map((s) => {
+    const st = PLAN_ICON[s.status] || '○';
+    return `<div class="plan-step ${escapeHtml(s.status || 'todo')}"><span class="pi">${st}</span><span class="pt">${escapeHtml(s.title)}</span></div>`;
+  }).join('') + (p.title ? `<div class="plan-title">${escapeHtml(p.title)}</div>` : '');
+}
+function onPlan(e) { renderPlan(e); }
+async function loadPlan() {
+  try {
+    const r = await fetch('/api/plan');
+    const d = await r.json();
+    if (d && d.steps) renderPlan(d);
+  } catch {}
+}
+
 /* ---------------- mind panel (what the organism knows, live) ---------------- */
 async function loadMind() {
   try {
@@ -1078,6 +1102,7 @@ window.addEventListener('DOMContentLoaded', () => {
   connect();
   loadEvolutionHistory();
   loadMind();
+  loadPlan();
 
   // restore panel state — phones start with the sidebar folded away
   setSidebar(localStorage.getItem('evolv.sb') === '1' || isNarrow());

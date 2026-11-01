@@ -99,6 +99,16 @@ body:not(.sb-hidden) #sb-rail { display: none; }
 .m-skill { border-color: rgba(217, 119, 87, 0.4); }
 .mind-empty { font-size: 11.5px; color: var(--faint); padding: 4px 4px; }
 
+.plan-step { display: flex; gap: 7px; align-items: baseline; padding: 4px 6px; font-size: 11.5px; }
+.plan-step .pi { flex-shrink: 0; width: 14px; text-align: center; color: var(--faint); }
+.plan-step.doing .pi { color: var(--accent); }
+.plan-step.doing { color: var(--text); }
+.plan-step.done .pt { text-decoration: line-through; color: var(--faint); }
+.plan-step.done .pi { color: #6fbf8f; }
+.plan-step .pt { color: var(--dim); word-break: break-word; }
+.plan-step.doing .pt { color: var(--text); font-weight: 550; }
+.plan-title { font-size: 10px; color: var(--faint); padding: 4px 6px 0; font-style: italic; }
+
 #stream-list { flex: 1; overflow-y: auto; padding: 0 8px 8px; min-height: 0; }
 .evo-item {
   display: flex; gap: 8px; align-items: flex-start;

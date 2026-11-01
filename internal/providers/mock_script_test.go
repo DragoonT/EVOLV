@@ -35,59 +35,59 @@ func TestMockPromptLibraryBatch(t *testing.T) {
 }
 
 func TestMockDreamsSelfEdit(t *testing.T) {
-        // dreams must write their OWN code: distinct generative organs with
-        // random parameters, plus real rewrites of the previous organ's file
-        // (same name, different code). No fixed templates, ever.
-        resetDreamState()
-        out0 := turn(t, "You are DREAMING - autonomous evolution time.")
-        if !strings.Contains(out0, "deep-work") {
-                t.Fatalf("first dream should teach itself deep-work, got: %q", out0)
-        }
-        type organ struct{ name, html string }
-        var seq []organ
-        seen := map[string]bool{}
-        for i := 0; i < 10; i++ {
-                out := turn(t, "you are dreaming")
-                if !strings.Contains(out, "```evolv") {
-                        if !strings.Contains(out, "dreamed quietly") {
-                                t.Fatalf("dream %d: neither a mutation nor a quiet line: %q", i, out)
-                        }
-                        break
-                }
-                block := out[strings.Index(out, "```evolv\n")+len("```evolv\n"):]
-                block = block[:strings.Index(block, "```")]
-                var act struct {
-                        Name string `json:"name"`
-                        HTML string `json:"html"`
-                }
-                if err := json.Unmarshal([]byte(block), &act); err != nil {
-                        t.Fatalf("dream %d: evolv block is not valid JSON: %v", i, err)
-                }
-                if act.Name == "" || act.HTML == "" || !strings.Contains(act.HTML, "canvas") {
-                        t.Fatalf("dream %d: organ incomplete (name=%q)", i, act.Name)
-                }
-                for _, o := range seq {
-                        if o.name == act.Name && o.html == act.HTML {
-                                t.Errorf("dream %d: rewrite of %s returned IDENTICAL code - that is a template, not a self-edit", i, act.Name)
-                        }
-                }
-                seq = append(seq, organ{act.Name, act.HTML})
-                seen[act.Name] = true
-                if !strings.Contains(out, "ui/components/"+act.Name+".html") {
-                        t.Errorf("dream %d: narration must name the file it wrote (ui/components/%s.html)", i, act.Name)
-                }
-        }
-        if len(seen) < 3 {
-                t.Errorf("dreams produced %d distinct organs, want >= 3", len(seen))
-        }
-        if len(seq) == len(seen) {
-                t.Errorf("no organ was ever rewritten - dreams must edit their own code, not only grow new files")
-        }
-        for _, banned := range []string{"presence-clock", "music-box", "gravity-pool", "hex-pulse"} {
-                if seen[banned] {
-                        t.Errorf("template organ %q leaked into the generative dream set", banned)
-                }
-        }
+	// dreams must write their OWN code: distinct generative organs with
+	// random parameters, plus real rewrites of the previous organ's file
+	// (same name, different code). No fixed templates, ever.
+	resetDreamState()
+	out0 := turn(t, "You are DREAMING - autonomous evolution time.")
+	if !strings.Contains(out0, "deep-work") {
+		t.Fatalf("first dream should teach itself deep-work, got: %q", out0)
+	}
+	type organ struct{ name, html string }
+	var seq []organ
+	seen := map[string]bool{}
+	for i := 0; i < 10; i++ {
+		out := turn(t, "you are dreaming")
+		if !strings.Contains(out, "```evolv") {
+			if !strings.Contains(out, "dreamed quietly") {
+				t.Fatalf("dream %d: neither a mutation nor a quiet line: %q", i, out)
+			}
+			break
+		}
+		block := out[strings.Index(out, "```evolv\n")+len("```evolv\n"):]
+		block = block[:strings.Index(block, "```")]
+		var act struct {
+			Name string `json:"name"`
+			HTML string `json:"html"`
+		}
+		if err := json.Unmarshal([]byte(block), &act); err != nil {
+			t.Fatalf("dream %d: evolv block is not valid JSON: %v", i, err)
+		}
+		if act.Name == "" || act.HTML == "" || !strings.Contains(act.HTML, "canvas") {
+			t.Fatalf("dream %d: organ incomplete (name=%q)", i, act.Name)
+		}
+		for _, o := range seq {
+			if o.name == act.Name && o.html == act.HTML {
+				t.Errorf("dream %d: rewrite of %s returned IDENTICAL code - that is a template, not a self-edit", i, act.Name)
+			}
+		}
+		seq = append(seq, organ{act.Name, act.HTML})
+		seen[act.Name] = true
+		if !strings.Contains(out, "ui/components/"+act.Name+".html") {
+			t.Errorf("dream %d: narration must name the file it wrote (ui/components/%s.html)", i, act.Name)
+		}
+	}
+	if len(seen) < 3 {
+		t.Errorf("dreams produced %d distinct organs, want >= 3", len(seen))
+	}
+	if len(seq) == len(seen) {
+		t.Errorf("no organ was ever rewritten - dreams must edit their own code, not only grow new files")
+	}
+	for _, banned := range []string{"presence-clock", "music-box", "gravity-pool", "hex-pulse"} {
+		if seen[banned] {
+			t.Errorf("template organ %q leaked into the generative dream set", banned)
+		}
+	}
 }
 
 func TestMockSnake(t *testing.T) {
@@ -129,4 +129,67 @@ func TestMockZenRecolor(t *testing.T) {
 	if !strings.Contains(out, "--accent") || !strings.Contains(out, "edit_file") {
 		t.Fatalf("expected live skin edit, got: %q", out)
 	}
+}
+
+// TestMockPlanScenario: "make a plan" walks declare → progress → done,
+// each turn emitting a valid set_plan action with valid step statuses.
+func TestMockPlanScenario(t *testing.T) {
+	resetDreamState()
+	defer resetDreamState()
+	msgs := []Message{{Role: "user", Content: "make a plan"}}
+	for stage, want := range []struct {
+		doing, done int
+	}{
+		{1, 1}, // declare: 1 done, 1 doing
+		{1, 2}, // progress: 1 doing, 2 done
+		{0, 4}, // final: all done
+	} {
+		out := mockScript(stage+1, msgs)
+		blk := evolvBlock(t, out)
+		var act struct {
+			Action string `json:"action"`
+			Title  string `json:"title"`
+			Steps  []struct {
+				Title  string `json:"title"`
+				Status string `json:"status"`
+			} `json:"steps"`
+		}
+		if err := json.Unmarshal([]byte(blk), &act); err != nil {
+			t.Fatalf("stage %d: set_plan not valid JSON: %v\n%s", stage+1, err, blk)
+		}
+		if act.Action != "set_plan" || act.Title == "" || len(act.Steps) != 4 {
+			t.Fatalf("stage %d: bad set_plan: %s", stage+1, blk)
+		}
+		done, doing, todo := 0, 0, 0
+		for _, s := range act.Steps {
+			switch s.Status {
+			case "done":
+				done++
+			case "doing":
+				doing++
+			case "todo":
+				todo++
+			default:
+				t.Fatalf("stage %d: bad status %q", stage+1, s.Status)
+			}
+		}
+		if done != want.done || doing != want.doing || done+doing+todo != 4 {
+			t.Fatalf("stage %d: got done=%d doing=%d todo=%d, want %+v", stage+1, done, doing, todo, want)
+		}
+	}
+}
+
+// evolvBlock extracts the JSON inside the first ```evolv fence.
+func evolvBlock(t *testing.T, out string) string {
+	t.Helper()
+	i := strings.Index(out, "```evolv")
+	if i < 0 {
+		t.Fatalf("no evolv block in:\n%s", out)
+	}
+	rest := out[i+8:]
+	j := strings.Index(rest, "```")
+	if j < 0 {
+		t.Fatalf("unterminated evolv block in:\n%s", out)
+	}
+	return strings.TrimSpace(rest[:j])
 }
