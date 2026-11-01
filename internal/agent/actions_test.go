@@ -15,6 +15,7 @@ func testAgent(t *testing.T) *Agent {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	ws, err := workspace.Load(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -136,6 +137,7 @@ func TestSnapshotAndRollback(t *testing.T) {
 func TestSnapshotRestoreWorkspace(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	ws, err := workspace.Load(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -155,5 +157,47 @@ func TestSnapshotRestoreWorkspace(t *testing.T) {
 	}
 	if err := ws.Restore("nope"); err == nil {
 		t.Fatal("bogus restore should error")
+	}
+}
+
+func TestCommitRedactsCredentials(t *testing.T) {
+	a := testAgent(t)
+	sub, _ := a.bus.Subscribe()
+
+	a.commit("tool", "my-key-sk-1234567890abcdef12345678", "workspace/tools/leak.js", "setup with ghp_1234567890abcdef1234567890abcdef12 and Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.secret")
+
+	var ev bus.Event
+	select {
+	case ev = <-sub.Events():
+	default:
+		t.Fatal("expected evolution bus event")
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(ev.Payload, &payload); err != nil {
+		t.Fatalf("failed to unmarshal payload: %v", err)
+	}
+
+	desc := payload["description"].(string)
+	if strings.Contains(desc, "ghp_1234567890abcdef1234567890abcdef12") {
+		t.Fatalf("GitHub PAT leaked to bus: %s", desc)
+	}
+	if strings.Contains(desc, "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.secret") {
+		t.Fatalf("Bearer token leaked to bus: %s", desc)
+	}
+	if !strings.Contains(desc, "[REDACTED]") {
+		t.Fatalf("expected [REDACTED] in bus event description: %s", desc)
+	}
+
+	history := a.ws.ReadEvolution(1)
+	if len(history) != 1 {
+		t.Fatalf("expected 1 evolution entry, got %d", len(history))
+	}
+	entryDesc := history[0]["description"].(string)
+	if strings.Contains(entryDesc, "ghp_1234567890abcdef1234567890abcdef12") {
+		t.Fatalf("GitHub PAT leaked to ledger: %s", entryDesc)
+	}
+	if !strings.Contains(entryDesc, "[REDACTED]") {
+		t.Fatalf("expected [REDACTED] in ledger entry: %s", entryDesc)
 	}
 }
