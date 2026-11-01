@@ -1285,7 +1285,7 @@ function showWelcome() {
   const w = el('div', '');
   w.id = 'welcome';
   w.innerHTML = `
-    <div class="w-mark">E</div>
+    <div class="w-mark evolv-mark" role="img" aria-label="EVOLV evolving emblem"><svg viewBox="0 0 64 64" aria-hidden="true"><circle class="em-orbit em-orbit-outer" cx="32" cy="32" r="25"/><circle class="em-orbit em-orbit-inner" cx="32" cy="32" r="19"/><path class="em-core em-core-one" d="M32 11 49 32 32 53 15 32Z"/><path class="em-core em-core-two" d="M32 14 46 22 46 42 32 50 18 42 18 22Z"/><path class="em-core em-core-three" d="M32 13 38 26 51 32 38 38 32 51 26 38 13 32 26 26Z"/><circle class="em-seed" cx="32" cy="32" r="5"/><circle class="em-satellite" cx="32" cy="7" r="3"/></svg></div>
     <h1>What should evolve today?</h1>
     <p class="w-sub">EVOLV is a workspace that rewrites itself — its UI, its tools, its mind — and works on your code anywhere on this machine.</p>
     <div class="w-grid">
