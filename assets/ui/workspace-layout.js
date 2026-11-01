@@ -16,7 +16,7 @@
   const model = document.createElement('section'); model.id = 'model-sec'; model.className = 'sb-sec';
   model.innerHTML = '<div class="sb-head">Model status</div>';
   model.appendChild(document.getElementById('provider-pill')); target.appendChild(model);
-  const ids = ['mind-sec', 'plan-sec', 'organs-sec', 'evo-sec', 'navigation-sec', 'model-sec'];
+  const ids = ['mind-sec', 'plan-sec', 'organs-sec', 'pinned-sec', 'evo-sec', 'navigation-sec', 'model-sec'];
   let saved = {};
   try { saved = JSON.parse(localStorage.getItem('evolv.panel-layout.v1') || '{}') || {}; } catch (_) {}
   const persist = () => {
@@ -78,6 +78,7 @@
     if (saved[id] && saved[id].collapsed === true) panel.classList.add('panel-collapsed');
     if (saved[id] && saved[id].side === 'right') target.appendChild(panel);
     else if (saved[id] && saved[id].side === 'left') sidebar.appendChild(panel);
+    else if (id === 'pinned-sec') target.appendChild(panel);
     update();
   });
   if (!Object.keys(saved).length) ['plan-sec', 'evo-sec'].forEach(id => { const el = document.getElementById(id); if (el) target.appendChild(el); });
@@ -114,12 +115,18 @@
       const panel = document.getElementById(id), buttons = panel.querySelector('.panel-controls').children;
       if (panel.classList.contains('panel-collapsed') !== (value.collapsed === true)) buttons[0].click();
       (value.side === 'right' ? target : sidebar).appendChild(panel);
-      if (value.size) { panel.style.setProperty('--panel-size', value.size + 'px'); panel.dataset.panelSize = String(value.size); }
+      if (value.size) {
+        panel.style.setProperty('--panel-size', value.size + 'px');
+        panel.dataset.panelSize = String(value.size);
+      } else {
+        panel.style.removeProperty('--panel-size');
+        delete panel.dataset.panelSize;
+      }
     });
     persist(); responsive();
   };
   const presets = {
-    chat: { 'mind-sec': {side:'left',order:0}, 'navigation-sec': {side:'left',order:1}, 'organs-sec': {side:'left',order:2,collapsed:true}, 'plan-sec': {side:'right',order:0,collapsed:true}, 'evo-sec': {side:'right',order:1,collapsed:true}, 'model-sec': {side:'right',order:2} },
+    chat: { 'mind-sec': {side:'left',order:0}, 'navigation-sec': {side:'left',order:1}, 'organs-sec': {side:'left',order:2,collapsed:true}, 'plan-sec': {side:'right',order:0,collapsed:true}, 'evo-sec': {side:'right',order:1,collapsed:true}, 'model-sec': {side:'right',order:2}, 'pinned-sec': {side:'right',order:3} },
     coding: { 'mind-sec': {side:'left',order:0}, 'navigation-sec': {side:'left',order:1}, 'model-sec': {side:'right',order:0}, 'plan-sec': {side:'right',order:1}, 'organs-sec': {side:'right',order:2}, 'evo-sec': {side:'right',order:3} },
     evolution: { 'mind-sec': {side:'left',order:0,collapsed:true}, 'organs-sec': {side:'left',order:1}, 'navigation-sec': {side:'left',order:2}, 'evo-sec': {side:'right',order:0}, 'model-sec': {side:'right',order:1}, 'plan-sec': {side:'right',order:2} }
   };

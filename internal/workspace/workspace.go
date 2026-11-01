@@ -37,19 +37,22 @@ const (
 
 // Config is the user-editable kernel config.
 type Config struct {
-	Provider      string            `json:"provider"`       // kilo | openai | anthropic | openrouter | groq | ollama | custom | mock
-	Model         string            `json:"model"`          // model id for the provider
-	APIKeys       map[string]string `json:"api_keys"`       // BYOK: provider -> key
-	BaseURLs      map[string]string `json:"base_urls"`      // custom endpoints
-	Port          int               `json:"port"`           // 0 = auto (7373 then free)
-	OpenBrowser   bool              `json:"open_browser"`   // auto open on boot
-	AutoEvolve    bool              `json:"auto_evolve"`    // ambient heartbeat evolutions
-	HeartbeatMins int               `json:"heartbeat_mins"` // cadence of ambient evolution
-	UserName      string            `json:"user_name"`      // how the organism addresses you
-	Theme         string            `json:"theme"`          // ui theme hint the agent may rewrite
-	ProjectDir    string            `json:"project_dir"`    // user's project root the agent works on (optional)
-	Version       string            `json:"version"`
-	InstalledAt   string            `json:"installed_at"`
+	Provider          string            `json:"provider"`       // kilo | openai | anthropic | openrouter | groq | ollama | custom | mock
+	Model             string            `json:"model"`          // model id for the provider
+	APIKeys           map[string]string `json:"api_keys"`       // BYOK: provider -> key
+	BaseURLs          map[string]string `json:"base_urls"`      // custom endpoints
+	Port              int               `json:"port"`           // 0 = auto (7373 then free)
+	OpenBrowser       bool              `json:"open_browser"`   // auto open on boot
+	AutoEvolve        bool              `json:"auto_evolve"`    // ambient heartbeat evolutions
+	HeartbeatMins     int               `json:"heartbeat_mins"` // cadence of ambient evolution
+	UserName          string            `json:"user_name"`      // how the organism addresses you
+	Theme             string            `json:"theme"`          // ui theme hint the agent may rewrite
+	ProjectDir        string            `json:"project_dir"`    // user's project root the agent works on (optional)
+	DisabledWidgets   map[string]bool   `json:"disabled_widgets,omitempty"`
+	PinnedCreations   map[string]bool   `json:"pinned_creations,omitempty"`
+	ArchivedCreations map[string]bool   `json:"archived_creations,omitempty"`
+	Version           string            `json:"version"`
+	InstalledAt       string            `json:"installed_at"`
 }
 
 // W is the active workspace.
@@ -110,18 +113,21 @@ func (w *W) ReadPlan() *Plan {
 // Default config.
 func defaultConfig() *Config {
 	return &Config{
-		Provider:      "kilo",
-		Model:         "kilo-auto/free",
-		APIKeys:       map[string]string{},
-		BaseURLs:      map[string]string{},
-		Port:          7373,
-		OpenBrowser:   true,
-		AutoEvolve:    false,
-		HeartbeatMins: 15,
-		UserName:      "friend",
-		Theme:         "obsidian",
-		Version:       Version,
-		InstalledAt:   time.Now().UTC().Format(time.RFC3339),
+		Provider:          "kilo",
+		Model:             "kilo-auto/free",
+		APIKeys:           map[string]string{},
+		BaseURLs:          map[string]string{},
+		DisabledWidgets:   map[string]bool{},
+		PinnedCreations:   map[string]bool{},
+		ArchivedCreations: map[string]bool{},
+		Port:              7373,
+		OpenBrowser:       true,
+		AutoEvolve:        false,
+		HeartbeatMins:     15,
+		UserName:          "friend",
+		Theme:             "obsidian",
+		Version:           Version,
+		InstalledAt:       time.Now().UTC().Format(time.RFC3339),
 	}
 }
 

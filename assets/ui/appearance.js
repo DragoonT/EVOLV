@@ -108,12 +108,14 @@
     panel.querySelector('#ap-radius-output').textContent = `${state.radius}px`;
     localStorage.setItem(key, JSON.stringify(state));
   }
+  const appearanceRoot = document.body;
+  if (!appearanceRoot) return;
   new MutationObserver(() => {
     const paper = document.body.classList.contains('paper');
     if (paper === lastPaper) return;
     lastPaper = paper;
     const next = paper ? 'arctic' : 'graphite';
     if (state.preset !== next) { state.preset = next; state.accent = ''; apply(); }
-  }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+  }).observe(appearanceRoot, { attributes: true, attributeFilter: ['class'] });
   apply();
 })();

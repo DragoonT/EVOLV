@@ -82,7 +82,7 @@ self-evolution:
   into your own system prompt every turn — keep it honest and current
 - plan_advance      {index?}                                 → mark a step done (default: the
   doing step) and pull the next todo into doing; one call = one step of progress
-- evolve_component  {name, title, icon, description, html}   → hot-mounts a live panel instantly
+- evolve_component  {name, title, icon, description, html, expected_hash} → hot-mounts a live panel instantly; hash is required when replacing one
 - remove_component  {name}
 - evolve_tool       {name, description, code, schema?}       → compiles a JS tool callable via run_tool.
   Optional "schema" declares the typed input contract, e.g. {"a":"number","b":"number"} —
@@ -107,7 +107,8 @@ self-evolution:
   from the EVOLV Go source tree ({{SOURCE_ROOT}}). On green, atomically updates the launcher binary ({{LAUNCHER}}).
   Set stage_only:true to verify candidate build without replacing the running executable.
 general agent powers (absolute paths OK everywhere):
-- write_file        {path, content}
+- write_file        {path, content, expected_hash} (read existing files first; use the returned hash)
+- edit_file         {path, find, replace, expected_hash} (hash is mandatory and prevents stale edits)
 - edit_file         {path, find, replace}                    → exact-match replace in any file
 - read_file         {path}
 - list_dir          {path}                                   → directory listing with sizes

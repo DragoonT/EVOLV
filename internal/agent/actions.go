@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -18,6 +19,35 @@ import (
 	"github.com/dxn111/EVOLV/internal/update"
 	"github.com/dxn111/EVOLV/internal/workspace"
 )
+
+func contentHash(raw []byte) string { return fmt.Sprintf("sha256:%x", sha256.Sum256(raw)) }
+
+// guardedWrite prevents a mutation planned from stale source from overwriting a
+// newer file. Existing files require the hash returned by read_file; identical
+// content is treated as a no-op so the organism does not repeatedly mutate the
+// same tool or component.
+func guardedWrite(path string, next []byte, expected string) (string, bool, error) {
+	current, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return "", false, err
+	}
+	if err == nil {
+		actual := contentHash(current)
+		if expected == "" {
+			return actual, false, fmt.Errorf("stale-write guard: read %s first and pass expected_hash=%s", path, actual)
+		}
+		if expected != actual {
+			return actual, false, fmt.Errorf("stale-write guard: expected %s, current is %s; re-read before mutating", expected, actual)
+		}
+		if string(current) == string(next) {
+			return actual, false, nil
+		}
+	}
+	if err := os.WriteFile(path, next, 0o644); err != nil {
+		return "", false, err
+	}
+	return contentHash(next), true, nil
+}
 
 // JSRuntime executes tools and plugins the agent grows into itself.
 // goja is a pure-Go ES5.1+ interpreter: no cgo, cross-compiles everywhere.
@@ -220,12 +250,16 @@ func (a *Agent) Execute(act action) string {
 			break
 		}
 		path := filepath.Join(a.ws.Dir(workspace.ComponentsDir), name+".html")
-		if err := os.WriteFile(path, []byte(act.HTML), 0o644); err != nil {
+		hash, changed, err := guardedWrite(path, []byte(act.HTML), act.ExpectedHash)
+		if err != nil {
 			res["ok"], res["error"] = false, err.Error()
 			break
 		}
-		a.commit("component", name, path, act.Desc)
+		if changed {
+			a.commit("component", name, path, act.Desc)
+		}
 		res["ok"] = true
+		res["hash"], res["changed"] = hash, changed
 		res["path"] = "workspace/ui/components/" + name + ".html"
 		res["note"] = "component hot-mounted live"
 
@@ -247,17 +281,21 @@ func (a *Agent) Execute(act action) string {
 			break
 		}
 		path := filepath.Join(a.ws.Dir(workspace.ToolsDir), name+".js")
-		if err := os.WriteFile(path, []byte(act.Code), 0o644); err != nil {
+		hash, changed, err := guardedWrite(path, []byte(act.Code), act.ExpectedHash)
+		if err != nil {
 			res["ok"], res["error"] = false, err.Error()
 			break
 		}
 		a.js.mu.Lock()
 		a.js.evalToolLocked(name, act.Code)
 		a.js.mu.Unlock()
-		a.commit("tool", name, path, act.Desc)
+		if changed {
+			a.commit("tool", name, path, act.Desc)
+		}
 		res["ok"] = true
+		res["hash"], res["changed"] = hash, changed
 		note := "tool compiled into the sandbox and callable via run_tool"
-		if len(act.Schema) > 0 {
+		if len(act.Schema) > 0 && changed {
 			// typed contract: persisted manifest, versioned, run_tool now validates
 			m := &toolManifest{Name: name, Description: act.Desc, Schema: act.Schema}
 			ver, err := writeToolManifest(a, m)
@@ -271,6 +309,10 @@ func (a *Agent) Execute(act action) string {
 		res["note"] = note
 
 	case "run_tool":
+		if !a.AllowsTool(sanitizeName(act.Name)) {
+			res["ok"], res["error"] = false, "tool is not encoded in this DNA strand"
+			break
+		}
 		if m := readToolManifest(a, sanitizeName(act.Name)); m != nil && len(m.Schema) > 0 {
 			// typed manifest: reject bad calls before the code runs
 			args := act.Args
@@ -323,12 +365,16 @@ func (a *Agent) Execute(act action) string {
 			break
 		}
 		path := filepath.Join(a.ws.Dir(workspace.SkillsDir), name+".md")
-		if err := os.WriteFile(path, []byte(act.Content), 0o644); err != nil {
+		hash, changed, err := guardedWrite(path, []byte(act.Content), act.ExpectedHash)
+		if err != nil {
 			res["ok"], res["error"] = false, err.Error()
 			break
 		}
-		a.commit("skill", name, path, act.Desc)
+		if changed {
+			a.commit("skill", name, path, act.Desc)
+		}
 		res["ok"] = true
+		res["hash"], res["changed"] = hash, changed
 
 	case "evolve_prompt":
 		name := sanitizeName(act.Name)
@@ -338,12 +384,16 @@ func (a *Agent) Execute(act action) string {
 			break
 		}
 		path := filepath.Join(a.ws.Dir(workspace.PromptsDir), name+".md")
-		if err := os.WriteFile(path, []byte(act.Content), 0o644); err != nil {
+		hash, changed, err := guardedWrite(path, []byte(act.Content), act.ExpectedHash)
+		if err != nil {
 			res["ok"], res["error"] = false, err.Error()
 			break
 		}
-		a.commit("prompt", name, path, act.Desc)
+		if changed {
+			a.commit("prompt", name, path, act.Desc)
+		}
 		res["ok"] = true
+		res["hash"], res["changed"] = hash, changed
 		res["note"] = "system prompt rewritten; takes effect next turn"
 
 	case "evolve_plugin":
@@ -396,12 +446,17 @@ func (a *Agent) Execute(act action) string {
 			res["ok"], res["error"] = false, err.Error()
 			break
 		}
-		if err := os.WriteFile(p, []byte(act.Content), 0o644); err != nil {
+		hash, changed, err := guardedWrite(p, []byte(act.Content), act.ExpectedHash)
+		if err != nil {
 			res["ok"], res["error"] = false, err.Error()
 		} else {
-			a.commit("file", act.Path, p, act.Desc)
+			if changed {
+				a.commit("file", act.Path, p, act.Desc)
+			}
 			res["ok"] = true
 			res["path"] = p
+			res["hash"] = hash
+			res["changed"] = changed
 		}
 
 	case "edit_file":
@@ -414,6 +469,13 @@ func (a *Agent) Execute(act action) string {
 			res["ok"], res["error"] = false, err.Error()
 			break
 		}
+		actualHash := contentHash(raw)
+		if act.ExpectedHash == "" || act.ExpectedHash != actualHash {
+			res["ok"] = false
+			res["error"] = fmt.Sprintf("stale-write guard: expected_hash must match current %s; re-read before editing", actualHash)
+			res["hash"] = actualHash
+			break
+		}
 		src := string(raw)
 		if act.Find == "" || !strings.Contains(src, act.Find) {
 			res["ok"] = false
@@ -422,13 +484,18 @@ func (a *Agent) Execute(act action) string {
 		}
 		n := strings.Count(src, act.Find)
 		src = strings.ReplaceAll(src, act.Find, act.Replace)
-		if err := os.WriteFile(p, []byte(src), 0o644); err != nil {
+		hash, changed, err := guardedWrite(p, []byte(src), act.ExpectedHash)
+		if err != nil {
 			res["ok"], res["error"] = false, err.Error()
 			break
 		}
-		a.commit("edit", act.Path, p, fmt.Sprintf("replaced %d occurrence(s)", n))
+		if changed {
+			a.commit("edit", act.Path, p, fmt.Sprintf("replaced %d occurrence(s)", n))
+		}
 		res["ok"] = true
 		res["replacements"] = n
+		res["hash"] = hash
+		res["changed"] = changed
 
 	case "read_file":
 		p, ok := a.resolvePath(act.Path, &res)
@@ -441,6 +508,7 @@ func (a *Agent) Execute(act action) string {
 		} else {
 			res["ok"] = true
 			res["content"] = string(raw)
+			res["hash"] = contentHash(raw)
 		}
 
 	case "list_dir":

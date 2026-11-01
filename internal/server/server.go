@@ -5,6 +5,7 @@ package server
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -30,27 +31,32 @@ import (
 
 // Server is the organism's interface to the world.
 type Server struct {
-	ws        *workspace.W
-	bus       *bus.Bus
-	ag        *agent.Agent
-	reg       *providers.Registry
-	mux       *http.ServeMux
-	upgr      websocket.Upgrader
-	mu        sync.Mutex
-	live      int
-	update    *update.Info // newer release, if any
-	genMu     sync.Mutex
-	genCancel context.CancelFunc // cancels the in-flight generation (stop button)
+	ws          *workspace.W
+	bus         *bus.Bus
+	ag          *agent.Agent
+	reg         *providers.Registry
+	mux         *http.ServeMux
+	upgr        websocket.Upgrader
+	mu          sync.Mutex
+	live        int
+	update      *update.Info // newer release, if any
+	genMu       sync.Mutex
+	genCancel   context.CancelFunc // cancels the in-flight generation (stop button)
+	agentMu     sync.RWMutex
+	agents      map[string]*agent.Agent
+	profiles    map[string]agent.Profile
+	activeAgent string
 }
 
 // New builds the server.
 func New(ws *workspace.W, b *bus.Bus, ag *agent.Agent, reg *providers.Registry) *Server {
 	s := &Server{
-		ws: ws, bus: b, ag: ag, reg: reg, mux: http.NewServeMux(),
+		ws: ws, bus: b, ag: ag, reg: reg, mux: http.NewServeMux(), agents: map[string]*agent.Agent{}, profiles: map[string]agent.Profile{}, activeAgent: "main",
 		upgr: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool { return true }, // localhost organism
 		},
 	}
+	s.loadAgentProfiles()
 	s.routes()
 	return s
 }
@@ -65,6 +71,9 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/plan", s.handlePlan)
 	s.mux.HandleFunc("/api/replay", s.handleReplay)
 	s.mux.HandleFunc("/api/mind", s.handleMind)
+	s.mux.HandleFunc("/api/widgets", s.handleWidgets)
+	s.mux.HandleFunc("/api/creations", s.handleCreations)
+	s.mux.HandleFunc("/api/agents", s.handleAgents)
 	s.mux.HandleFunc("/api/genome", s.handleGenome)
 	s.mux.HandleFunc("/api/files", s.handleFiles)
 	s.mux.HandleFunc("/api/reset", s.handleReset)
@@ -211,6 +220,7 @@ func (s *Server) currentProviderName() string {
 
 type chatReq struct {
 	Message string `json:"message"`
+	Agent   string `json:"agent,omitempty"`
 }
 
 func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
@@ -223,6 +233,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"message required"}`, 400)
 		return
 	}
+	target := s.agentFor(req.Agent)
 	go func() {
 		defer func() {
 			if rec := recover(); rec != nil {
@@ -241,11 +252,180 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 			s.genMu.Unlock()
 			cancel()
 		}()
-		s.ag.Chat(ctx, req.Message)
+		s.bus.Publish("agent:active", map[string]string{"agent": target.ProfileID()})
+		target.Chat(ctx, req.Message)
 		s.bus.Publish("agent:phase", map[string]string{"phase": "idle"})
 	}()
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+}
+
+func (s *Server) agentFor(id string) *agent.Agent {
+	if id == "" || id == "main" {
+		return s.ag
+	}
+	s.agentMu.RLock()
+	defer s.agentMu.RUnlock()
+	if a := s.agents[id]; a != nil {
+		return a
+	}
+	return s.ag
+}
+
+func agentSlug(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	var b strings.Builder
+	for _, r := range value {
+		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' {
+			b.WriteRune(r)
+		} else if (r == '-' || r == '_' || r == ' ') && b.Len() > 0 {
+			b.WriteByte('-')
+		}
+	}
+	return strings.Trim(b.String(), "-")
+}
+
+func (s *Server) profilesDir() string {
+	return filepath.Join(s.ws.Dir(workspace.WorkspaceDir), "agents")
+}
+
+func (s *Server) saveAgentProfile(p agent.Profile) error {
+	dir := filepath.Join(s.profilesDir(), p.ID)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	raw, err := json.MarshalIndent(p, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(dir, "profile.json"), raw, 0o644)
+}
+
+func (s *Server) loadAgentProfiles() {
+	// Workbench-only tests and lightweight embedders may intentionally start a
+	// server without a chat agent. Profiles remain on disk until one is present.
+	if s.ag == nil {
+		return
+	}
+	entries, _ := os.ReadDir(s.profilesDir())
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		raw, err := os.ReadFile(filepath.Join(s.profilesDir(), entry.Name(), "profile.json"))
+		if err != nil {
+			continue
+		}
+		var p agent.Profile
+		if json.Unmarshal(raw, &p) != nil || p.ID == "" {
+			continue
+		}
+		s.profiles[p.ID] = p
+		s.agents[p.ID] = s.ag.CloneProfile(p)
+	}
+}
+
+func (s *Server) agentCapabilityNames(rel, ext string) []string {
+	entries, _ := os.ReadDir(s.ws.Dir(rel))
+	out := []string{}
+	for _, entry := range entries {
+		if entry.IsDir() || (ext != "" && filepath.Ext(entry.Name()) != ext) {
+			continue
+		}
+		out = append(out, strings.TrimSuffix(entry.Name(), ext))
+	}
+	sort.Strings(out)
+	return out
+}
+
+func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	switch r.Method {
+	case http.MethodGet:
+		type view struct {
+			ID           string   `json:"id"`
+			Number       int      `json:"number"`
+			Name         string   `json:"name"`
+			Identity     string   `json:"identity"`
+			SystemPrompt string   `json:"system_prompt"`
+			Tools        []string `json:"tools"`
+			Skills       []string `json:"skills"`
+			History      int      `json:"history"`
+			Mutations    int      `json:"mutations"`
+			Active       bool     `json:"active"`
+		}
+		out := []view{{ID: "main", Number: 1, Name: "Prime", Identity: "Original living organism", History: s.ag.HistoryLen(), Mutations: s.ag.EvolutionCount(), Active: s.activeAgent == "main"}}
+		s.agentMu.RLock()
+		for id, p := range s.profiles {
+			a := s.agents[id]
+			out = append(out, view{ID: id, Number: p.Number, Name: p.Name, Identity: p.Identity, SystemPrompt: p.SystemPrompt, Tools: p.Tools, Skills: p.Skills, History: a.HistoryLen(), Mutations: a.EvolutionCount(), Active: s.activeAgent == id})
+		}
+		s.agentMu.RUnlock()
+		sort.Slice(out[1:], func(i, j int) bool { return out[i+1].Number < out[j+1].Number })
+		json.NewEncoder(w).Encode(map[string]any{"agents": out, "active": s.activeAgent, "tools": s.agentCapabilityNames(workspace.ToolsDir, ".js"), "skills": s.agentCapabilityNames(workspace.SkillsDir, ".md")})
+	case http.MethodPost:
+		var in struct {
+			Action       string   `json:"action"`
+			ID           string   `json:"id"`
+			Name         string   `json:"name"`
+			Identity     string   `json:"identity"`
+			SystemPrompt string   `json:"system_prompt"`
+			Tools        []string `json:"tools"`
+			Skills       []string `json:"skills"`
+		}
+		if json.NewDecoder(r.Body).Decode(&in) != nil {
+			http.Error(w, "bad json", 400)
+			return
+		}
+		if in.Action == "switch" {
+			if in.ID != "main" {
+				s.agentMu.RLock()
+				_, ok := s.agents[in.ID]
+				s.agentMu.RUnlock()
+				if !ok {
+					http.Error(w, "unknown agent", 404)
+					return
+				}
+			}
+			s.activeAgent = in.ID
+			s.bus.Publish("agent:active", map[string]string{"agent": in.ID})
+			json.NewEncoder(w).Encode(map[string]any{"ok": true, "active": in.ID})
+			return
+		}
+		id := agentSlug(in.ID)
+		if id == "" {
+			id = agentSlug(in.Name)
+		}
+		if id == "" || id == "main" {
+			http.Error(w, "agent name required", 400)
+			return
+		}
+		number := 2
+		s.agentMu.RLock()
+		for _, existing := range s.profiles {
+			if existing.Number >= number {
+				number = existing.Number + 1
+			}
+		}
+		s.agentMu.RUnlock()
+		p := agent.Profile{ID: id, Number: number, Name: strings.TrimSpace(in.Name), Identity: strings.TrimSpace(in.Identity), SystemPrompt: strings.TrimSpace(in.SystemPrompt), Tools: in.Tools, Skills: in.Skills}
+		if p.Name == "" {
+			p.Name = id
+		}
+		if err := s.saveAgentProfile(p); err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		s.agentMu.Lock()
+		s.profiles[id] = p
+		s.agents[id] = s.ag.CloneProfile(p)
+		s.activeAgent = id
+		s.agentMu.Unlock()
+		s.bus.Publish("agent:cloned", map[string]string{"agent": id, "name": p.Name})
+		json.NewEncoder(w).Encode(map[string]any{"ok": true, "agent": p, "active": id})
+	default:
+		http.Error(w, "GET or POST only", 405)
+	}
 }
 
 func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
@@ -575,23 +755,218 @@ func (s *Server) handleMind(w http.ResponseWriter, r *http.Request) {
 			return nil
 		}
 		var out []string
+		seen := map[string]bool{}
 		for _, e := range ents {
 			if !e.IsDir() {
-				out = append(out, strings.TrimSuffix(e.Name(), filepath.Ext(e.Name())))
+				name := strings.TrimSuffix(e.Name(), filepath.Ext(e.Name()))
+				// Typed tools have both name.js and name.json; the dashboard
+				// should show the capability once, not once per backing file.
+				if !seen[name] {
+					out = append(out, name)
+					seen[name] = true
+				}
 			}
 		}
 		sort.Strings(out)
 		return out
 	}
+	components := s.ag.ListComponents()
+	widgets := make([]map[string]any, 0, len(components))
+	enabled := make([]string, 0, len(components))
+	for _, name := range components {
+		on := s.ws.Config.DisabledWidgets == nil || !s.ws.Config.DisabledWidgets[name]
+		widgets = append(widgets, map[string]any{"name": name, "enabled": on})
+		if on {
+			enabled = append(enabled, name)
+		}
+	}
 	json.NewEncoder(w).Encode(map[string]any{
 		"skills":     dirNames(workspace.SkillsDir),
 		"prompts":    dirNames(workspace.PromptsDir),
 		"tools":      dirNames(workspace.ToolsDir),
-		"components": s.ag.ListComponents(),
+		"components": enabled,
+		"widgets":    widgets,
 		"plugins":    s.ag.PluginNames(),
 		"evolutions": s.ag.EvolutionCount(),
 		"snapshots":  len(s.ws.ListSnapshots()),
 	})
+}
+
+// handleWidgets persists whether a grown component is visible. The source
+// remains in the genome, so disabling is reversible and never destroys work.
+func (s *Server) handleWidgets(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		s.handleMind(w, r)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "GET or POST", 405)
+		return
+	}
+	var req struct {
+		Name    string `json:"name"`
+		Enabled bool   `json:"enabled"`
+	}
+	if json.NewDecoder(r.Body).Decode(&req) != nil || strings.TrimSpace(req.Name) == "" {
+		http.Error(w, `{"error":"name required"}`, 400)
+		return
+	}
+	known := false
+	for _, name := range s.ag.ListComponents() {
+		if name == req.Name {
+			known = true
+			break
+		}
+	}
+	if !known {
+		http.Error(w, `{"error":"unknown widget"}`, 404)
+		return
+	}
+	if s.ws.Config.DisabledWidgets == nil {
+		s.ws.Config.DisabledWidgets = map[string]bool{}
+	}
+	if req.Enabled {
+		delete(s.ws.Config.DisabledWidgets, req.Name)
+	} else {
+		s.ws.Config.DisabledWidgets[req.Name] = true
+	}
+	s.ws.SaveConfig()
+	s.bus.Publish("widget:state", map[string]any{"name": req.Name, "enabled": req.Enabled})
+	json.NewEncoder(w).Encode(map[string]any{"ok": true, "name": req.Name, "enabled": req.Enabled})
+}
+
+type creationInfo struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Type     string `json:"type"`
+	Path     string `json:"path"`
+	Hash     string `json:"hash"`
+	Bytes    int64  `json:"bytes"`
+	Updated  string `json:"updated"`
+	Enabled  bool   `json:"enabled"`
+	Pinned   bool   `json:"pinned"`
+	Archived bool   `json:"archived"`
+	Status   string `json:"status"`
+}
+
+func (s *Server) creationInventory() []creationInfo {
+	type source struct{ kind, rel, ext string }
+	sources := []source{
+		{"widget", workspace.ComponentsDir, ".html"}, {"tool", workspace.ToolsDir, ".js"},
+		{"skill", workspace.SkillsDir, ".md"}, {"prompt", workspace.PromptsDir, ".md"},
+	}
+	var out []creationInfo
+	add := func(kind, rel, name string, info os.FileInfo) {
+		full := s.ws.Dir(rel)
+		raw, err := os.ReadFile(full)
+		status := "healthy"
+		if err != nil || len(raw) == 0 {
+			status = "broken"
+		}
+		sum := sha256.Sum256(raw)
+		id := kind + ":" + name
+		enabled := true
+		if kind == "widget" && s.ws.Config.DisabledWidgets != nil && s.ws.Config.DisabledWidgets[name] {
+			enabled = false
+		}
+		out = append(out, creationInfo{ID: id, Name: name, Type: kind, Path: strings.ReplaceAll(rel, "\\", "/"), Hash: fmt.Sprintf("sha256:%x", sum), Bytes: info.Size(), Updated: info.ModTime().UTC().Format(time.RFC3339), Enabled: enabled, Pinned: s.ws.Config.PinnedCreations[id], Archived: s.ws.Config.ArchivedCreations[id], Status: status})
+	}
+	for _, src := range sources {
+		ents, _ := os.ReadDir(s.ws.Dir(src.rel))
+		for _, e := range ents {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), src.ext) {
+				continue
+			}
+			info, err := e.Info()
+			if err != nil {
+				continue
+			}
+			name := strings.TrimSuffix(e.Name(), src.ext)
+			add(src.kind, filepath.Join(src.rel, e.Name()), name, info)
+		}
+	}
+	ents, _ := os.ReadDir(s.ws.Dir(workspace.PluginsDir))
+	for _, e := range ents {
+		if !e.IsDir() {
+			continue
+		}
+		rel := filepath.Join(workspace.PluginsDir, e.Name(), "plugin.js")
+		if info, err := os.Stat(s.ws.Dir(rel)); err == nil {
+			add("plugin", rel, e.Name(), info)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Type == out[j].Type {
+			return out[i].Name < out[j].Name
+		}
+		return out[i].Type < out[j].Type
+	})
+	return out
+}
+
+func (s *Server) handleCreations(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		items := s.creationInventory()
+		json.NewEncoder(w).Encode(map[string]any{"creations": items, "count": len(items), "evolution": s.ws.ReadEvolution(500)})
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "GET or POST", 405)
+		return
+	}
+	var req struct {
+		ID     string `json:"id"`
+		Action string `json:"action"`
+		Value  bool   `json:"value"`
+	}
+	if json.NewDecoder(r.Body).Decode(&req) != nil {
+		http.Error(w, "bad json", 400)
+		return
+	}
+	parts := strings.SplitN(req.ID, ":", 2)
+	if len(parts) != 2 {
+		http.Error(w, "bad id", 400)
+		return
+	}
+	if s.ws.Config.PinnedCreations == nil {
+		s.ws.Config.PinnedCreations = map[string]bool{}
+	}
+	if s.ws.Config.ArchivedCreations == nil {
+		s.ws.Config.ArchivedCreations = map[string]bool{}
+	}
+	switch req.Action {
+	case "pin":
+		if req.Value {
+			s.ws.Config.PinnedCreations[req.ID] = true
+		} else {
+			delete(s.ws.Config.PinnedCreations, req.ID)
+		}
+	case "archive":
+		if req.Value {
+			s.ws.Config.ArchivedCreations[req.ID] = true
+		} else {
+			delete(s.ws.Config.ArchivedCreations, req.ID)
+		}
+	case "enable":
+		if parts[0] != "widget" {
+			http.Error(w, "only widgets can be toggled", 400)
+			return
+		}
+		if s.ws.Config.DisabledWidgets == nil {
+			s.ws.Config.DisabledWidgets = map[string]bool{}
+		}
+		if req.Value {
+			delete(s.ws.Config.DisabledWidgets, parts[1])
+		} else {
+			s.ws.Config.DisabledWidgets[parts[1]] = true
+		}
+		s.bus.Publish("widget:state", map[string]any{"name": parts[1], "enabled": req.Value})
+	default:
+		http.Error(w, "unknown action", 400)
+		return
+	}
+	s.ws.SaveConfig()
+	json.NewEncoder(w).Encode(map[string]any{"ok": true})
 }
 
 func (s *Server) handleReset(w http.ResponseWriter, r *http.Request) {

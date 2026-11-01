@@ -8,6 +8,7 @@ const state = {
   evolutionCount: 0, mounted: new Map(), // name -> el
   shellReloadTimer: null, thinkingEl: null,
   evoAll: [], evoRevealed: 0, // ledger source of truth + revealed-beyond-cap count
+  creations: [], creationHistory: [], libraryTab: 'library',
 };
 
 /* ---------------- update banner ---------------- */
@@ -946,6 +947,23 @@ async function loadMind() {
   } catch {}
 }
 
+/* ---------------- creation library + live pinned widgets ---------------- */
+const CREATION_ICON = { widget:'🧩', tool:'🔧', skill:'🧠', plugin:'🔌', prompt:'✍️' };
+function seenCreations(){try{return new Set(JSON.parse(localStorage.getItem('evolv.creations.seen')||'[]'))}catch{return new Set()}}
+function markCreationsSeen(){localStorage.setItem('evolv.creations.seen',JSON.stringify(state.creations.map(c=>c.id)));$('#library-badge').hidden=true;$('#inbox-count').textContent='0'}
+async function loadCreationLibrary(){try{const d=await fetch('/api/creations').then(r=>r.json());state.creations=d.creations||[];state.creationHistory=d.evolution||[];const unseen=state.creations.filter(c=>!seenCreations().has(c.id));$('#library-count').textContent=state.creations.length;$('#inbox-count').textContent=unseen.length;$('#library-badge').hidden=!unseen.length;$('#library-badge').textContent=unseen.length||'';await renderPinnedCreations();renderCreationLibrary()}catch{toast('⚠️ creation library could not be loaded')}}
+async function renderPinnedCreations(){const panel=$('#pinned-sec'),list=$('#pinned-widget-list');if(!panel||!list)return;const pinned=state.creations.filter(c=>c.pinned&&!c.archived);panel.hidden=!pinned.length;$('#pinned-count').textContent=pinned.length;list.innerHTML='';for(const c of pinned){const item=document.createElement('article');item.className=`pinned-sidebar-card${c.enabled?'':' disabled'}`;item.dataset.id=c.id;item.innerHTML=`<header><button class="pinned-open"><span>${CREATION_ICON[c.type]||'◇'}</span><b>${escapeHtml(c.name)}</b><small>${escapeHtml(c.type)}</small></button><button class="pinned-remove" title="Unpin">×</button></header><div class="pinned-widget-body"></div>`;item.querySelector('.pinned-open').onclick=()=>{openGenome();setTimeout(()=>openGenomeFile(c.path.replace(/^workspace\//,'')),80)};item.querySelector('.pinned-remove').onclick=()=>creationAction(c,'pin');list.appendChild(item);const body=item.querySelector('.pinned-widget-body');if(c.type==='widget'&&c.enabled){const html=state.mounted.get(c.name)||await fetchOrganHTML(c.name);if(html!=null)graftOrgan(body,html)}else if(c.type==='widget'){body.innerHTML='<button class="pinned-enable">Enable live widget</button>';body.querySelector('button').onclick=()=>creationAction(c,'enable')}else body.innerHTML='<p class="pinned-widget-note">Pinned creation · click its title to inspect source.</p>'}}
+function creationCard(c){const el=document.createElement('article');el.className=`creation-card${c.pinned?' pinned':''}${c.archived?' archived':''}`;const age=new Date(c.updated).toLocaleDateString([],{month:'short',day:'numeric'});el.innerHTML=`<div class="creation-card-head"><span class="creation-icon">${CREATION_ICON[c.type]||'◇'}</span><div><h3>${escapeHtml(c.name)}</h3><span>${escapeHtml(c.type)} · ${age}</span></div><i class="creation-health ${c.status}"></i></div><div class="creation-meta"><code>${escapeHtml(c.hash.slice(7,19))}</code><span>${Math.max(1,Math.round(c.bytes/1024))} KB</span>${c.pinned?'<b>PINNED</b>':''}${!c.enabled?'<b>OFF</b>':''}</div><div class="creation-actions">${c.type==='widget'?`<button data-act="enable">${c.enabled?'Disable':'Enable'}</button>`:''}<button data-act="pin">${c.pinned?'Unpin':'Pin'}</button><button data-act="source">Source</button><button data-act="archive">${c.archived?'Restore':'Archive'}</button></div>`;el.querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>creationAction(c,b.dataset.act));return el}
+async function creationAction(c,action){if(action==='source'){closeCreationLibrary();openGenome();setTimeout(()=>openGenomeFile(c.path.replace(/^workspace\//,'')),80);return}const value=action==='enable'?!c.enabled:action==='pin'?!c.pinned:!c.archived;const r=await fetch('/api/creations',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:c.id,action,value})});if(!r.ok){toast('⚠️ creation state could not be saved');return}await loadCreationLibrary()}
+function renderCreationLibrary(){if(!$('#library-grid'))return;const q=$('#library-search').value.trim().toLowerCase(),type=$('#library-type').value,filter=$('#library-state').value;let items=state.creations.filter(c=>(!q||`${c.name} ${c.type} ${c.path}`.toLowerCase().includes(q))&&(type==='all'||c.type===type));items=items.filter(c=>filter==='all'||filter==='active'&&!c.archived||filter==='pinned'&&c.pinned||filter==='disabled'&&!c.enabled||filter==='archived'&&c.archived);items.sort((a,b)=>Number(b.pinned)-Number(a.pinned)||new Date(b.updated)-new Date(a.updated));const grid=$('#library-grid');grid.innerHTML='';items.forEach(c=>grid.appendChild(creationCard(c)));if(!items.length)grid.innerHTML='<div class="library-empty">No creations match this view.</div>';const seen=seenCreations(),inbox=$('#library-inbox');inbox.innerHTML='';state.creations.filter(c=>!seen.has(c.id)).forEach(c=>inbox.appendChild(creationCard(c)));if(!inbox.children.length)inbox.innerHTML='<div class="library-empty">Inbox zero. New autonomous creations will wait here for review.</div>';renderCreationHistory()}
+function renderCreationHistory(){const host=$('#library-history');host.innerHTML='';const groups=[];for(const e of [...state.creationHistory].reverse()){const key=`${e.kind||'mutation'}:${e.name||''}`;let g=groups.find(x=>x.key===key&&Math.abs(new Date(x.time)-new Date(e.time))<120000);if(!g){g={key,kind:e.kind||'mutation',name:e.name||'',time:e.time,entries:[]};groups.push(g)}g.entries.push(e)}groups.slice(0,100).forEach(g=>{const row=document.createElement('details');row.className='evolution-group';row.innerHTML=`<summary><span>${CREATION_ICON[g.kind]||'◇'}</span><div><b>${escapeHtml(g.name||g.kind)}</b><small>${g.entries.length} change${g.entries.length===1?'':'s'} · ${new Date(g.time).toLocaleString()}</small></div><em>${escapeHtml(g.kind)}</em></summary><div>${g.entries.map(e=>`<p>${escapeHtml(e.description||e.kind||'mutation')}</p>`).join('')}</div>`;host.appendChild(row)})}
+function setLibraryTab(tab){state.libraryTab=tab;document.querySelectorAll('[data-library-tab]').forEach(b=>b.classList.toggle('active',b.dataset.libraryTab===tab));$('#library-grid').hidden=tab!=='library';$('#library-inbox').hidden=tab!=='inbox';$('#library-history').hidden=tab!=='history';$('[data-library-toolbar]').hidden=tab!=='library';if(tab==='inbox')markCreationsSeen()}
+async function openCreationLibrary(){$('#library-modal').classList.add('open');$('#library-modal').setAttribute('aria-hidden','false');await loadCreationLibrary();$('#library-search').focus()}
+function closeCreationLibrary(){$('#library-modal').classList.remove('open');$('#library-modal').setAttribute('aria-hidden','true')}
+
+function openHologram(){const h=$('#hologram'),frame=$('#hologram-frame');h.hidden=false;if(!frame.src)frame.src=frame.dataset.src;document.body.classList.add('hologram-open')}
+function closeHologram(){$('#hologram').hidden=true;document.body.classList.remove('hologram-open');$('#btn-dna').focus()}
+
 /* ---------------- genome inspector (watch the body, live) ---------------- */
 let genomeOpen = false, genomeFile = null, genomeDirty = false;
 
@@ -1138,6 +1156,7 @@ window.addEventListener('DOMContentLoaded', () => {
   loadEvolutionHistory();
   loadMind();
   loadPlan();
+  loadCreationLibrary();
 
   // restore panel state — phones start with the sidebar folded away
   setSidebar(localStorage.getItem('evolv.sb') === '1' || isNarrow());
@@ -1175,6 +1194,16 @@ window.addEventListener('DOMContentLoaded', () => {
     try { await fetch('/api/dream', { method: 'POST' }); } catch { toast('⚠️ could not start dream'); }
   });
   $('#btn-files').addEventListener('click', openGenome);
+  $('#btn-library').addEventListener('click', openCreationLibrary);
+  $('#btn-library-close').addEventListener('click', closeCreationLibrary);
+  $('#library-modal').addEventListener('click',e=>{if(e.target.id==='library-modal')closeCreationLibrary()});
+  document.querySelectorAll('[data-library-tab]').forEach(b=>b.addEventListener('click',()=>setLibraryTab(b.dataset.libraryTab)));
+  $('#library-search').addEventListener('input',renderCreationLibrary);
+  $('#library-type').addEventListener('change',renderCreationLibrary);
+  $('#library-state').addEventListener('change',renderCreationLibrary);
+  $('#btn-dna').addEventListener('click',openHologram);
+  $('#btn-dna-close').addEventListener('click',closeHologram);
+  $('#hologram').addEventListener('click',e=>{if(e.target.id==='hologram')closeHologram()});
   $('#btn-snap-diff').addEventListener('click', openDiff);
   $('#btn-diff-close').addEventListener('click', closeDiff);
   $('#btn-diff-run').addEventListener('click', runDiff);
