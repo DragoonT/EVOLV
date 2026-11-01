@@ -18,6 +18,7 @@ import (
 
 	"github.com/dxn111/EVOLV/internal/candidate"
 	"github.com/dxn111/EVOLV/internal/update"
+	"github.com/dxn111/EVOLV/internal/redact"
 	"github.com/dxn111/EVOLV/internal/workspace"
 )
 
@@ -1065,7 +1066,7 @@ currentManifest := readToolManifest(a, name)
 		}
 		res["ok"] = err == nil
 		res["cwd"] = cwd
-		res["output"] = outStr
+		res["output"] = redact.Redact(outStr)
 		if err != nil {
 			res["error"] = err.Error()
 		}
@@ -1124,6 +1125,8 @@ func contextWithTimeout(d time.Duration) (context.Context, context.CancelFunc) {
 // prompted work from autonomous work.
 func (a *Agent) commit(kind, name, path, desc string) {
 	a.evolution++
+	desc = redact.Redact(desc)
+	name = redact.Redact(name)
 	entry := map[string]any{
 		"n": a.evolution, "kind": kind, "name": name, "path": path, "description": desc,
 	}
