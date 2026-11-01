@@ -45,6 +45,7 @@
     </div>
 
     <div class="sb-bottom">
+      <button class="sb-btn" id="btn-workbench"><span>🛠</span> Workbench <b id="wb-badge" class="wb-badge" hidden></b></button>
       <button class="sb-btn" id="btn-files"><span>🗂</span> Genome inspector</button>
       <button class="sb-btn" id="btn-settings"><span>⚙️</span> Settings</button>
       <div class="pill" id="provider-pill" title="click to configure models">
@@ -215,6 +216,38 @@
         </div>
         <textarea id="genome-editor" spellcheck="false" placeholder="workspace files are plain text: ui/style.css, ui/components/*.html, tools/*.js, skills/*.md, plugins/*/plugin.js…"></textarea>
         <button class="save-btn" id="btn-genome-save">⚡ WRITE TO GENOME (ctrl+s)</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="wb-modal">
+  <div class="gm-box wb-box">
+    <div class="gm-head">
+      <span>🛠 WORKBENCH — <b id="wb-root-name" class="live">…</b> <span id="wb-root-files" class="wb-files"></span></span>
+      <div style="display:flex;gap:6px">
+        <button class="icon-btn" id="btn-wb-newfile" title="new file in the selected folder (or root)">＋ file</button>
+        <button class="icon-btn" id="btn-wb-newdir" title="new folder in the selected folder (or root)">＋ dir</button>
+        <button class="icon-btn" id="btn-wb-refresh" title="reload the tree">⟳</button>
+        <button class="icon-btn" id="btn-wb-close">✕</button>
+      </div>
+    </div>
+    <div class="gm-body">
+      <div class="gm-side wb-side">
+        <div id="wb-tree" class="wb-tree"><div class="wb-loading">loading project…</div></div>
+        <div class="wb-hint">click a file to open · double-click a folder to expand · right-click for actions</div>
+      </div>
+      <div class="gm-editor">
+        <div class="gm-path">
+          <span id="wb-open-path">pick a file — the workbench edits your project in place</span>
+          <span style="display:flex;gap:2px">
+            <button class="gm-del" id="btn-wb-rename" title="rename / move this file" hidden>✎ rename</button>
+            <button class="gm-del" id="btn-wb-del" title="delete this file" hidden>🗑 delete</button>
+          </span>
+        </div>
+        <textarea id="wb-editor" class="wb-editor" spellcheck="false" placeholder="your project, live: open any text file, edit it, ctrl+s writes it to disk instantly — the organism feels every save"></textarea>
+        <div class="wb-statusbar"><span id="wb-stats">—</span><span id="wb-dirty" class="wb-dirty" hidden>● unsaved — ctrl+s to write</span></div>
+        <button class="save-btn" id="btn-wb-save">⚡ WRITE TO DISK (ctrl+s)</button>
       </div>
     </div>
   </div>

@@ -796,3 +796,34 @@ body.paper #welcome .w-mark { box-shadow: 0 8px 40px rgba(192, 95, 60, 0.18); }
 #search-count { font-size: 12px; color: var(--dim); min-width: 44px; text-align: center; font-variant-numeric: tabular-nums; }
 ::highlight(evolv-hit) { background: var(--accent-soft); color: inherit; }
 ::highlight(evolv-hit-cur) { background: var(--accent); color: #fff8f2; border-radius: 2px; }
+
+/* ================= WORKBENCH ================= */
+#wb-modal { display: none; position: fixed; inset: 0; z-index: 240; background: rgba(10,9,8,.62); backdrop-filter: blur(4px); }
+#wb-modal.show { display: block; }
+.wb-box { max-width: 1080px; height: min(660px, 86vh); }
+.wb-badge { background: var(--accent); color: #fff8f2; border-radius: 8px; padding: 0 6px; font-size: 10px; margin-left: 4px; }
+.wb-files { color: var(--dim); font-weight: 400; font-size: 12px; }
+.wb-side { width: 300px; }
+.wb-tree { flex: 1; overflow: auto; padding: 6px 4px; font-family: var(--mono, monospace); font-size: 12.5px; }
+.wb-ul, .wb-tree ul { list-style: none; margin: 0; padding: 0; }
+.wb-ul { padding-left: 0; }
+.wb-kids > .wb-ul, .wb-kids ul { padding-left: 14px; border-left: 1px dashed var(--line-soft); margin-left: 9px; }
+.wb-row { display: flex; align-items: center; gap: 5px; padding: 3px 6px; border-radius: 6px; cursor: pointer; white-space: nowrap; user-select: none; }
+.wb-row:hover { background: var(--accent-soft); }
+.wb-row.sel { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
+.wb-row.is-dir { font-weight: 600; }
+.wb-arrow { width: 10px; color: var(--dim); font-size: 10px; flex: none; }
+.wb-ico { flex: none; }
+.wb-name { overflow: hidden; text-overflow: ellipsis; }
+.wb-size { margin-left: auto; color: var(--dim); font-size: 10.5px; flex: none; }
+.wb-loading, .wb-empty { color: var(--dim); font-size: 12px; padding: 8px 10px; }
+.wb-hint { color: var(--dim); font-size: 10.5px; padding: 6px 10px; border-top: 1px solid var(--line-soft); }
+.wb-editor { flex: 1; resize: none; border: none; outline: none; background: transparent; color: var(--fg, inherit);
+  font-family: var(--mono, monospace); font-size: 13px; line-height: 1.55; padding: 12px 16px; min-height: 0; }
+.wb-statusbar { display: flex; justify-content: space-between; align-items: center; padding: 4px 16px;
+  font-size: 11px; color: var(--dim); border-top: 1px solid var(--line-soft); }
+.wb-dirty { color: var(--accent); font-weight: 600; }
+@media (max-width: 760px) {
+  .wb-box { width: 96vw; height: 90vh; }
+  .wb-side { width: 40%; }
+}

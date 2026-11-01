@@ -77,6 +77,13 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/dream", s.handleDream)
 	s.mux.HandleFunc("/api/stop", s.handleStop)
 	s.mux.HandleFunc("/api/export", s.handleExport)
+	s.mux.HandleFunc("/api/wb/root", s.handleWbRoot)
+	s.mux.HandleFunc("/api/wb/tree", s.handleWbTree)
+	s.mux.HandleFunc("/api/wb/read", s.handleWbRead)
+	s.mux.HandleFunc("/api/wb/write", s.handleWbWrite)
+	s.mux.HandleFunc("/api/wb/mkdir", s.handleWbMkdir)
+	s.mux.HandleFunc("/api/wb/delete", s.handleWbDelete)
+	s.mux.HandleFunc("/api/wb/rename", s.handleWbRename)
 	s.WatchReleases()
 	s.ag.StartDreaming() // the organism wakes itself when idle
 }

@@ -112,10 +112,14 @@ function handle(ev) {
     }
     case 'plugin:log': console.log('[plugin]', (ev.payload || {}).text); break;
     case 'shell:reload': {
+      // LOOP GUARD — a storm of reload events (post-update seeding, a dream
+      // rewriting the shell, rollback) must recompile the page ONCE, not
+      // bounce it forever. Suppress anything within 10s of the last reload.
+      if (shellReloadGuarded()) { console.log('[evolv] shell reload suppressed by loop guard'); break; }
       $('#recompile-path').textContent = (ev.payload || {}).reason || 'the organism is rewriting its own shell…';
       $('#recompile').classList.add('show');
       clearTimeout(state.shellReloadTimer);
-      state.shellReloadTimer = setTimeout(() => location.reload(), 900);
+      state.shellReloadTimer = setTimeout(() => { markShellReloaded(); location.reload(); }, 900);
       break;
     }
     case 'update:available': {
@@ -132,10 +136,23 @@ function handle(ev) {
   }
 }
 
+/* ---------------- shell reload loop guard ----------------
+A recompile reloads the page; if the source of the reload (a seed, a dream,
+an update storm) keeps firing after the reload, the page would bounce
+forever on "recompiling shell". The guard: a sessionStorage timestamp set
+the instant we decide to reload — survives the reload itself — suppresses
+any further recompile overlay for 10 seconds. One morph, one reload. */
+function shellReloadGuarded() {
+  const last = +(sessionStorage.getItem('evolv.reloadAt') || 0);
+  return Date.now() - last < 10000;
+}
+function markShellReloaded() { sessionStorage.setItem('evolv.reloadAt', String(Date.now())); }
+
 /* ---------------- shell hot-reload (genome recompile) ---------------- */
 const SHELL_FILES = new Set(['workspace/ui/index.html', 'workspace/ui/app.js']);
 function onFsChange(ch, evTime) {
   const rel = ch.path.replace(/\\/g, '/');
+  onWbFsChange(ch); // the workbench watches the project live
   // replayed/stale events must not trigger recompiles: only react to fresh
   // writes and renames (boot-time 'create' storms are how the genome seeds)
   const age = Date.now() - new Date(evTime).getTime();
@@ -160,11 +177,13 @@ function onFsChange(ch, evTime) {
     return;
   }
   if (fresh && SHELL_FILES.has(rel)) {
-    // the organism rewrote its own shell — recompile visibly, then hot-swap
+    // the organism rewrote its own shell — recompile visibly, then hot-swap.
+    // Same loop guard: shell writes can arrive in bursts; reload once.
+    if (shellReloadGuarded()) return;
     $('#recompile-path').textContent = ch.path;
     $('#recompile').classList.add('show');
     clearTimeout(state.shellReloadTimer);
-    state.shellReloadTimer = setTimeout(() => location.reload(), 900);
+    state.shellReloadTimer = setTimeout(() => { markShellReloaded(); location.reload(); }, 900);
     return;
   }
   if (ch.zone === 'components' && ch.path.endsWith('.html')) {
@@ -1284,3 +1303,298 @@ function hideWelcome() {
 }
 
 // (the empty-state welcome replaced the injected greeting — no fake first message)
+
+/* ================= WORKBENCH — a real dev environment for the user's project =================
+The genome inspector edits the organism's own body; the workbench opens the
+user's bound project (config.project_dir, or organism home when unbound).
+Lazy file tree, in-place text editor with ctrl+s, new file/dir, rename,
+delete — every write lands on real disk and publishes fs:change, so the
+organism FEELS the workbench editing its host project live. */
+
+let wbOpenFlag = false;
+let wbExpanded = new Set();   // dir paths currently expanded
+let wbSelected = null;        // selected tree row path (dir or file)
+let wbFile = null;            // file open in the editor
+let wbDirty = false;
+let wbRootName = '';
+
+async function openWorkbench() {
+  wbOpenFlag = true;
+  $('#wb-modal').classList.add('show');
+  try {
+    const r = await fetch('/api/wb/root');
+    const j = await r.json();
+    wbRootName = j.name || 'project';
+    $('#wb-root-name').textContent = wbRootName;
+    $('#wb-root-files').textContent = j.files != null ? ` · ${j.files} files` : '';
+  } catch { $('#wb-root-name').textContent = 'unreachable'; }
+  refreshWbTree();
+}
+function closeWorkbench() {
+  if (wbDirty && !confirm('unsaved edits will be lost — close anyway?')) return;
+  wbOpenFlag = false;
+  wbDirty = false;
+  $('#wb-dirty').hidden = true;
+  $('#wb-modal').classList.remove('show');
+}
+
+async function refreshWbTree() {
+  const box = $('#wb-tree');
+  box.innerHTML = '<div class="wb-loading">loading project…</div>';
+  try {
+    const r = await fetch('/api/wb/tree?open=1&depth=2');
+    const j = await r.json();
+    box.innerHTML = '';
+    if (!j.entries || !j.entries.length) {
+      box.innerHTML = '<div class="wb-loading">empty project — hit "＋ file" to create the first one</div>';
+      return;
+    }
+    box.appendChild(buildWbLevel(j.entries));
+  } catch { box.innerHTML = '<div class="wb-loading">⚠️ could not list the project</div>'; }
+}
+
+// build one nested <ul> of entries; dirs already carrying kids render open
+function buildWbLevel(entries) {
+  const ul = document.createElement('ul');
+  ul.className = 'wb-ul';
+  for (const e of entries) {
+    const li = document.createElement('li');
+    li.className = 'wb-row' + (e.dir ? ' is-dir' : ' is-file') + (wbSelected === e.path ? ' sel' : '');
+    li.dataset.path = e.path;
+    const icon = wbIcon(e.name, e.dir);
+    const arrow = e.dir ? '<span class="wb-arrow">' + (e.open || wbExpanded.has(e.path) ? '▾' : '▸') + '</span>' : '<span class="wb-arrow"></span>';
+    li.innerHTML = `${arrow}<span class="wb-ico">${icon}</span><span class="wb-name">${escapeHtml(e.name)}</span>` +
+      (e.dir ? '' : `<span class="wb-size">${fmtSize(e.size)}</span>`);
+    li.title = e.path;
+    if (e.dir) {
+      li.addEventListener('click', (ev) => { ev.stopPropagation(); toggleWbDir(li, e); });
+      li.addEventListener('dblclick', (ev) => { ev.stopPropagation(); toggleWbDir(li, e); });
+      li.addEventListener('contextmenu', (ev) => { ev.preventDefault(); ev.stopPropagation(); wbSelected = e.path; wbDirMenu(e); });
+    } else {
+      li.addEventListener('click', (ev) => { ev.stopPropagation(); wbSelected = e.path; openWbFile(e.path); });
+      li.addEventListener('contextmenu', (ev) => { ev.preventDefault(); ev.stopPropagation(); wbSelected = e.path; wbFileMenu(e); });
+    }
+    ul.appendChild(li);
+    // nested kids: either preloaded from the server or expanded on demand
+    const kidBox = document.createElement('li');
+    kidBox.className = 'wb-kids';
+    kidBox.dataset.kidsof = e.path;
+    ul.appendChild(kidBox);
+    if (e.dir && (e.open || wbExpanded.has(e.path))) {
+      wbExpanded.add(e.path);
+      li.querySelector('.wb-arrow').textContent = '▾';
+      if (e.kids && e.kids.length) kidBox.appendChild(buildWbLevel(e.kids));
+      else if (e.kids) kidBox.innerHTML = '<div class="wb-empty">(empty)</div>';
+      else loadWbKids(kidBox, e.path);
+    }
+  }
+  return ul;
+}
+
+async function loadWbKids(box, dirPath) {
+  box.innerHTML = '<div class="wb-loading">…</div>';
+  try {
+    const r = await fetch('/api/wb/tree?path=' + encodeURIComponent(dirPath) + '&open=1&depth=1');
+    const j = await r.json();
+    box.innerHTML = '';
+    if (!j.entries || !j.entries.length) { box.innerHTML = '<div class="wb-empty">(empty)</div>'; return; }
+    box.appendChild(buildWbLevel(j.entries));
+  } catch { box.innerHTML = '<div class="wb-empty">⚠️</div>'; }
+}
+
+function toggleWbDir(li, e) {
+  const box = li.parentElement.querySelector(`[data-kidsof="${CSS.escape(e.path)}"]`);
+  if (!box) return;
+  if (wbExpanded.has(e.path)) {
+    wbExpanded.delete(e.path);
+    box.innerHTML = '';
+    li.querySelector('.wb-arrow').textContent = '▸';
+    li.classList.remove('sel');
+  } else {
+    wbExpanded.add(e.path);
+    wbSelected = e.path;
+    li.querySelector('.wb-arrow').textContent = '▾';
+    loadWbKids(box, e.path);
+  }
+}
+
+function wbIcon(name, isDir) {
+  if (isDir) return '📁';
+  const ext = (name.split('.').pop() || '').toLowerCase();
+  const map = { js:'🟨', ts:'🟦', go:'🐹', py:'🐍', rs:'🦀', html:'🌐', css:'🎨', json:'🧾', md:'📝',
+    txt:'📄', sh:'🐚', yml:'⚙️', yaml:'⚙️', toml:'⚙️', mod:'🐹', sum:'🐹', png:'🖼', jpg:'🖼',
+    svg:'🖼', gif:'🖼', lock:'🔒', env:'🔑', gitignore:'🙈', csv:'📊', sql:'🗄' };
+  return map[ext] || '📄';
+}
+function fmtSize(n) {
+  if (n == null) return '';
+  if (n < 1024) return n + ' B';
+  if (n < 1048576) return (n / 1024).toFixed(1) + ' K';
+  return (n / 1048576).toFixed(1) + ' M';
+}
+
+async function openWbFile(path) {
+  try {
+    const r = await fetch('/api/wb/read?path=' + encodeURIComponent(path));
+    const j = await r.json();
+    if (!j.ok) { toast('⚠️ ' + escapeHtml(j.error || 'could not open')); return; }
+    wbFile = path;
+    wbDirty = false;
+    $('#wb-editor').value = j.content;
+    $('#wb-open-path').textContent = path;
+    $('#wb-dirty').hidden = true;
+    $('#btn-wb-del').hidden = false;
+    $('#btn-wb-rename').hidden = false;
+    updateWbStats();
+    document.querySelectorAll('.wb-row.sel').forEach((n) => n.classList.remove('sel'));
+    const row = [...document.querySelectorAll('.wb-row')].find((n) => n.dataset.path === path);
+    if (row) row.classList.add('sel');
+  } catch { toast('⚠️ could not open file'); }
+}
+
+function updateWbStats() {
+  const v = $('#wb-editor').value;
+  const lines = v ? v.split('\n').length : 0;
+  $('#wb-stats').textContent = `${fmtSize(v.length)} · ${lines} lines`;
+}
+
+function markWbDirty() {
+  if (!wbDirty) { wbDirty = true; $('#wb-dirty').hidden = false; }
+  updateWbStats();
+}
+
+async function saveWbFile() {
+  if (!wbFile) { toast('open a file first — pick one from the tree'); return; }
+  try {
+    const r = await fetch('/api/wb/write', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: wbFile, content: $('#wb-editor').value }),
+    });
+    const j = await r.json();
+    if (j.ok) {
+      wbDirty = false;
+      $('#wb-dirty').hidden = true;
+      toast(`💾 <b>${escapeHtml(wbFile)}</b> written to disk`);
+    } else toast('⚠️ ' + escapeHtml(j.error || 'write failed'));
+  } catch { toast('⚠️ write failed'); }
+}
+
+function wbUniqueName(base, siblings) {
+  if (!siblings.has(base)) return base;
+  const dot = base.lastIndexOf('.');
+  const stem = dot > 0 ? base.slice(0, dot) : base;
+  const ext = dot > 0 ? base.slice(dot) : '';
+  for (let i = 2; ; i++) if (!siblings.has(stem + '-' + i + ext)) return stem + '-' + i + ext;
+}
+
+async function wbSiblingNames(dirPath) {
+  try {
+    const r = await fetch('/api/wb/tree?path=' + encodeURIComponent(dirPath));
+    const j = await r.json();
+    return new Set((j.entries || []).map((e) => e.name));
+  } catch { return new Set(); }
+}
+
+$('#btn-wb-newfile').addEventListener('click', async () => {
+  const dir = wbSelected && !wbSelected.includes('.') ? wbSelected : '';
+  const names = await wbSiblingNames(dir);
+  const name = wbUniqueName('new-file.txt', names);
+  const path = dir ? dir + '/' + name : name;
+  await fetch('/api/wb/write', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path, content: '' }) });
+  wbExpanded.add(dir);
+  refreshWbTree();
+  openWbFile(path);
+  $('#wb-editor').focus();
+  toast(`📄 <b>${escapeHtml(path)}</b> created — type away`);
+});
+
+$('#btn-wb-newdir').addEventListener('click', async () => {
+  const dir = wbSelected && !wbSelected.includes('.') ? wbSelected : '';
+  const names = await wbSiblingNames(dir);
+  const name = wbUniqueName('new-dir', names);
+  const path = dir ? dir + '/' + name : name;
+  await fetch('/api/wb/mkdir', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path }) });
+  wbExpanded.add(dir);
+  refreshWbTree();
+  toast(`📁 <b>${escapeHtml(path)}</b> created`);
+});
+
+$('#btn-wb-refresh').addEventListener('click', refreshWbTree);
+$('#btn-wb-close').addEventListener('click', closeWorkbench);
+$('#wb-modal').addEventListener('click', (e) => { if (e.target.id === 'wb-modal') closeWorkbench(); });
+$('#btn-wb-save').addEventListener('click', saveWbFile);
+$('#wb-editor').addEventListener('input', markWbDirty);
+$('#wb-editor').addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveWbFile(); }
+  if (e.key === 'Tab') { // tab inserts two spaces, never steals focus
+    e.preventDefault();
+    const ta = e.target, s0 = ta.selectionStart, s1 = ta.selectionEnd;
+    ta.value = ta.value.slice(0, s0) + '  ' + ta.value.slice(s1);
+    ta.selectionStart = ta.selectionEnd = s0 + 2;
+    markWbDirty();
+  }
+  e.stopPropagation(); // don't fire global shortcuts while typing
+});
+
+$('#btn-wb-del').addEventListener('click', async () => {
+  if (!wbFile || !confirm(`delete ${wbFile} from your project? This cannot be undone.`)) return;
+  const r = await fetch('/api/wb/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: wbFile }) });
+  const j = await r.json();
+  if (j.ok) {
+    toast(`💥 <b>${escapeHtml(wbFile)}</b> deleted`);
+    wbFile = null; wbDirty = false;
+    $('#wb-editor').value = '';
+    $('#wb-open-path').textContent = 'pick a file — the workbench edits your project in place';
+    $('#wb-dirty').hidden = true;
+    $('#btn-wb-del').hidden = true;
+    $('#btn-wb-rename').hidden = true;
+    refreshWbTree();
+  } else toast('⚠️ ' + escapeHtml(j.error || 'delete failed'));
+});
+
+$('#btn-wb-rename').addEventListener('click', async () => {
+  if (!wbFile) return;
+  const to = prompt('rename / move to (project-relative path):', wbFile);
+  if (!to || to === wbFile) return;
+  const r = await fetch('/api/wb/rename', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from: wbFile, to }) });
+  const j = await r.json();
+  if (j.ok) { toast(`✎ <b>${escapeHtml(wbFile)}</b> → <b>${escapeHtml(to)}</b>`); wbFile = to; refreshWbTree(); openWbFile(to); }
+  else toast('⚠️ ' + escapeHtml(j.error || 'rename failed'));
+});
+
+function wbFileMenu(e) {
+  wbSelected = e.path;
+  if (confirm(`file: ${e.path}\n\nOK = open · Cancel = stay`)) openWbFile(e.path);
+}
+function wbDirMenu(e) {
+  wbSelected = e.path;
+  const act = prompt(`folder: ${e.path}\n\nType: open / collapse / newfile / newdir / delete`, 'open');
+  if (!act) return;
+  if (act === 'open') { if (!wbExpanded.has(e.path)) toggleWbDir([...document.querySelectorAll('.wb-row')].find((n) => n.dataset.path === e.path), e); }
+  else if (act === 'collapse') { if (wbExpanded.has(e.path)) toggleWbDir([...document.querySelectorAll('.wb-row')].find((n) => n.dataset.path === e.path), e); }
+  else if (act === 'newfile') $('#btn-wb-newfile').click();
+  else if (act === 'newdir') $('#btn-wb-newdir').click();
+  else if (act === 'delete') {
+    if (!confirm(`delete folder ${e.path}? It must be empty.`)) return;
+    fetch('/api/wb/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: e.path }) })
+      .then((r) => r.json()).then((j) => { if (j.ok) { toast(`💥 <b>${escapeHtml(e.path)}</b> deleted`); refreshWbTree(); } else toast('⚠️ ' + escapeHtml(j.error || 'delete failed')); });
+  }
+}
+
+// the workbench watches the project live too: any fs:change under the root
+// refreshes the open tree (unless the change came from our own save, which
+// the editor already reflects)
+let wbRefreshTimer = null;
+function onWbFsChange(ch) {
+  if (!wbOpenFlag) return;
+  const src = (ch || {}).source;
+  if (src === 'workbench') return; // our own writes are already on screen
+  clearTimeout(wbRefreshTimer);
+  wbRefreshTimer = setTimeout(refreshWbTree, 600); // coalesce bursts
+}
+
+$('#btn-workbench').addEventListener('click', openWorkbench);
