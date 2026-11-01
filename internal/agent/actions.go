@@ -16,11 +16,24 @@ import (
 
 	"github.com/dop251/goja"
 
+	"github.com/dxn111/EVOLV/internal/candidate"
 	"github.com/dxn111/EVOLV/internal/update"
 	"github.com/dxn111/EVOLV/internal/workspace"
 )
 
 func contentHash(raw []byte) string { return fmt.Sprintf("sha256:%x", sha256.Sum256(raw)) }
+
+func sameSchema(a, b map[string]string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for key, value := range a {
+		if b[key] != value {
+			return false
+		}
+	}
+	return true
+}
 
 // guardedWrite prevents a mutation planned from stale source from overwriting a
 // newer file. Existing files require the hash returned by read_file; identical
@@ -252,7 +265,9 @@ func (a *Agent) Execute(act action) string {
 		res["ok"] = true
 		res["hash"], res["changed"] = hash, changed
 		note := "tool compiled into the sandbox and callable via run_tool"
-		if len(act.Schema) > 0 && changed {
+		currentManifest := readToolManifest(a, name)
+		manifestChanged := len(act.Schema) > 0 && (currentManifest == nil || currentManifest.Description != act.Desc || !sameSchema(currentManifest.Schema, act.Schema))
+		if manifestChanged {
 			// typed contract: persisted manifest, versioned, run_tool now validates
 			m := &toolManifest{Name: name, Description: act.Desc, Schema: act.Schema}
 			ver, err := writeToolManifest(a, m)
@@ -793,6 +808,34 @@ func (a *Agent) Execute(act action) string {
 		if err != nil {
 			res["error"] = err.Error()
 		}
+
+	case "stage_candidate":
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		defer cancel()
+		man, err := a.candidateManager().Stage(ctx, candidate.Proposal{Name: act.Name, Files: act.Files, ExpectedHashes: act.ExpectedHashes})
+		if err != nil {
+			res["ok"], res["error"] = false, err.Error()
+			break
+		}
+		res["ok"] = man.Status == "ready"
+		res["candidate"] = man
+		if man.Status != "ready" {
+			res["error"] = "candidate validation failed; living source was not touched"
+		}
+		a.bus.Publish("candidate:updated", man)
+
+	case "list_candidates":
+		items := a.candidateManager().List()
+		res["ok"], res["candidates"] = true, items
+
+	case "promote_candidate":
+		man, err := a.candidateManager().Promote(act.Name)
+		if err != nil {
+			res["ok"], res["error"] = false, err.Error()
+			break
+		}
+		res["ok"], res["candidate"] = true, man
+		a.bus.Publish("candidate:updated", man)
 
 	default:
 		res["ok"] = false

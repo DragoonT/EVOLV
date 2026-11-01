@@ -103,6 +103,12 @@ self-evolution:
   512KB cap) — plugins and grown tools can read the live web.
 - reload_shell      {}                                       → forces the browser to recompile your shell now
 - self_update       {}                                       → morph to the latest released version of yourself (binary swap)
+- stage_candidate   {name, files:{"relative/path":"complete content"}, expected_hashes:{"relative/path":"sha256:..."}}
+                                                             → copy your source into an isolated candidate, apply only these
+  hash-pinned files, then run go test ./... and go build ./...; the living source is never touched
+- list_candidates   {}                                       → inspect archived candidate evidence and validation status
+- promote_candidate {name:"candidate-id"}                    → promote a green candidate only if every source hash is still current;
+  never promote without explicit user approval
 general agent powers (absolute paths OK everywhere):
 - write_file        {path, content, expected_hash} (read existing files first; use the returned hash)
 - edit_file         {path, find, replace, expected_hash} (hash is mandatory and prevents stale edits)

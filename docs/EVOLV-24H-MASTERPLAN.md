@@ -43,7 +43,7 @@
 | # | Capability | Value | Effort | Dependency | Verdict |
 |---|---|---|---|---|---|
 | P0 | Agent task-planner + persistent task state (§4A) | unlock everything | M | none | **shipped; harden resume** |
-| P0 | Candidate-build self-evolution loop (§4B) | the differentiator | L | planner | **next major engine slice** |
+| P0 | Candidate-build self-evolution loop (§4B) | the differentiator | L | planner | **staging, validation, archive, and guarded promotion shipped; boot health/swap remains** |
 | P1 | Workspace export/import package (§5) | community growth | M | snapshots | after P0 |
 | P1 | Docs site + installer `--version` (v0.22.0) | first impression | S | none | **shipped** |
 | P1 | Plugin permission tiers + limits | trust | M | audit | permissions shipped; limits remain |

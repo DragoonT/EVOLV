@@ -33,6 +33,7 @@ const (
 	EvolutionFile = "workspace/evolution.jsonl" // append-only mutation history
 	PlanFile      = "workspace/plan.json"       // the agent's current task plan
 	RepoMapFile   = "workspace/repo-map.json"   // cached repository tree + symbol outline
+	CandidatesDir = "workspace/candidates"      // isolated, auditable self-evolution proposals
 )
 
 // Config is the user-editable kernel config.
@@ -208,7 +209,7 @@ func Load(uiFS fs.FS) (*W, error) {
 		w.SaveConfig()
 	}
 	// directories
-	for _, d := range []string{WorkspaceDir, UIComponentsRel(), PluginsDir, ToolsDir, SkillsDir, PromptsDir, LogsDir, SnapshotsDir} {
+	for _, d := range []string{WorkspaceDir, UIComponentsRel(), PluginsDir, ToolsDir, SkillsDir, PromptsDir, CandidatesDir, LogsDir, SnapshotsDir} {
 		if err := os.MkdirAll(w.Dir(d), 0o755); err != nil {
 			return nil, err
 		}

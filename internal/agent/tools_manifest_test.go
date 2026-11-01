@@ -27,7 +27,7 @@ func TestTypedToolManifest(t *testing.T) {
 	}
 	// re-evolve → version bumps
 	res = execOK(t, a, action{Action: "evolve_tool", Name: "adder", Desc: "adder v2", Code: code,
-		Schema: map[string]string{"a": "number", "b": "number", "c": "number"}})
+		ExpectedHash: contentHash([]byte(code)), Schema: map[string]string{"a": "number", "b": "number", "c": "number"}})
 	if res["version"] != float64(2) {
 		t.Fatalf("second version should be 2, got %v", res["version"])
 	}

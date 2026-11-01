@@ -9,7 +9,9 @@ import (
 // mkTestW builds a workspace in a temp home, like the agent tests do.
 func mkTestW(t *testing.T) *W {
 	t.Helper()
-	t.Setenv("HOME", t.TempDir())
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	w, err := Load(nil)
 	if err != nil {
 		t.Fatal(err)

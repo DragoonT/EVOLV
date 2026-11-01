@@ -16,6 +16,7 @@ func mockAgent(t *testing.T) (*Agent, *workspace.W) {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	ws, err := workspace.Load(nil)
 	if err != nil {
 		t.Fatal(err)

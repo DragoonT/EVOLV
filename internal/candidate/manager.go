@@ -1,0 +1,257 @@
+// Package candidate builds self-evolution proposals away from the living tree.
+package candidate
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/json"
+	"fmt"
+	"io/fs"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/dxn111/EVOLV/internal/workspace"
+)
+
+type Change struct {
+	Path, BeforeHash, AfterHash string
+	Bytes                       int64
+}
+type Check struct {
+	Command    string `json:"command"`
+	OK         bool   `json:"ok"`
+	Output     string `json:"output"`
+	DurationMS int64  `json:"duration_ms"`
+}
+type Manifest struct {
+	ID         string   `json:"id"`
+	Name       string   `json:"name"`
+	SourceRoot string   `json:"source_root"`
+	Status     string   `json:"status"`
+	Created    string   `json:"created"`
+	Promoted   string   `json:"promoted,omitempty"`
+	Changes    []Change `json:"changes"`
+	Checks     []Check  `json:"checks"`
+}
+type Proposal struct {
+	Name           string
+	Files          map[string]string
+	ExpectedHashes map[string]string
+}
+type Manager struct {
+	WS         *workspace.W
+	SourceRoot string
+}
+
+func hash(raw []byte) string { return fmt.Sprintf("sha256:%x", sha256.Sum256(raw)) }
+func cleanRel(p string) (string, error) {
+	p = filepath.Clean(filepath.FromSlash(p))
+	if p == "." || filepath.IsAbs(p) || p == ".." || strings.HasPrefix(p, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("candidate path escapes source: %q", p)
+	}
+	return p, nil
+}
+func slug(s string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(s) {
+		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' {
+			b.WriteRune(r)
+		} else if b.Len() > 0 && b.String()[b.Len()-1] != '-' {
+			b.WriteByte('-')
+		}
+	}
+	return strings.Trim(b.String(), "-")
+}
+
+func (m *Manager) Stage(ctx context.Context, p Proposal) (*Manifest, error) {
+	if m.SourceRoot == "" {
+		return nil, fmt.Errorf("EVOLV source root not found")
+	}
+	if len(p.Files) == 0 {
+		return nil, fmt.Errorf("candidate needs at least one file")
+	}
+	id := time.Now().UTC().Format("20060102-150405.000000000") + "-" + slug(p.Name)
+	if strings.HasSuffix(id, "-") {
+		id += "candidate"
+	}
+	root := m.WS.Dir(filepath.Join(workspace.CandidatesDir, id))
+	tree := filepath.Join(root, "source")
+	if err := copyTree(m.SourceRoot, tree); err != nil {
+		return nil, err
+	}
+	man := &Manifest{ID: id, Name: p.Name, SourceRoot: m.SourceRoot, Status: "testing", Created: time.Now().UTC().Format(time.RFC3339)}
+	paths := make([]string, 0, len(p.Files))
+	for path := range p.Files {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	for _, rawPath := range paths {
+		rel, err := cleanRel(rawPath)
+		if err != nil {
+			return nil, err
+		}
+		live := filepath.Join(m.SourceRoot, rel)
+		before, readErr := os.ReadFile(live)
+		beforeHash := ""
+		if readErr == nil {
+			beforeHash = hash(before)
+		} else if !os.IsNotExist(readErr) {
+			return nil, readErr
+		}
+		if want := p.ExpectedHashes[rawPath]; beforeHash != "" && (want == "" || want != beforeHash) {
+			return nil, fmt.Errorf("stale candidate input for %s: current %s", rel, beforeHash)
+		}
+		next := []byte(p.Files[rawPath])
+		dest := filepath.Join(tree, rel)
+		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+			return nil, err
+		}
+		if err := os.WriteFile(dest, next, 0o644); err != nil {
+			return nil, err
+		}
+		man.Changes = append(man.Changes, Change{Path: filepath.ToSlash(rel), BeforeHash: beforeHash, AfterHash: hash(next), Bytes: int64(len(next))})
+	}
+	commands := [][]string{{"go", "test", "./..."}, {"go", "build", "./..."}}
+	for _, args := range commands {
+		start := time.Now()
+		cmdCtx, cancel := context.WithTimeout(ctx, 4*time.Minute)
+		cmd := exec.CommandContext(cmdCtx, args[0], args[1:]...)
+		cmd.Dir = tree
+		out, err := cmd.CombinedOutput()
+		cancel()
+		if len(out) > 64<<10 {
+			out = out[len(out)-(64<<10):]
+		}
+		check := Check{Command: strings.Join(args, " "), OK: err == nil, Output: string(out), DurationMS: time.Since(start).Milliseconds()}
+		if err != nil {
+			check.Output += fmt.Sprintf("\nerror: %v", err)
+		}
+		man.Checks = append(man.Checks, check)
+		if err != nil {
+			man.Status = "failed"
+			_ = writeManifest(root, man)
+			return man, nil
+		}
+	}
+	man.Status = "ready"
+	return man, writeManifest(root, man)
+}
+
+func (m *Manager) Promote(id string) (*Manifest, error) {
+	man, root, err := m.load(id)
+	if err != nil {
+		return nil, err
+	}
+	if man.Status != "ready" {
+		return nil, fmt.Errorf("candidate %s is %s, not ready", id, man.Status)
+	}
+	for _, c := range man.Changes {
+		live := filepath.Join(m.SourceRoot, filepath.FromSlash(c.Path))
+		raw, err := os.ReadFile(live)
+		current := ""
+		if err == nil {
+			current = hash(raw)
+		} else if !os.IsNotExist(err) {
+			return nil, err
+		}
+		if current != c.BeforeHash {
+			return nil, fmt.Errorf("promotion blocked: %s changed since staging", c.Path)
+		}
+	}
+	for _, c := range man.Changes {
+		src := filepath.Join(root, "source", filepath.FromSlash(c.Path))
+		raw, err := os.ReadFile(src)
+		if err != nil {
+			return nil, err
+		}
+		dst := filepath.Join(m.SourceRoot, filepath.FromSlash(c.Path))
+		if err = os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+			return nil, err
+		}
+		if err = os.WriteFile(dst, raw, 0o644); err != nil {
+			return nil, err
+		}
+	}
+	man.Status = "promoted"
+	man.Promoted = time.Now().UTC().Format(time.RFC3339)
+	return man, writeManifest(root, man)
+}
+func (m *Manager) List() []Manifest {
+	ents, _ := os.ReadDir(m.WS.Dir(workspace.CandidatesDir))
+	out := []Manifest{}
+	for _, e := range ents {
+		if e.IsDir() {
+			if man, _, err := m.load(e.Name()); err == nil {
+				out = append(out, *man)
+			}
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Created > out[j].Created })
+	return out
+}
+func (m *Manager) load(id string) (*Manifest, string, error) {
+	clean, err := cleanRel(id)
+	if err != nil || strings.Contains(clean, string(filepath.Separator)) {
+		return nil, "", fmt.Errorf("invalid candidate id")
+	}
+	root := m.WS.Dir(filepath.Join(workspace.CandidatesDir, clean))
+	raw, err := os.ReadFile(filepath.Join(root, "manifest.json"))
+	if err != nil {
+		return nil, "", err
+	}
+	var man Manifest
+	if err = json.Unmarshal(raw, &man); err != nil {
+		return nil, "", err
+	}
+	return &man, root, nil
+}
+func writeManifest(root string, man *Manifest) error {
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		return err
+	}
+	raw, err := json.MarshalIndent(man, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(root, "manifest.json"), raw, 0o644)
+}
+func copyTree(src, dst string) error {
+	return filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		if d.IsDir() && (d.Name() == ".git" || d.Name() == "node_modules" || d.Name() == "upstream-work" || d.Name() == "dist") {
+			return fs.SkipDir
+		}
+		if d.Type()&fs.ModeSymlink != 0 {
+			return nil // never follow links outside the source tree
+		}
+		target := filepath.Join(dst, rel)
+		if d.IsDir() {
+			return os.MkdirAll(target, 0o755)
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		if info.Size() > 8<<20 {
+			return nil
+		}
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if err = os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return err
+		}
+		return os.WriteFile(target, raw, info.Mode().Perm())
+	})
+}

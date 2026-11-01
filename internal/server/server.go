@@ -24,6 +24,7 @@ import (
 
 	"github.com/dxn111/EVOLV/internal/agent"
 	"github.com/dxn111/EVOLV/internal/bus"
+	"github.com/dxn111/EVOLV/internal/candidate"
 	"github.com/dxn111/EVOLV/internal/providers"
 	"github.com/dxn111/EVOLV/internal/update"
 	"github.com/dxn111/EVOLV/internal/workspace"
@@ -74,6 +75,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/widgets", s.handleWidgets)
 	s.mux.HandleFunc("/api/creations", s.handleCreations)
 	s.mux.HandleFunc("/api/agents", s.handleAgents)
+	s.mux.HandleFunc("/api/candidates", s.handleCandidates)
 	s.mux.HandleFunc("/api/genome", s.handleGenome)
 	s.mux.HandleFunc("/api/files", s.handleFiles)
 	s.mux.HandleFunc("/api/reset", s.handleReset)
@@ -470,6 +472,34 @@ func validateCapabilities(selected, available []string) ([]string, error) {
 	}
 	sort.Strings(out)
 	return out, nil
+}
+
+func (s *Server) handleCandidates(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	mgr := &candidate.Manager{WS: s.ws, SourceRoot: workspace.DetectSourceRoot()}
+	if r.Method == http.MethodGet {
+		json.NewEncoder(w).Encode(map[string]any{"candidates": mgr.List(), "source_root": mgr.SourceRoot})
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "GET or POST only", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		Action string `json:"action"`
+		ID     string `json:"id"`
+	}
+	if json.NewDecoder(r.Body).Decode(&req) != nil || req.Action != "promote" || req.ID == "" {
+		http.Error(w, `{"error":"action promote and id are required"}`, http.StatusBadRequest)
+		return
+	}
+	man, err := mgr.Promote(req.ID)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusConflict)
+		return
+	}
+	s.bus.Publish("candidate:updated", man)
+	json.NewEncoder(w).Encode(map[string]any{"ok": true, "candidate": man})
 }
 
 func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {

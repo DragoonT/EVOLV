@@ -4,6 +4,15 @@ This update turns EVOLV's accumulated mutations into a manageable, theme-aware w
 
 ## Highlights
 
+### Candidate evolution safety
+
+- `stage_candidate` copies the detected EVOLV source into `workspace/candidates/<id>/source` and never edits the running tree.
+- Every replacement file must include the SHA-256 hash of the live source it was based on.
+- Each candidate runs `go test ./...` and `go build ./...` with bounded execution time; output, duration, changed paths, and hashes are archived in `manifest.json`.
+- Failed candidates remain inspectable but cannot be promoted.
+- Promotion is explicit, revalidates every live source hash before the first write, and aborts if the source changed after staging.
+- The Creation Library includes a Candidates view with validation evidence, changed files, status, and a confirmed promotion control.
+
 ### Live DNA experience
 
 - A slowly animated DNA strand remains visible beneath the application layers.
@@ -57,6 +66,8 @@ This update turns EVOLV's accumulated mutations into a manageable, theme-aware w
 | `POST /api/creations` | Pin, archive, enable, or disable a creation. |
 | `GET /api/widgets` | Return widget state for dashboard controls. |
 | `POST /api/widgets` | Enable or disable a grown widget. |
+| `GET /api/candidates` | List archived candidate builds and their test evidence. |
+| `POST /api/candidates` | Explicitly promote a ready candidate after fresh hash validation. |
 
 ## Persistence and compatibility
 

@@ -16,6 +16,7 @@ func testAgent(t *testing.T) *Agent {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	ws, err := workspace.Load(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -151,6 +152,7 @@ func TestSnapshotAndRollback(t *testing.T) {
 func TestSnapshotRestoreWorkspace(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	ws, err := workspace.Load(nil)
 	if err != nil {
 		t.Fatal(err)

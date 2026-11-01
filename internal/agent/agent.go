@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/dxn111/EVOLV/internal/bus"
+	"github.com/dxn111/EVOLV/internal/candidate"
 	"github.com/dxn111/EVOLV/internal/providers"
 	"github.com/dxn111/EVOLV/internal/workspace"
 )
@@ -132,26 +133,32 @@ func (a *Agent) HistoryLen() int {
 // ---------- the evolv-block protocol ----------
 
 type action struct {
-	Action       string            `json:"action"`
-	Name         string            `json:"name"`
-	Title        string            `json:"title"`
-	Icon         string            `json:"icon"`
-	Desc         string            `json:"description"`
-	HTML         string            `json:"html"`
-	Code         string            `json:"code"`
-	Content      string            `json:"content"`
-	Path         string            `json:"path"`
-	To           string            `json:"to"`
-	Find         string            `json:"find"`
-	Replace      string            `json:"replace"`
-	ExpectedHash string            `json:"expected_hash"`
-	Depth        int               `json:"depth"`
-	Cwd          string            `json:"cwd"`
-	Command      string            `json:"command"`
-	Args         map[string]any    `json:"args"`
-	Steps        []planStepArg     `json:"steps"`
-	Schema       map[string]string `json:"schema"`
-	Perms        []string          `json:"perms"`
+	Action         string            `json:"action"`
+	Name           string            `json:"name"`
+	Title          string            `json:"title"`
+	Icon           string            `json:"icon"`
+	Desc           string            `json:"description"`
+	HTML           string            `json:"html"`
+	Code           string            `json:"code"`
+	Content        string            `json:"content"`
+	Path           string            `json:"path"`
+	To             string            `json:"to"`
+	Find           string            `json:"find"`
+	Replace        string            `json:"replace"`
+	ExpectedHash   string            `json:"expected_hash"`
+	Depth          int               `json:"depth"`
+	Cwd            string            `json:"cwd"`
+	Command        string            `json:"command"`
+	Args           map[string]any    `json:"args"`
+	Steps          []planStepArg     `json:"steps"`
+	Schema         map[string]string `json:"schema"`
+	Perms          []string          `json:"perms"`
+	Files          map[string]string `json:"files"`
+	ExpectedHashes map[string]string `json:"expected_hashes"`
+}
+
+func (a *Agent) candidateManager() *candidate.Manager {
+	return &candidate.Manager{WS: a.ws, SourceRoot: workspace.DetectSourceRoot()}
 }
 
 // planStepArg is one step of a set_plan action as it arrives over the wire.
