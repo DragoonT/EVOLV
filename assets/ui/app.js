@@ -7,6 +7,7 @@ const state = {
   ws: null, connected: false, busy: false,
   evolutionCount: 0, mounted: new Map(), // name -> el
   shellReloadTimer: null, thinkingEl: null,
+  evoAll: [], evoRevealed: 0, // ledger source of truth + revealed-beyond-cap count
 };
 
 /* ---------------- update banner ---------------- */
@@ -309,15 +310,45 @@ function bumpCounter() {
   const box = $('#evo-counter');
   box.classList.remove('bump'); void box.offsetWidth; box.classList.add('bump');
 }
+/* The ledger is virtualized: the DOM only ever holds the newest EVO_CAP
+   entries (plus any you explicitly reveal). The full history lives in
+   state.evoAll — a long-running organism that mutates all night stays smooth. */
+const EVO_CAP = 200, EVO_PAGE = 100;
+
+function renderEvoList() {
+  const list = $('#stream-list');
+  if (!list) return;
+  const visible = state.evoAll.slice(0, EVO_CAP + state.evoRevealed);
+  const hidden = state.evoAll.length - visible.length;
+  list.textContent = '';
+  const frag = document.createDocumentFragment();
+  let prevDream = false;
+  // walk oldest -> newest so dream runs open with a single divider
+  for (const h of visible.slice().reverse()) {
+    const isDream = !!h.dream;
+    if (isDream && !prevDream) frag.appendChild(dreamDivider());
+    frag.appendChild(evoItem(h.kind, h.name, h.description, h.t || (h.time || '').slice(11, 19), isDream));
+    prevDream = isDream;
+  }
+  if (hidden > 0) {
+    const b = el('button', 'evo-more');
+    b.textContent = `⏵ show ${Math.min(EVO_PAGE, hidden)} older mutations — ${hidden} hidden`;
+    b.onclick = () => { state.evoRevealed += EVO_PAGE; renderEvoList(); };
+    frag.appendChild(b);
+  }
+  list.appendChild(frag);
+}
+
 function onEvolution(e) {
   state.evolutionCount = Math.max(state.evolutionCount, e.n || 0);
   loadMind(); // the mind panel updates the instant something grows
   bumpCounter();
-  const list = $('#stream-list');
-  const top = list.firstElementChild;
-  const topDream = top && top.classList.contains('evo-dream');
-  if (e.dream && !topDream) list.prepend(dreamDivider()); // a new sleep begins
-  list.prepend(evoItem(e.kind, e.name, e.description, null, e.dream));
+  // stamp the clock once, at ingestion — re-renders must not let old events drift
+  state.evoAll.unshift({
+    kind: e.kind, name: e.name, description: e.description, dream: e.dream,
+    t: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+  });
+  renderEvoList();
 }
 
 async function loadEvolutionHistory() {
@@ -326,13 +357,11 @@ async function loadEvolutionHistory() {
     const d = await r.json();
     state.evolutionCount = d.count || 0;
     bumpCounter();
-    let prevDream = false;
-    (d.history || []).slice().reverse().forEach((h) => {
-      const isDream = !!h.dream;
-      if (isDream && !prevDream) $('#stream-list').appendChild(dreamDivider());
-      $('#stream-list').appendChild(evoItem(h.kind, h.name, h.description, (h.time || '').slice(11, 19), isDream));
-      prevDream = isDream;
-    });
+    state.evoAll = (d.history || []).map((h) => ({
+      kind: h.kind, name: h.name, description: h.description,
+      time: h.time, dream: h.dream,
+    }));
+    renderEvoList();
     (d.components || []).forEach((n) => mountComponent(n, { fresh: false, inline: false }));
     countDreamsWhileAway(d);
   } catch {}
@@ -501,8 +530,22 @@ function onToken(text) {
     currentAssistant = { m, body: m.querySelector('.body'), raw: '' };
   }
   currentAssistant.raw += text;
-  renderAssistant();
-  scrollChat();
+  scheduleRender();
+}
+
+/* rAF batching: tokens can arrive in bursts of dozens per second, but the
+   full markdown parse + DOM rebuild only runs once per animation frame.
+   finishAssistant() does the final synchronous render, so nothing is lost. */
+let renderQueued = false;
+function scheduleRender() {
+  if (renderQueued) return;
+  renderQueued = true;
+  requestAnimationFrame(() => {
+    renderQueued = false;
+    if (!currentAssistant) return; // turn finished; final render already ran
+    renderAssistant();
+    scrollChat();
+  });
 }
 
 // the streaming caret: a blinking block at the end of the last paragraph

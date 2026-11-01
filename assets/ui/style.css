@@ -111,6 +111,13 @@ body:not(.sb-hidden) #sb-rail { display: none; }
 .evo-item .n { font-size: 11.5px; color: var(--text); font-weight: 550; word-break: break-all; }
 .evo-item .d { font-size: 10.5px; color: var(--faint); margin-top: 1px; }
 .evo-item .t { margin-left: auto; font-size: 9.5px; color: var(--faint); flex-shrink: 0; padding-top: 3px; }
+.evo-more {
+  display: block; width: calc(100% - 4px); margin: 6px 2px 2px; padding: 8px 10px;
+  border: 1px dashed var(--line-soft); border-radius: 8px; background: transparent;
+  color: var(--dim); font-size: 11px; font-family: var(--font); cursor: pointer;
+  transition: all 0.15s;
+}
+.evo-more:hover { background: var(--bg3); color: var(--text); border-color: var(--accent); }
 
 .sb-bottom {
   border-top: 1px solid var(--line-soft); padding: 8px 10px 12px;
