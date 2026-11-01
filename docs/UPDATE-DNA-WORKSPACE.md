@@ -9,6 +9,8 @@ This update turns EVOLV's accumulated mutations into a manageable, theme-aware w
 - `stage_candidate` copies the detected EVOLV source into `workspace/candidates/<id>/source` and never edits the running tree.
 - Every replacement file must include the SHA-256 hash of the live source it was based on.
 - Each candidate runs `go test ./...` and `go build ./...` with bounded execution time; output, duration, changed paths, and hashes are archived in `manifest.json`.
+- EVOLV candidates also compile a standalone executable, launch it with an isolated home and temporary loopback port, and require an HTTP 200 response from `/api/health` before becoming ready.
+- The smoke-test process is always terminated after the probe; its isolated runtime files and compiled artifact remain with the candidate evidence.
 - Failed candidates remain inspectable but cannot be promoted.
 - Promotion is explicit, revalidates every live source hash before the first write, and aborts if the source changed after staging.
 - The Creation Library includes a Candidates view with validation evidence, changed files, status, and a confirmed promotion control.

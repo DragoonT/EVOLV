@@ -7,10 +7,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -34,6 +38,7 @@ type Manifest struct {
 	Status     string   `json:"status"`
 	Created    string   `json:"created"`
 	Promoted   string   `json:"promoted,omitempty"`
+	Artifact   string   `json:"artifact,omitempty"`
 	Changes    []Change `json:"changes"`
 	Checks     []Check  `json:"checks"`
 }
@@ -117,21 +122,35 @@ func (m *Manager) Stage(ctx context.Context, p Proposal) (*Manifest, error) {
 	}
 	commands := [][]string{{"go", "test", "./..."}, {"go", "build", "./..."}}
 	for _, args := range commands {
-		start := time.Now()
-		cmdCtx, cancel := context.WithTimeout(ctx, 4*time.Minute)
-		cmd := exec.CommandContext(cmdCtx, args[0], args[1:]...)
-		cmd.Dir = tree
-		out, err := cmd.CombinedOutput()
-		cancel()
-		if len(out) > 64<<10 {
-			out = out[len(out)-(64<<10):]
-		}
-		check := Check{Command: strings.Join(args, " "), OK: err == nil, Output: string(out), DurationMS: time.Since(start).Milliseconds()}
-		if err != nil {
-			check.Output += fmt.Sprintf("\nerror: %v", err)
-		}
+		check := runCommand(ctx, tree, args...)
 		man.Checks = append(man.Checks, check)
-		if err != nil {
+		if !check.OK {
+			man.Status = "failed"
+			_ = writeManifest(root, man)
+			return man, nil
+		}
+	}
+	if _, err := os.Stat(filepath.Join(tree, "cmd", "evolv")); err == nil {
+		artifactDir := filepath.Join(root, "artifacts")
+		if err := os.MkdirAll(artifactDir, 0o755); err != nil {
+			return nil, err
+		}
+		binary := filepath.Join(artifactDir, "evolv-candidate")
+		if runtime.GOOS == "windows" {
+			binary += ".exe"
+		}
+		check := runCommand(ctx, tree, "go", "build", "-o", binary, "./cmd/evolv")
+		check.Command = "go build candidate artifact"
+		man.Checks = append(man.Checks, check)
+		if !check.OK {
+			man.Status = "failed"
+			_ = writeManifest(root, man)
+			return man, nil
+		}
+		man.Artifact = filepath.ToSlash(filepath.Join("artifacts", filepath.Base(binary)))
+		boot := bootHealthCheck(ctx, binary, filepath.Join(root, "runtime-home"))
+		man.Checks = append(man.Checks, boot)
+		if !boot.OK {
 			man.Status = "failed"
 			_ = writeManifest(root, man)
 			return man, nil
@@ -139,6 +158,93 @@ func (m *Manager) Stage(ctx context.Context, p Proposal) (*Manifest, error) {
 	}
 	man.Status = "ready"
 	return man, writeManifest(root, man)
+}
+
+func runCommand(parent context.Context, dir string, args ...string) Check {
+	start := time.Now()
+	ctx, cancel := context.WithTimeout(parent, 4*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	if len(out) > 64<<10 {
+		out = out[len(out)-(64<<10):]
+	}
+	check := Check{Command: strings.Join(args, " "), OK: err == nil, Output: string(out), DurationMS: time.Since(start).Milliseconds()}
+	if err != nil {
+		check.Output += fmt.Sprintf("\nerror: %v", err)
+	}
+	return check
+}
+
+func bootHealthCheck(parent context.Context, binary, isolatedHome string) Check {
+	start := time.Now()
+	check := Check{Command: "boot smoke GET /api/health"}
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		check.Output = err.Error()
+		return check
+	}
+	port := listener.Addr().(*net.TCPAddr).Port
+	_ = listener.Close()
+	if err = os.MkdirAll(isolatedHome, 0o755); err != nil {
+		check.Output = err.Error()
+		return check
+	}
+	ctx, cancel := context.WithTimeout(parent, 25*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, binary, "--port", strconv.Itoa(port), "--no-open")
+	cmd.Env = isolatedHomeEnv(isolatedHome)
+	cmd.Dir = filepath.Dir(binary)
+	if err = cmd.Start(); err != nil {
+		check.Output = err.Error()
+		return check
+	}
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	url := fmt.Sprintf("http://127.0.0.1:%d/api/health", port)
+	client := &http.Client{Timeout: 700 * time.Millisecond}
+	var last string
+	for {
+		select {
+		case err = <-done:
+			check.Output = fmt.Sprintf("candidate exited before health check: %v", err)
+			check.DurationMS = time.Since(start).Milliseconds()
+			return check
+		case <-ctx.Done():
+			_ = cmd.Process.Kill()
+			check.Output = "health timeout: " + last
+			check.DurationMS = time.Since(start).Milliseconds()
+			return check
+		case <-time.After(150 * time.Millisecond):
+			resp, requestErr := client.Get(url)
+			if requestErr != nil {
+				last = requestErr.Error()
+				continue
+			}
+			_ = resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				check.OK, check.Output = true, fmt.Sprintf("healthy on isolated port %d", port)
+				_ = cmd.Process.Kill()
+				<-done
+				check.DurationMS = time.Since(start).Milliseconds()
+				return check
+			}
+			last = resp.Status
+		}
+	}
+}
+
+func isolatedHomeEnv(home string) []string {
+	out := make([]string, 0, len(os.Environ())+2)
+	for _, item := range os.Environ() {
+		upper := strings.ToUpper(item)
+		if strings.HasPrefix(upper, "HOME=") || strings.HasPrefix(upper, "USERPROFILE=") {
+			continue
+		}
+		out = append(out, item)
+	}
+	return append(out, "HOME="+home, "USERPROFILE="+home)
 }
 
 func (m *Manager) Promote(id string) (*Manifest, error) {
