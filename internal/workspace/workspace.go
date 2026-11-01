@@ -31,6 +31,7 @@ const (
 	ManifestFile  = "workspace/manifest.json"
 	EvolutionFile = "workspace/evolution.jsonl" // append-only mutation history
 	PlanFile      = "workspace/plan.json"       // the agent's current task plan
+	RepoMapFile   = "workspace/repo-map.json"   // cached repository tree + symbol outline
 )
 
 // Config is the user-editable kernel config.

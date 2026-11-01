@@ -148,7 +148,7 @@ Every dream is a real conversation turn, so the organism *remembers its dreams* 
 | `evolve_skill` / `evolve_prompt` | grows its own memory and system prompt |
 | `evolve_plugin` | installs a **live** plugin: own sandbox, reacts to bus events via `evolv.on`, real timers via `evolv.every` |
 | `write_file` / `edit_file` / `read_file` | any file, any path on your machine |
-| `list_dir` / `tree` / `move` / `delete_file` | real filesystem surgery |
+| `list_dir` / `tree` / `map_repo` / `move` / `delete_file` | filesystem navigation plus a cached Go/JS/TS repository outline |
 | `set_project` / `shell` | binds your project root, runs commands (120s timeout) |
 | `snapshot` / `rollback` | time travel: freeze the genome, rewind the whole organism |
 | `reload_shell` | forces the browser to recompile its UI now |
