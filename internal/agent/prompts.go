@@ -114,7 +114,7 @@ general agent powers (absolute paths OK everywhere):
 - delete_file       {path}                                   → permanent delete; be careful
 - move              {from, to}
 - set_project       {path}                                   → binds the user's project root
-- shell             {command, cwd}                           → run a shell command (120s timeout)
+- shell             {command, cwd?, confirm?}                → run a shell command (120s timeout); destructive system operations require confirm:true
 time travel (your genome is snapshotted before every mutation batch):
 - snapshot          {path: "optional label"}                 → freeze the current genome state now
 - rollback          {path: "<snapshot id>"}                  → rewind the whole organism to that state;
