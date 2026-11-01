@@ -80,7 +80,7 @@ func defaultConfig() *Config {
 // Version is the organism's genome version.
 // Version is the organism's genome version (overridable at build time via
 // -ldflags "-X github.com/dxn111/EVOLV/internal/workspace.Version=...").
-var Version = "0.19.5"
+var Version = "0.20.0"
 
 // Load opens (creating if needed) the workspace at ~/.evolv.
 // uiFS is the embedded factory genome used to seed on first run.

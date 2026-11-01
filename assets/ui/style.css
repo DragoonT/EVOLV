@@ -560,6 +560,39 @@ and can be opened across the entire window via the ⤢ control. */
 }
 .gm-editor .save-btn { width: auto; margin: 10px 16px 14px; padding: 9px 18px; }
 
+/* dream mutations: quiet, grouped, unmistakably not yours */
+.evo-item.evo-dream .ico { filter: saturate(0.7); }
+.evo-dream-div {
+  display: flex; justify-content: center; margin: 7px 0 3px;
+}
+.evo-dream-div span {
+  font-size: 9.5px; letter-spacing: 1.2px; color: var(--faint);
+  border: 1px dashed var(--line); border-radius: 999px; padding: 2px 10px;
+}
+.w-dreams {
+  display: block; width: 100%; text-align: left; cursor: pointer;
+  margin: 10px 0 4px; padding: 10px 14px; border-radius: 11px;
+  background: rgba(110, 197, 154, 0.07); border: 1px solid rgba(110, 197, 154, 0.22);
+  color: var(--dim); font-size: 12.5px; font-family: var(--font);
+  transition: all 0.15s;
+}
+.w-dreams:hover { background: rgba(110, 197, 154, 0.13); color: var(--text); }
+.w-dreams b { color: var(--text); }
+.dream-return {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  margin: 10px auto 4px; padding: 10px 14px; border-radius: 11px; max-width: 680px;
+  background: rgba(110, 197, 154, 0.07); border: 1px solid rgba(110, 197, 154, 0.22);
+  color: var(--dim); font-size: 12.5px; cursor: pointer; transition: all 0.15s;
+}
+.dream-return:hover { background: rgba(110, 197, 154, 0.13); color: var(--text); }
+.dream-return u { text-decoration-color: rgba(110,197,154,.6); text-underline-offset: 3px; }
+.dream-return .dr-x {
+  border: none; background: transparent; color: var(--faint); cursor: pointer;
+  font-size: 12px; padding: 2px 6px; border-radius: 6px;
+}
+.dream-return .dr-x:hover { background: rgba(255,255,255,.07); color: var(--text); }
+
+
 /* ---------- snapshot diff: what exactly did that mutation change? ---------- */
 #diff-modal {
   position: fixed; inset: 0; z-index: 95; display: none;

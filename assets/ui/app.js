@@ -286,13 +286,21 @@ const KIND_META = {
   project: ['🎯'], remove_component: ['🗑'],
   snapshot: ['🧊'], rollback: ['⏪'], self_update: ['🦋'],
 };
-function evoItem(kind, name, desc, time) {
+function evoItem(kind, name, desc, time, dream) {
   const [ico] = KIND_META[kind] || ['✨'];
   const t = time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const item = document.createElement('div');
-  item.className = 'evo-item';
-  item.innerHTML = `<span class="ico">${ico}</span><span><div><span class="k">${escapeHtml(kind)}</span> <span class="n">${escapeHtml(name || '')}</span></div>${desc ? `<div class="d">${escapeHtml(desc)}</div>` : ''}</span><span class="t">${t}</span>`;
+  item.className = 'evo-item' + (dream ? ' evo-dream' : '');
+  item.innerHTML = `<span class="ico">${dream ? '🌙' : ico}</span><span><div><span class="k">${escapeHtml(kind)}</span> <span class="n">${escapeHtml(name || '')}</span></div>${desc ? `<div class="d">${escapeHtml(desc)}</div>` : ''}</span><span class="t">${t}</span>`;
   return item;
+}
+// a dream run starts when a dream entry follows a non-dream one — mark it
+// with a quiet divider so consecutive dream mutations read as one sleep
+function dreamDivider() {
+  const d = document.createElement('div');
+  d.className = 'evo-dream-div';
+  d.innerHTML = '<span>🌙 dream — nobody watching</span>';
+  return d;
 }
 function bumpCounter() {
   for (const id of ['#evo-count', '#evo-count2']) {
@@ -305,7 +313,11 @@ function onEvolution(e) {
   state.evolutionCount = Math.max(state.evolutionCount, e.n || 0);
   loadMind(); // the mind panel updates the instant something grows
   bumpCounter();
-  $('#stream-list').prepend(evoItem(e.kind, e.name, e.description));
+  const list = $('#stream-list');
+  const top = list.firstElementChild;
+  const topDream = top && top.classList.contains('evo-dream');
+  if (e.dream && !topDream) list.prepend(dreamDivider()); // a new sleep begins
+  list.prepend(evoItem(e.kind, e.name, e.description, null, e.dream));
 }
 
 async function loadEvolutionHistory() {
@@ -314,10 +326,47 @@ async function loadEvolutionHistory() {
     const d = await r.json();
     state.evolutionCount = d.count || 0;
     bumpCounter();
+    let prevDream = false;
     (d.history || []).slice().reverse().forEach((h) => {
-      $('#stream-list').appendChild(evoItem(h.kind, h.name, h.description, (h.time || '').slice(11, 19)));
+      const isDream = !!h.dream;
+      if (isDream && !prevDream) $('#stream-list').appendChild(dreamDivider());
+      $('#stream-list').appendChild(evoItem(h.kind, h.name, h.description, (h.time || '').slice(11, 19), isDream));
+      prevDream = isDream;
     });
     (d.components || []).forEach((n) => mountComponent(n, { fresh: false, inline: false }));
+    countDreamsWhileAway(d);
+  } catch {}
+}
+
+// "it dreamt N times while you were away" — count dream mutations newer than
+// the last visit stamp; runs of ledger entries = one sleep each
+function countDreamsWhileAway(d) {
+  try {
+    const last = +(localStorage.getItem('evolv.lastSeen') || 0);
+    const now = Date.now();
+    localStorage.setItem('evolv.lastSeen', String(now));
+    if (!last) return; // first visit — nothing was "away"
+    const dreams = (d.history || []).filter((h) => h.dream && (Date.parse(h.time) || 0) > last);
+    if (!dreams.length) return;
+    const txt = `🌙 it dreamt <b>${dreams.length}</b> time${dreams.length === 1 ? '' : 's'} while you were away — ${dreams.length} mutation${dreams.length === 1 ? '' : 's'}, zero prompts`;
+    const w = $('#welcome');
+    if (w) {
+      const line = document.createElement('button');
+      line.className = 'w-dreams';
+      line.innerHTML = txt + '. open the replay →';
+      line.addEventListener('click', openReplay);
+      w.querySelector('.w-sub').after(line);
+      return;
+    }
+    // returning to an existing conversation: a dismissible banner at the top
+    const strip = document.createElement('div');
+    strip.className = 'dream-return';
+    strip.innerHTML = `<span>${txt} · <u>see what it made</u></span><button class="dr-x" title="dismiss">✕</button>`;
+    strip.addEventListener('click', (e) => {
+      if (e.target.classList.contains('dr-x')) { strip.remove(); return; }
+      strip.remove(); openReplay();
+    });
+    $('#chat-scroll').prepend(strip);
   } catch {}
 }
 
