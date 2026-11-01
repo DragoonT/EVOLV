@@ -100,25 +100,32 @@ func (a *Agent) HistoryLen() int {
 // ---------- the evolv-block protocol ----------
 
 type action struct {
-	Action  string            `json:"action"`
-	Name    string            `json:"name"`
-	Title   string            `json:"title"`
-	Icon    string            `json:"icon"`
-	Desc    string            `json:"description"`
-	HTML    string            `json:"html"`
-	Code    string            `json:"code"`
-	Content string            `json:"content"`
-	Path    string            `json:"path"`
-	To      string            `json:"to"`
-	Find    string            `json:"find"`
-	Replace string            `json:"replace"`
-	Depth   int               `json:"depth"`
-	Cwd     string            `json:"cwd"`
-	Command string            `json:"command"`
-	Args    map[string]any    `json:"args"`
-	Steps   []planStepArg     `json:"steps"`
-	Schema  map[string]string `json:"schema"`
-	Perms   []string          `json:"perms"`
+	Action         string            `json:"action"`
+	Name           string            `json:"name"`
+	Title          string            `json:"title"`
+	Icon           string            `json:"icon"`
+	Desc           string            `json:"description"`
+	HTML           string            `json:"html"`
+	Code           string            `json:"code"`
+	Content        string            `json:"content"`
+	Path           string            `json:"path"`
+	To             string            `json:"to"`
+	Find           string            `json:"find"`
+	Replace        string            `json:"replace"`
+	Depth          int               `json:"depth"`
+	Cwd            string            `json:"cwd"`
+	Command        string            `json:"command"`
+	Args           map[string]any    `json:"args"`
+	Steps          []planStepArg     `json:"steps"`
+	Schema         map[string]string `json:"schema"`
+	Perms          []string          `json:"perms"`
+	Files          []fileMutation    `json:"files,omitempty"`
+	Message        string            `json:"message,omitempty"`
+	RunTests       *bool             `json:"run_tests,omitempty"`
+	StageOnly      bool              `json:"stage_only,omitempty"`
+	SourceRoot     string            `json:"source_root,omitempty"`
+	TargetLauncher string            `json:"target_launcher,omitempty"`
+	TestPkg        string            `json:"test_pkg,omitempty"`
 }
 
 // planStepArg is one step of a set_plan action as it arrives over the wire.

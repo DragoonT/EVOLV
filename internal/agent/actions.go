@@ -681,6 +681,75 @@ func (a *Agent) Execute(act action) string {
 		res["version"] = ver
 		res["note"] = "binary swapped; the user restarts evolv to wake the new body"
 
+	case "self_modify", "evolve_kernel":
+		opt := selfModifyOptions{
+			Message:        act.Message,
+			StageOnly:      act.StageOnly,
+			SourceRoot:     act.SourceRoot,
+			TargetLauncher: act.TargetLauncher,
+			TestPkg:        act.TestPkg,
+			Files:          act.Files,
+		}
+		if act.RunTests != nil {
+			opt.RunTests = *act.RunTests
+		} else {
+			opt.RunTests = true
+		}
+		if opt.Message == "" && act.Args != nil {
+			if m, ok := act.Args["message"].(string); ok {
+				opt.Message = m
+			}
+		}
+		if act.Args != nil {
+			if st, ok := act.Args["stage_only"].(bool); ok {
+				opt.StageOnly = st
+			}
+			if rt, ok := act.Args["run_tests"].(bool); ok {
+				opt.RunTests = rt
+			}
+			if tp, ok := act.Args["test_pkg"].(string); ok {
+				opt.TestPkg = tp
+			}
+			if sr, ok := act.Args["source_root"].(string); ok {
+				opt.SourceRoot = sr
+			}
+			if tl, ok := act.Args["target_launcher"].(string); ok {
+				opt.TargetLauncher = tl
+			}
+			if rawFiles, ok := act.Args["files"].([]any); ok {
+				for _, rf := range rawFiles {
+					if fm, ok := rf.(map[string]any); ok {
+						p, _ := fm["path"].(string)
+						c, _ := fm["content"].(string)
+						if p != "" {
+							opt.Files = append(opt.Files, fileMutation{Path: p, Content: c})
+						}
+					}
+				}
+			}
+		}
+		result := a.SelfModify(opt)
+		res["ok"] = result.OK
+		if !result.OK {
+			res["stage"] = result.Stage
+			res["error"] = result.Error
+		}
+		if result.Tag != "" {
+			res["tag"] = result.Tag
+		}
+		if result.Candidate != "" {
+			res["candidate"] = result.Candidate
+		}
+		if result.SourceRoot != "" {
+			res["source_root"] = result.SourceRoot
+		}
+		res["compiled"] = result.Compiled
+		res["tested"] = result.Tested
+		res["swapped"] = result.Swapped
+		if result.Note != "" {
+			res["note"] = result.Note
+		}
+
 	case "list_files":
 		var files []string
 		root := a.ws.Dir(workspace.WorkspaceDir)

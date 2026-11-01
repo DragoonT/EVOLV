@@ -103,6 +103,9 @@ self-evolution:
   512KB cap) — plugins and grown tools can read the live web.
 - reload_shell      {}                                       → forces the browser to recompile your shell now
 - self_update       {}                                       → morph to the latest released version of yourself (binary swap)
+- self_modify       {message?, files?, run_tests?, stage_only?} → compiles, tests, and stages a kernel candidate
+  from the EVOLV Go source tree ({{SOURCE_ROOT}}). On green, atomically updates the launcher binary ({{LAUNCHER}}).
+  Set stage_only:true to verify candidate build without replacing the running executable.
 general agent powers (absolute paths OK everywhere):
 - write_file        {path, content}
 - edit_file         {path, find, replace}                    → exact-match replace in any file
