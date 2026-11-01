@@ -22,11 +22,13 @@ import (
 // JSRuntime executes tools and plugins the agent grows into itself.
 // goja is a pure-Go ES5.1+ interpreter: no cgo, cross-compiles everywhere.
 type JSRuntime struct {
-	a     *Agent
-	vm    *goja.Runtime
-	mu    sync.Mutex
-	tools map[string]toolDef
-	vms   []*pluginVM // one isolated runtime per plugin
+	a                 *Agent
+	vm                *goja.Runtime
+	mu                sync.Mutex
+	tools             map[string]toolDef
+	vms               []*pluginVM // one isolated runtime per plugin
+	toolTimeout       time.Duration
+	pluginLoadTimeout time.Duration
 }
 
 type toolDef struct {
@@ -38,7 +40,14 @@ type toolDef struct {
 // NewJSRuntime creates the sandbox.
 func NewJSRuntime(a *Agent) *JSRuntime {
 	vm := goja.New()
-	r := &JSRuntime{a: a, vm: vm, tools: map[string]toolDef{}}
+	vm.SetMaxCallStackSize(DefaultMaxCallStackSize)
+	r := &JSRuntime{
+		a:                 a,
+		vm:                vm,
+		tools:             map[string]toolDef{},
+		toolTimeout:       DefaultToolTimeout,
+		pluginLoadTimeout: DefaultPluginLoadTimeout,
+	}
 	_ = vm.Set("evolv", map[string]any{
 		"log": func(args ...goja.Value) {
 			parts := make([]string, len(args))
@@ -54,6 +63,20 @@ func NewJSRuntime(a *Agent) *JSRuntime {
 		"http":          httpFetch,
 	})
 	return r
+}
+
+// SetToolTimeout sets the execution timeout for tool execution.
+func (r *JSRuntime) SetToolTimeout(d time.Duration) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.toolTimeout = d
+}
+
+// SetPluginLoadTimeout sets the timeout for compiling/loading plugins.
+func (r *JSRuntime) SetPluginLoadTimeout(d time.Duration) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.pluginLoadTimeout = d
 }
 
 // LoadAll loads every tool and plugin currently in the genome.
@@ -90,9 +113,20 @@ func (r *JSRuntime) loadToolsLocked() {
 // either as a bare function declaration or via `export default`.
 func (r *JSRuntime) evalToolLocked(name, code string) {
 	src := "(function(){" + code + "; return typeof " + sanitizeIdent(name) + "==='function'? " + sanitizeIdent(name) + " : null})()"
-	val, err := r.vm.RunString(src)
+	timeout := r.toolTimeout
+	if timeout <= 0 {
+		timeout = DefaultPluginLoadTimeout
+	}
+	var val goja.Value
+	err := runWithTimeout(r.vm, timeout, func() error {
+		var evalErr error
+		val, evalErr = r.vm.RunString(src)
+		return evalErr
+	})
 	if err != nil {
-		r.a.bus.Publish("plugin:log", map[string]string{"text": "tool " + name + " failed: " + err.Error()})
+		if r.a != nil && r.a.bus != nil {
+			r.a.bus.Publish("plugin:log", map[string]string{"text": "tool " + name + " failed: " + err.Error()})
+		}
 		return
 	}
 	if goja.IsUndefined(val) || goja.IsNull(val) {
@@ -152,13 +186,22 @@ func (r *JSRuntime) ListTools() []toolDef {
 // RunTool executes a grown tool with JSON args.
 func (r *JSRuntime) RunTool(name string, args map[string]any) (any, error) {
 	r.mu.Lock()
+	defer r.mu.Unlock()
 	t, ok := r.tools[name]
-	r.mu.Unlock()
 	if !ok {
 		return nil, fmt.Errorf("no such tool: %s", name)
 	}
+	timeout := r.toolTimeout
+	if timeout <= 0 {
+		timeout = DefaultToolTimeout
+	}
 	argVal := r.vm.ToValue(args)
-	res, err := t.fn(goja.Undefined(), argVal)
+	var res goja.Value
+	err := runWithTimeout(r.vm, timeout, func() error {
+		var callErr error
+		res, callErr = t.fn(goja.Undefined(), argVal)
+		return callErr
+	})
 	if err != nil {
 		return nil, err
 	}
