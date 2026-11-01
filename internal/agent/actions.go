@@ -822,6 +822,21 @@ func (a *Agent) Execute(act action) string {
 		} else if a.ws.Config.ProjectDir != "" {
 			cwd = a.ws.Config.ProjectDir
 		}
+
+		confirmed, _ := act.Args["confirm"].(bool)
+		if !confirmed {
+			if f, _ := act.Args["force"].(bool); f {
+				confirmed = true
+			}
+		}
+
+		if decision := CheckShellCommand(act.Command, cwd, confirmed); decision.Blocked {
+			res["ok"] = false
+			res["error"] = decision.Reason
+			res["requires_confirmation"] = decision.RequiresConfirm
+			res["cwd"] = cwd
+			break
+		}
 		ctx, cancel := contextWithTimeout(120 * time.Second)
 		defer cancel()
 		bin, args := shellCommand(act.Command)
