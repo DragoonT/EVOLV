@@ -109,6 +109,8 @@ general agent powers (absolute paths OK everywhere):
 - read_file         {path}
 - list_dir          {path}                                   → directory listing with sizes
 - tree              {path, depth}                            → recursive file tree (default depth 2)
+- map_repo          {path?, depth?}                          → bounded tree + Go/JS/TS symbol outline;
+  defaults to the bound project and caches the result at workspace/repo-map.json
 - delete_file       {path}                                   → permanent delete; be careful
 - move              {from, to}
 - set_project       {path}                                   → binds the user's project root

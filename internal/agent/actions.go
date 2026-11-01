@@ -456,6 +456,37 @@ func (a *Agent) Execute(act action) string {
 		sort.Strings(files)
 		res["ok"], res["path"], res["files"] = true, root, files
 
+	case "map_repo":
+		root := strings.TrimSpace(act.Path)
+		if root == "" {
+			root = a.ws.Config.ProjectDir
+		}
+		if root == "" {
+			root = a.ws.Root
+		}
+		abs, err := filepath.Abs(root)
+		if err != nil || !dirExists(abs) {
+			res["ok"], res["error"] = false, "directory does not exist: "+root
+			break
+		}
+		mapped, err := buildRepoMap(abs, act.Depth)
+		if err != nil {
+			res["ok"], res["error"] = false, err.Error()
+			break
+		}
+		cache, err := writeRepoMapCache(a, mapped)
+		if err != nil {
+			res["ok"], res["error"] = false, err.Error()
+			break
+		}
+		res["ok"] = true
+		res["root"] = mapped.Root
+		res["generated"] = mapped.Generated
+		res["files"] = mapped.Files
+		res["symbols"] = mapped.Symbols
+		res["truncated"] = mapped.Truncated
+		res["cache"] = cache
+
 	case "delete_file":
 		p, ok := a.resolvePath(act.Path, &res)
 		if !ok {
