@@ -134,6 +134,30 @@ ensure_path() {
 }
 
 # ── main ────────────────────────────────────────────────────────────────────
+# ── flags ───────────────────────────────────────────────────────────────────
+# --version / -v : print what the installer is and what it would install
+show_version() {
+  say "evolv installer v2 (docs: https://github.com/${REPO}/tree/main/docs)"
+  TAG=$(latest_tag || true)
+  if [ -n "$TAG" ]; then
+    say "latest release: ${TAG}"
+  else
+    say "latest release: could not reach github.com (offline?) — install will build from source"
+  fi
+  say "EVOLV_VERSION env pin: ${VERSION}"
+}
+
+for arg in "$@"; do
+  case "$arg" in
+    --version|-v) show_version; exit 0 ;;
+    --help|-h)
+      say "usage: install.sh [--version] [--help]"
+      say "  EVOLV_VERSION=v0.21.0 install.sh   pin a release instead of latest"
+      exit 0 ;;
+    EVOLV_VERSION=*) VERSION="${arg#EVOLV_VERSION=}" ;;
+  esac
+done
+
 main() {
   banner
   detect_platform
