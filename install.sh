@@ -125,17 +125,30 @@ draw_fail() {
     "$RED" "$RESET" "$LABEL_W" "$label" "$DIM" "$detail" "$RESET"
 }
 
+draw_warn() {
+  label="$1"; detail="$2"
+  printf '\r  %s!%s %-*s  %s%s%s\033[K\n' \
+    "$YELLOW" "$RESET" "$LABEL_W" "$label" "$DIM" "$detail" "$RESET"
+}
+
 # ── stages ──────────────────────────────────────────────────────────────────
 run_stage() {
   # $1 label · $2 command · $3 success detail · $4 "bar" (default) or "spin"
-  label="$1"; cmd="$2"; detail="${3:-}"; mode="${4:-bar}"
+  # $5 "soft" turns an expected failure into a yellow note instead of a red error
+  label="$1"; cmd="$2"; detail="${3:-}"; mode="${4:-bar}"; soft="${5:-}"
   if [ "$UI" != "1" ]; then
     printf "  … %s\n" "$label"
     set +e
     eval "$cmd"
     rc=$?
     set -e
-    if [ "$rc" -eq 0 ]; then printf "  ok %s\n" "$label"; else printf "  FAILED %s\n" "$label"; fi
+    if [ "$rc" -eq 0 ]; then
+      printf "  ok %s\n" "$label"
+    elif [ "$soft" = "soft" ]; then
+      printf "  ! %s — falling back\n" "$label"
+    else
+      printf "  FAILED %s\n" "$label"
+    fi
     return "$rc"
   fi
   log="${TMPDIR:-/tmp}/evolv-stage.$$"
@@ -163,6 +176,8 @@ run_stage() {
   secs=$(( $(date +%s) - start ))
   if [ "$rc" -eq 0 ]; then
     draw_done "$label" "$detail" "$secs"
+  elif [ "$soft" = "soft" ]; then
+    draw_warn "$label" "no prebuilt — building from source"
   else
     draw_fail "$label" "failed after ${secs}s"
     if [ -s "$log" ]; then
@@ -402,11 +417,9 @@ main() {
     VERSION_TAG="$TAG"
     ARCHIVE="evolv_${VERSION_TAG#v}_${OS}_${ARCH}.tar.gz"
     URL="https://github.com/${REPO}/releases/download/${VERSION_TAG}/${ARCHIVE}"
-    if run_stage "download" "fetch '$URL' /tmp/evolv.tar.gz" "${VERSION_TAG} · ${OS}/${ARCH}"; then
+    if run_stage "download" "fetch '$URL' /tmp/evolv.tar.gz" "${VERSION_TAG} · ${OS}/${ARCH}" bar soft; then
       HAVE_RELEASE=1
       INSTALLED_VERSION="${VERSION_TAG#v}"
-    else
-      warn "no prebuilt ${ARCHIVE} — falling back to source build"
     fi
   else
     warn "no releases published yet — building from source"
@@ -418,6 +431,10 @@ main() {
   else
     # fallback: build from source with Go
     command -v git >/dev/null 2>&1 || die "git required to build from source"
+    # reuse a Go the installer already unpacked, even if it is not on PATH
+    if ! command -v go >/dev/null 2>&1 && [ -x "$HOME/sdk/go/bin/go" ]; then
+      export PATH="$HOME/sdk/go/bin:$PATH"
+    fi
     if ! command -v go >/dev/null 2>&1; then
       warn "Go toolchain not found — installing Go 1.26 (this needs ~250MB)"
       GO_VER="1.26.0"
@@ -430,7 +447,9 @@ main() {
       esac
       run_stage "go download" "fetch 'https://go.dev/dl/${GO_TGZ}' /tmp/go.tgz" "Go ${GO_VER}" || die "Go download failed"
       [ -d "$HOME/sdk" ] || mkdir -p "$HOME/sdk"
-      run_stage "go unpack" "tar -C '$HOME/sdk' -xzf /tmp/go.tgz" "Go ${GO_VER}" || die "could not unpack Go"
+      # Extract into a clean directory: tar does not delete files that the new
+      # release removed, and a mixed 1.24/1.26 tree fails with "redeclared".
+      run_stage "go unpack" "rm -rf '$HOME/sdk/go' && tar -C '$HOME/sdk' -xzf /tmp/go.tgz" "Go ${GO_VER}" || die "could not unpack Go"
       export PATH="$HOME/sdk/go/bin:$PATH"
     fi
     choose_install_dir
