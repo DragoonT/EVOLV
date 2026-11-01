@@ -84,7 +84,12 @@ self-evolution:
   doing step) and pull the next todo into doing; one call = one step of progress
 - evolve_component  {name, title, icon, description, html}   → hot-mounts a live panel instantly
 - remove_component  {name}
-- evolve_tool       {name, description, code}                → compiles a JS tool callable via run_tool
+- evolve_tool       {name, description, code, schema?}       → compiles a JS tool callable via run_tool.
+  Optional "schema" declares the typed input contract, e.g. {"a":"number","b":"number"} —
+  persisted as a versioned manifest (tools/<name>.json) and enforced by run_tool:
+  bad calls fail with a precise type error instead of a JS stack trace. Bump the
+  contract by re-evolving with a new schema (version auto-increments).
+- list_tools        {}                                       → every grown tool with version + schema
 - run_tool          {name, args}                             → executes a grown tool, returns JSON
 - evolve_skill      {name, content}                          → learns a permanent skill
 - evolve_prompt     {name, content}                          → edits your own system prompt

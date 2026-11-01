@@ -212,9 +212,32 @@ func (a *Agent) Execute(act action) string {
 		a.js.mu.Unlock()
 		a.commit("tool", name, path, act.Desc)
 		res["ok"] = true
-		res["note"] = "tool compiled into the sandbox and callable via run_tool"
+		note := "tool compiled into the sandbox and callable via run_tool"
+		if len(act.Schema) > 0 {
+			// typed contract: persisted manifest, versioned, run_tool now validates
+			m := &toolManifest{Name: name, Description: act.Desc, Schema: act.Schema}
+			ver, err := writeToolManifest(a, m)
+			if err != nil {
+				res["ok"], res["error"] = false, err.Error()
+				break
+			}
+			res["version"] = ver
+			note = fmt.Sprintf("tool v%d compiled with typed manifest — run_tool validates args against the schema", ver)
+		}
+		res["note"] = note
 
 	case "run_tool":
+		if m := readToolManifest(a, sanitizeName(act.Name)); m != nil && len(m.Schema) > 0 {
+			// typed manifest: reject bad calls before the code runs
+			args := act.Args
+			if args == nil {
+				args = map[string]any{}
+			}
+			if err := validateToolArgs(m.Schema, args); err != nil {
+				res["ok"], res["error"] = false, err.Error()
+				break
+			}
+		}
 		out, err := a.js.RunTool(act.Name, act.Args)
 		if err != nil {
 			res["ok"], res["error"] = false, err.Error()
@@ -223,6 +246,30 @@ func (a *Agent) Execute(act action) string {
 			res["ok"] = true
 			res["result"] = json.RawMessage(raw)
 		}
+
+	case "list_tools":
+		// introspection: every grown tool with its typed manifest
+		tools := a.js.ListTools()
+		type toolInfo struct {
+			Name        string            `json:"name"`
+			Description string            `json:"description"`
+			Version     int               `json:"version"`
+			Schema      map[string]string `json:"schema,omitempty"`
+		}
+		out := make([]toolInfo, 0, len(tools))
+		for _, t := range tools {
+			ti := toolInfo{Name: t.Name, Description: t.Desc}
+			if m := readToolManifest(a, t.Name); m != nil {
+				ti.Version, ti.Schema = m.Version, m.Schema
+				if ti.Description == "" {
+					ti.Description = m.Description
+				}
+			}
+			out = append(out, ti)
+		}
+		res["ok"] = true
+		res["tools"] = out
+		res["count"] = len(out)
 
 	case "evolve_skill":
 		name := sanitizeName(act.Name)
