@@ -100,7 +100,7 @@ func (a *Agent) HistoryLen() int {
 // ---------- the evolv-block protocol ----------
 
 type action struct {
-	Action         string            `json:"action"`
+Action         string            `json:"action"`
 	Name           string            `json:"name"`
 	Title          string            `json:"title"`
 	Icon           string            `json:"icon"`
@@ -115,6 +115,7 @@ type action struct {
 	Depth          int               `json:"depth"`
 	Cwd            string            `json:"cwd"`
 	Command        string            `json:"command"`
+	Framework      string            `json:"framework"`
 	Args           map[string]any    `json:"args"`
 	Steps          []planStepArg     `json:"steps"`
 	Schema         map[string]string `json:"schema"`
