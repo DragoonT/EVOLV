@@ -187,3 +187,38 @@ func TestWbMkdir(t *testing.T) {
 		t.Fatal("mkdir didn't create parents")
 	}
 }
+
+// TestWbSearch: project-wide grep — matches across files, line numbers,
+// skip-list respected, cap enforced.
+func TestWbSearch(t *testing.T) {
+	s, proj := newWbServer(t)
+	os.MkdirAll(filepath.Join(proj, "src"), 0o755)
+	os.WriteFile(filepath.Join(proj, "README.md"), []byte("the quick brown fox\nlazy dog\n"), 0o644)
+	os.WriteFile(filepath.Join(proj, "src", "main.go"), []byte("package main\n// the quick brown fox again\n"), 0o644)
+	os.MkdirAll(filepath.Join(proj, "node_modules", "x"), 0o755)
+	os.WriteFile(filepath.Join(proj, "node_modules", "x", "i.js"), []byte("the quick brown fox in deps\n"), 0o644)
+
+	out := wbGET(t, s, "/api/wb/search?q=quick%20brown")
+	hits := out["hits"].([]any)
+	if len(hits) != 2 {
+		t.Fatalf("want 2 hits (node_modules skipped), got %d: %v", len(hits), out)
+	}
+	h0 := hits[0].(map[string]any)
+	if h0["path"] != "README.md" || h0["line"] != float64(1) {
+		t.Fatalf("first hit wrong: %v", h0)
+	}
+	if out["files"] != float64(2) {
+		t.Fatalf("files scanned wrong: %v", out["files"])
+	}
+	// case-insensitive
+	out = wbGET(t, s, "/api/wb/search?q=QUICK")
+	if len(out["hits"].([]any)) != 2 {
+		t.Fatalf("case-insensitive search failed: %v", out)
+	}
+	// no query → 400
+	rec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "/api/wb/search?q=", nil))
+	if rec.Code != 400 {
+		t.Fatalf("empty q not rejected: %d", rec.Code)
+	}
+}

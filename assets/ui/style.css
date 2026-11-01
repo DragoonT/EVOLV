@@ -827,3 +827,15 @@ body.paper #welcome .w-mark { box-shadow: 0 8px 40px rgba(192, 95, 60, 0.18); }
   .wb-box { width: 96vw; height: 90vh; }
   .wb-side { width: 40%; }
 }
+
+.wb-search { margin: 6px 8px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line-soft);
+  background: transparent; color: inherit; font-size: 12.5px; outline: none; }
+.wb-search:focus { border-color: var(--accent); }
+.wb-results { flex: 1; overflow: auto; border-top: 1px solid var(--line-soft); font-size: 12px; }
+.wb-results .wb-res-head { padding: 5px 10px; color: var(--dim); font-size: 11px; position: sticky; top: 0; background: var(--bg, inherit); }
+.wb-res { display: block; width: 100%; text-align: left; padding: 4px 10px; background: none; border: none;
+  color: inherit; cursor: pointer; font-family: var(--mono, monospace); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wb-res:hover { background: var(--accent-soft); }
+.wb-res b { color: var(--accent); }
+.wb-res-path { font-weight: 700; }
+.wb-editor { white-space: pre; overflow-x: auto; }

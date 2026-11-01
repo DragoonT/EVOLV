@@ -396,3 +396,70 @@ func (s *Server) handleWbRoot(w http.ResponseWriter, r *http.Request) {
 	})
 	wbWriteJSON(w, map[string]any{"ok": true, "root": root, "name": name, "files": files})
 }
+
+// handleWbSearch greps the whole project: every text file under the root
+// (skip-list respected, <1 MB), returns matching lines capped at 200 hits.
+func (s *Server) handleWbSearch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		wbErr(w, 405, "GET only")
+		return
+	}
+	q := r.URL.Query().Get("q")
+	if strings.TrimSpace(q) == "" {
+		wbErr(w, 400, "need q")
+		return
+	}
+	root, _ := s.wbRoot()
+	qLower := strings.ToLower(q)
+	type hit struct {
+		Path  string `json:"path"`
+		Line  int    `json:"line"`
+		Text  string `json:"text"`
+		Col   int    `json:"col"`
+		Count int    `json:"count"`
+	}
+	hits := []hit{}
+	files := 0
+	err := filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			if wbSkip[d.Name()] && p != root {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if len(hits) >= 200 {
+			return filepath.SkipAll
+		}
+		info, err := d.Info()
+		if err != nil || info.Size() > wbMaxWrite {
+			return nil
+		}
+		raw, err := os.ReadFile(p)
+		if err != nil || !isMostlyText(raw) {
+			return nil
+		}
+		files++
+		rel, _ := filepath.Rel(root, p)
+		rel = filepath.ToSlash(rel)
+		for i, line := range strings.Split(string(raw), "\n") {
+			idx := strings.Index(strings.ToLower(line), qLower)
+			if idx < 0 {
+				continue
+			}
+			count := strings.Count(strings.ToLower(line), qLower)
+			hits = append(hits, hit{Path: rel, Line: i + 1, Text: line, Col: idx + 1, Count: count})
+			if len(hits) >= 200 {
+				return filepath.SkipAll
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		wbErr(w, 400, err.Error())
+		return
+	}
+	wbWriteJSON(w, map[string]any{"ok": true, "q": q, "files": files, "hits": hits, "truncated": len(hits) >= 200})
+}

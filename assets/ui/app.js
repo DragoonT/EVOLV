@@ -1598,3 +1598,50 @@ function onWbFsChange(ch) {
 }
 
 $('#btn-workbench').addEventListener('click', openWorkbench);
+
+/* ---- workbench project-wide search ---- */
+let wbSearchTimer = null;
+$('#wb-search').addEventListener('input', () => {
+  clearTimeout(wbSearchTimer);
+  wbSearchTimer = setTimeout(runWbSearch, 250);
+});
+$('#wb-search').addEventListener('keydown', (e) => {
+  e.stopPropagation();
+  if (e.key === 'Escape') { e.target.value = ''; $('#wb-results').hidden = true; $('#wb-results').innerHTML = ''; }
+});
+
+async function runWbSearch() {
+  const q = $('#wb-search').value.trim();
+  const box = $('#wb-results');
+  if (!q) { box.hidden = true; box.innerHTML = ''; return; }
+  try {
+    const r = await fetch('/api/wb/search?q=' + encodeURIComponent(q));
+    const j = await r.json();
+    if (!j.ok) { box.hidden = false; box.innerHTML = '<div class="wb-empty">⚠️ ' + escapeHtml(j.error || 'search failed') + '</div>'; return; }
+    box.hidden = false;
+    if (!j.hits.length) { box.innerHTML = `<div class="wb-empty">no matches for "${escapeHtml(q)}" in ${j.files} files</div>`; return; }
+    const head = `<div class="wb-res-head">${j.hits.length}${j.truncated ? '+' : ''} matches in ${j.files} files${j.truncated ? ' (showing first 200)' : ''}</div>`;
+    box.innerHTML = head + j.hits.map((h) =>
+      `<button class="wb-res" data-path="${escapeHtml(h.path)}" data-line="${h.line}">` +
+      `<span class="wb-res-path">${escapeHtml(h.path)}:${h.line}</span> — ${escapeHtml(h.text.trim().slice(0, 120))}</button>`).join('');
+    box.querySelectorAll('.wb-res').forEach((b) => b.addEventListener('click', () => jumpWb(b.dataset.path, +b.dataset.line)));
+  } catch { box.hidden = false; box.innerHTML = '<div class="wb-empty">⚠️ search failed</div>'; }
+}
+
+// open a file and put the caret on the matching line (and flash it)
+async function jumpWb(path, line) {
+  await openWbFile(path);
+  const ta = $('#wb-editor');
+  const lines = ta.value.split('\n');
+  if (line < 1 || line > lines.length) return;
+  let pos = 0;
+  for (let i = 0; i < line - 1; i++) pos += lines[i].length + 1;
+  ta.focus();
+  ta.selectionStart = pos;
+  ta.selectionEnd = pos + lines[line - 1].length;
+  // scroll the caret into view
+  const lh = parseFloat(getComputedStyle(ta).lineHeight) || 20;
+  ta.scrollTop = Math.max(0, (line - 6) * lh);
+  ta.style.background = 'var(--accent-soft)';
+  setTimeout(() => { ta.style.background = ''; }, 500);
+}

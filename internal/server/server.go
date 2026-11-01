@@ -84,6 +84,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/wb/mkdir", s.handleWbMkdir)
 	s.mux.HandleFunc("/api/wb/delete", s.handleWbDelete)
 	s.mux.HandleFunc("/api/wb/rename", s.handleWbRename)
+	s.mux.HandleFunc("/api/wb/search", s.handleWbSearch)
 	s.WatchReleases()
 	s.ag.StartDreaming() // the organism wakes itself when idle
 }
