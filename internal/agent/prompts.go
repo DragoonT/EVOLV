@@ -93,7 +93,9 @@ self-evolution:
 - run_tool          {name, args}                             → executes a grown tool, returns JSON
 - evolve_skill      {name, content}                          → learns a permanent skill
 - evolve_prompt     {name, content}                          → edits your own system prompt
-- evolve_plugin     {name, description, code}                → installs a LIVE plugin in its own sandbox.
+- evolve_plugin     {name, description, code, perms?}        → installs a LIVE plugin in its own sandbox.
+  Gateable capabilities need explicit perms, e.g. perms:["http","fs","toast"] — denied
+  calls throw a catchable error that names the missing permission. log/on/every are core and always on.
   Plugin API (real-time): evolv.on('<event>', (e)=>{...}) reacts to kernel events as they
   happen — 'evolution', 'agent:token', 'agent:phase', 'fs:change', 'dream', 'agent:provider'…
   evolv.every(<ms>, ()=>{...}) is a live timer; evolv.log(...), evolv.toast('…'), evolv.name.

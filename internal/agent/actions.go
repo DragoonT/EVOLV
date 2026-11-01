@@ -126,7 +126,8 @@ func (r *JSRuntime) loadPluginsLocked() {
 			continue
 		}
 		// r.mu is held; buildPluginVM must not re-lock it.
-		p, err := r.buildPluginVM(n, string(raw))
+		perms := pluginPermsFromManifest(r.a, n)
+		p, err := r.buildPluginVM(n, string(raw), perms)
 		if err != nil {
 			r.a.bus.Publish("plugin:log", map[string]string{"plugin": n, "text": "load failed: " + err.Error()})
 			continue
@@ -316,6 +317,7 @@ func (a *Agent) Execute(act action) string {
 		}
 		manifest, _ := json.MarshalIndent(map[string]any{
 			"name": name, "description": act.Desc, "version": "0.1.0", "author": "evolv-agent",
+			"perms": act.Perms,
 		}, "", "  ")
 		if err := os.WriteFile(filepath.Join(dir, "plugin.json"), manifest, 0o644); err != nil {
 			res["ok"], res["error"] = false, err.Error()
@@ -327,7 +329,7 @@ func (a *Agent) Execute(act action) string {
 		}
 		// hot-load into its own sandbox; the plugin is ALIVE the moment this returns
 		a.js.mu.Lock()
-		p, err := a.js.buildPluginVM(name, act.Code)
+		p, err := a.js.buildPluginVM(name, act.Code, act.Perms)
 		if err == nil {
 			a.js.vms = append(a.js.vms, p)
 		}

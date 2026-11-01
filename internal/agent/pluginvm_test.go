@@ -13,7 +13,7 @@ func TestPluginOnReactsToEvents(t *testing.T) {
 	a := testAgent(t)
 	done := make(chan map[string]any, 1)
 	a.js.mu.Lock()
-	p, err := a.js.buildPluginVM("test", "evolv.on('evolution', function(e){ __bridge({kind: e.kind, name: e.name}); });")
+	p, err := a.js.buildPluginVM("test", "evolv.on('evolution', function(e){ __bridge({kind: e.kind, name: e.name}); });", nil)
 	a.js.mu.Unlock()
 	if err != nil {
 		t.Fatal(err)
@@ -47,7 +47,7 @@ func TestPluginEveryFires(t *testing.T) {
 	a := testAgent(t)
 	ticks := make(chan int, 8)
 	a.js.mu.Lock()
-	p, err := a.js.buildPluginVM("ticker", "evolv.every(60, function(){ __tick(); });")
+	p, err := a.js.buildPluginVM("ticker", "evolv.every(60, function(){ __tick(); });", nil)
 	a.js.mu.Unlock()
 	if err != nil {
 		t.Fatal(err)
@@ -74,7 +74,7 @@ func TestPluginEveryFires(t *testing.T) {
 func TestDispatchNeverBlocks(t *testing.T) {
 	a := testAgent(t)
 	a.js.mu.Lock()
-	p0, err := a.js.buildPluginVM("silent", "1;")
+	p0, err := a.js.buildPluginVM("silent", "1;", nil)
 	a.js.vms = append(a.js.vms, p0)
 	a.js.mu.Unlock()
 	if err != nil {

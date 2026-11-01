@@ -118,6 +118,7 @@ type action struct {
 	Args    map[string]any    `json:"args"`
 	Steps   []planStepArg     `json:"steps"`
 	Schema  map[string]string `json:"schema"`
+	Perms   []string          `json:"perms"`
 }
 
 // planStepArg is one step of a set_plan action as it arrives over the wire.

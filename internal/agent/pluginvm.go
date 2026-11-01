@@ -2,6 +2,7 @@ package agent
 
 import (
 	"encoding/json"
+	"fmt"
 	"sort"
 	"strings"
 	"sync"
@@ -29,6 +30,20 @@ type pluginVM struct {
 	events   chan bus.Event
 	handlers map[string][]goja.Callable
 	timers   []timer
+	perms    map[string]bool
+}
+
+// pluginCaps is every gateable capability a plugin can request.
+var pluginCaps = []string{"http", "fs", "toast"}
+
+// hasPerm reports whether the plugin was granted a capability. Core
+// capabilities (log, on, every) are always on; gateable ones must be listed
+// in the plugin's manifest perms.
+func (p *pluginVM) hasPerm(cap string) bool { return p.perms[cap] }
+
+// deny builds the permission-denied error a gated capability throws.
+func deny(plugin, cap string) string {
+	return fmt.Sprintf("plugin %q lacks permission %q — re-evolve it with perms:[%q]", plugin, cap, cap)
 }
 
 type timer struct {
@@ -41,10 +56,13 @@ const pluginEventQueue = 128
 
 // buildPluginVM creates the sandboxed runtime and runs the plugin code.
 // Callers holding JSRuntime.mu must not re-lock it. Does NOT start the loop.
-func (r *JSRuntime) buildPluginVM(name, code string) (*pluginVM, error) {
+func (r *JSRuntime) buildPluginVM(name, code string, perms []string) (*pluginVM, error) {
 	vm := goja.New()
 	p := &pluginVM{name: name, a: r.a, vm: vm, events: make(chan bus.Event, pluginEventQueue),
-		handlers: map[string][]goja.Callable{}}
+		handlers: map[string][]goja.Callable{}, perms: map[string]bool{}}
+	for _, c := range perms {
+		p.perms[strings.TrimSpace(strings.ToLower(c))] = true
+	}
 	api := map[string]any{
 		"log": func(args ...goja.Value) {
 			parts := make([]string, len(args))
@@ -54,11 +72,24 @@ func (r *JSRuntime) buildPluginVM(name, code string) (*pluginVM, error) {
 			p.a.bus.Publish("plugin:log", map[string]string{"plugin": name, "text": strings.Join(parts, " ")})
 		},
 		"toast": func(msg string) {
+			if !p.hasPerm("toast") {
+				panic(vm.NewTypeError(deny(name, "toast")))
+			}
 			p.a.bus.Publish("plugin:toast", map[string]string{"plugin": name, "text": msg})
 		},
-		"workspace_dir": func() string { return p.a.ws.Root },
-		"name":          name,
-		"http":          httpFetch,
+		"workspace_dir": func() string {
+			if !p.hasPerm("fs") {
+				panic(vm.NewTypeError(deny(name, "fs")))
+			}
+			return p.a.ws.Root
+		},
+		"name": name,
+		"http": func(url string) map[string]any {
+			if !p.hasPerm("http") {
+				panic(vm.NewTypeError(deny(name, "http")))
+			}
+			return httpFetch(url)
+		},
 		"on": func(event string, fn goja.Value) {
 			if cb, ok := goja.AssertFunction(fn); ok {
 				// stash the callable on the VM so it isn't garbage collected

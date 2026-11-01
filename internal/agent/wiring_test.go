@@ -11,7 +11,7 @@ func TestAgentFeedsBusToPlugins(t *testing.T) {
 	a := testAgent(t)
 	done := make(chan string, 1)
 	a.js.mu.Lock()
-	p, err := a.js.buildPluginVM("wired", "evolv.on('evolution', function(e){ __b(e.kind); });")
+	p, err := a.js.buildPluginVM("wired", "evolv.on('evolution', function(e){ __b(e.kind); });", nil)
 	if err == nil {
 		a.js.vms = append(a.js.vms, p)
 	}

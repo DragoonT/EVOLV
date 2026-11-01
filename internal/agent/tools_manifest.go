@@ -106,3 +106,20 @@ func validateToolArgs(schema map[string]string, args map[string]any) error {
 	}
 	return nil
 }
+
+// pluginPermsFromManifest reads a plugin's persisted perms from its
+// plugin.json so reload-time sandboxes get the same capabilities the
+// author asked for at install time.
+func pluginPermsFromManifest(a *Agent, name string) []string {
+	raw, err := os.ReadFile(filepath.Join(a.ws.Dir(workspace.PluginsDir), name, "plugin.json"))
+	if err != nil {
+		return nil
+	}
+	var m struct {
+		Perms []string `json:"perms"`
+	}
+	if json.Unmarshal(raw, &m) != nil {
+		return nil
+	}
+	return m.Perms
+}
