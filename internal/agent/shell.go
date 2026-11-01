@@ -2,7 +2,9 @@ package agent
 
 import (
 	"os"
+	"path/filepath"
 	"runtime"
+	"strings"
 )
 
 // shellCommand returns the platform shell binary and args needed to run a
@@ -20,7 +22,12 @@ import (
 // Users can override the shell on any platform by setting EVOLV_SHELL.
 func shellCommand(command string) (bin string, args []string) {
 	if custom := os.Getenv("EVOLV_SHELL"); custom != "" {
-		return custom, []string{"-c", command}
+		flag := "-c"
+		base := strings.ToLower(filepath.Base(custom))
+		if base == "cmd.exe" || base == "cmd" {
+			flag = "/C"
+		}
+		return custom, []string{flag, command}
 	}
 	if runtime.GOOS == "windows" {
 		comspec := os.Getenv("COMSPEC")

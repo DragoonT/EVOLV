@@ -13,6 +13,7 @@ import (
 // TestShellCommandPlatform verifies that shellCommand selects a real binary
 // and the right flag for the current OS.
 func TestShellCommandPlatform(t *testing.T) {
+	t.Setenv("EVOLV_SHELL", "")
 	bin, args := shellCommand("echo hi")
 	if bin == "" {
 		t.Fatal("shellCommand returned an empty binary")
@@ -50,6 +51,13 @@ func TestShellCustomOverride(t *testing.T) {
 	bin, args := shellCommand("echo hi")
 	if bin != "/bin/custom_sh" || len(args) != 2 || args[0] != "-c" || args[1] != "echo hi" {
 		t.Fatalf("custom shell not honored: bin=%s args=%v", bin, args)
+	}
+
+	// When EVOLV_SHELL is cmd.exe, it should select /C flag
+	t.Setenv("EVOLV_SHELL", "cmd.exe")
+	bin, args = shellCommand("echo hi")
+	if bin != "cmd.exe" || len(args) != 2 || args[0] != "/C" || args[1] != "echo hi" {
+		t.Fatalf("cmd.exe override should use /C: bin=%s args=%v", bin, args)
 	}
 }
 
@@ -95,19 +103,20 @@ func TestShellCwdExplicit(t *testing.T) {
 func TestShellOutputTruncation(t *testing.T) {
 	a := testAgent(t)
 
-	// Create a file with >8000 bytes to output
-	f := filepath.Join(t.TempDir(), "large.txt")
+	// Create a file with >8000 bytes to output in isolated temp dir
+	dir := t.TempDir()
+	f := filepath.Join(dir, "large.txt")
 	if err := os.WriteFile(f, []byte(strings.Repeat("A", 9000)), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
 	var cmd string
 	if runtime.GOOS == "windows" {
-		cmd = "type " + f
+		cmd = "type large.txt"
 	} else {
-		cmd = "cat " + f
+		cmd = "cat large.txt"
 	}
-	res := execOK(t, a, action{Action: "shell", Command: cmd})
+	res := execOK(t, a, action{Action: "shell", Command: cmd, Cwd: dir})
 	if res["ok"] != true {
 		t.Fatalf("shell failed: %v", res)
 	}
