@@ -17,6 +17,7 @@ func newWbServer(t *testing.T) (*Server, string) {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	ws, err := workspace.Load(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -127,7 +128,9 @@ func TestWbEscapeRejected(t *testing.T) {
 	// a symlink pointing outside the project
 	outside := t.TempDir()
 	os.WriteFile(filepath.Join(outside, "secret.txt"), []byte("top secret"), 0o644)
-	os.Symlink(outside, filepath.Join(proj, "leak"))
+	if err := os.Symlink(outside, filepath.Join(proj, "leak")); err != nil {
+		t.Skip("skipping symlink test on platform without symlink privilege:", err)
+	}
 	rec := httptest.NewRecorder()
 	s.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "/api/wb/read?path=leak/secret.txt", nil))
 	if rec.Code != 400 {

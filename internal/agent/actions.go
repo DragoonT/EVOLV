@@ -712,7 +712,8 @@ func (a *Agent) Execute(act action) string {
 		}
 		ctx, cancel := contextWithTimeout(120 * time.Second)
 		defer cancel()
-		cmd := exec.CommandContext(ctx, "sh", "-c", act.Command)
+		bin, args := shellCommand(act.Command)
+		cmd := exec.CommandContext(ctx, bin, args...)
 		cmd.Dir = cwd
 		out, err := cmd.CombinedOutput()
 		outStr := string(out)
