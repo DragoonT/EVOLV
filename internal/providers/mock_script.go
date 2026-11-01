@@ -160,7 +160,7 @@ func mockPromptLibraryBatchJSON() string {
 }
 
 func mockZenBatchJSON() string {
-        return `{"action":"edit_file","path":"ui/style.css","find":"--accent: #d97757;","replace":"--accent: #7aa2f7;","desc":"live skin recolor: terracotta to calm blue"}
+        return `{"action":"edit_file","path":"workspace/ui/style.css","find":"--accent: #d97757;","replace":"--accent: #7aa2f7;","desc":"live skin recolor: terracotta to calm blue"}
 {"action":"evolve_component","name":"zen-toggle","title":"Zen","icon":"🌙","description":"A toggle that hides the chrome — the agent grew a calmer version of its own UI","html":"<style>body.zen #sidebar,body.zen #canvas-col{display:none}body.zen #chat-col{max-width:760px;margin:0 auto}body.zen #chat-scroll{padding-top:14vh}</style><div id='c-zen-toggle' style='text-align:center'><button class='ev-btn' id='zen-btn'>🌙 zen mode: off</button><div style='font-size:11px;opacity:.5;margin-top:8px'>hides every panel but the chat — the organism rearranging its own body</div></div><script>(function(){var b=document.getElementById('zen-btn');b.addEventListener('click',function(){var on=document.body.classList.toggle('zen');b.textContent=on?'🌙 zen mode: on':'🌙 zen mode: off'})})()</script>"}`
 }
 
@@ -177,8 +177,8 @@ func mockPluginJSON() string {
 }
 
 func mockSelfEditBatchJSON() string {
-        return `{"action":"edit_file","path":"ui/index.html","find":"EVOLV rewrites its own code while you watch — every file it touches is yours to edit too.","replace":"EVOLV rewrote this line itself — ask it to edit its own source and watch it land live."}
-{"action":"edit_file","path":"ui/style.css","find":"--accent: #d97757;","replace":"--accent: #f59e0b;","desc":"live skin recolor: terracotta to amber"}
+        return `{"action":"edit_file","path":"workspace/ui/index.html","find":"EVOLV rewrites its own code while you watch — every file it touches is yours to edit too.","replace":"EVOLV rewrote this line itself — ask it to edit its own source and watch it land live."}
+{"action":"edit_file","path":"workspace/ui/style.css","find":"--accent: #d97757;","replace":"--accent: #f59e0b;","desc":"live skin recolor: terracotta to amber"}
 {"action":"reload_shell"}`
 }
 
