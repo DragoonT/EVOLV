@@ -154,6 +154,13 @@ type action struct {
 	Schema         map[string]string `json:"schema"`
 	Perms          []string          `json:"perms"`
 	Files          []fileMutation    `json:"files,omitempty"`
+	Summary        string            `json:"summary,omitempty"`
+	Status         string            `json:"status,omitempty"`
+	FilesList      []string          `json:"files_list,omitempty"`
+	TestsPassed   int               `json:"tests_passed,omitempty"`
+	TestsFailed   int               `json:"tests_failed,omitempty"`
+	Confidence    string            `json:"confidence,omitempty"`
+	Notes         string            `json:"notes,omitempty"`
 	Message        string            `json:"message,omitempty"`
 	RunTests       *bool             `json:"run_tests,omitempty"`
 	StageOnly      bool              `json:"stage_only,omitempty"`

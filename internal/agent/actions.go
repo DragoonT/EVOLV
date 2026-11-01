@@ -33,14 +33,16 @@ func guardedWrite(path string, next []byte, expected string) (string, bool, erro
 	}
 	if err == nil {
 		actual := contentHash(current)
+		// identical content is a no-op: nothing to protect, and the organism
+		// may re-evolve the same code to bump its typed manifest version.
+		if string(current) == string(next) {
+			return actual, false, nil
+		}
 		if expected == "" {
 			return actual, false, fmt.Errorf("stale-write guard: read %s first and pass expected_hash=%s", path, actual)
 		}
 		if expected != actual {
 			return actual, false, fmt.Errorf("stale-write guard: expected %s, current is %s; re-read before mutating", expected, actual)
-		}
-		if string(current) == string(next) {
-			return actual, false, nil
 		}
 	}
 	if err := os.WriteFile(path, next, 0o644); err != nil {
@@ -295,7 +297,7 @@ func (a *Agent) Execute(act action) string {
 		res["ok"] = true
 		res["hash"], res["changed"] = hash, changed
 		note := "tool compiled into the sandbox and callable via run_tool"
-		if len(act.Schema) > 0 && changed {
+		if len(act.Schema) > 0 {
 			// typed contract: persisted manifest, versioned, run_tool now validates
 			m := &toolManifest{Name: name, Description: act.Desc, Schema: act.Schema}
 			ver, err := writeToolManifest(a, m)
@@ -818,6 +820,87 @@ func (a *Agent) Execute(act action) string {
 		publishPlan(a, &plan)
 		res["ok"] = true
 		res["note"] = fmt.Sprintf("plan updated: %d/%d steps done", countDone(plan.Steps), len(plan.Steps))
+
+	case "complete_task":
+		summary := strings.TrimSpace(act.Summary)
+		if summary == "" {
+			summary = strings.TrimSpace(act.Desc)
+		}
+		if summary == "" {
+			summary = strings.TrimSpace(act.Title)
+		}
+		if summary == "" {
+			res["ok"] = false
+			res["error"] = "complete_task needs summary"
+			break
+		}
+
+		status := strings.ToLower(strings.TrimSpace(act.Status))
+		if status == "" {
+			status = "success"
+		}
+		switch status {
+		case "success", "partial", "blocked", "failed":
+		default:
+			status = "success"
+		}
+
+		confidence := strings.ToLower(strings.TrimSpace(act.Confidence))
+		if confidence == "" {
+			confidence = "high"
+		}
+		switch confidence {
+		case "high", "medium", "low":
+		default:
+			confidence = "high"
+		}
+
+		files := act.FilesList
+		if files == nil {
+			files = []string{}
+		}
+
+		// When task succeeded, complete any remaining active steps in plan.json
+		if status == "success" {
+			if plan := a.ws.ReadPlan(); plan != nil && len(plan.Steps) > 0 {
+				mutated := false
+				for i := range plan.Steps {
+					if plan.Steps[i].Status != "done" {
+						plan.Steps[i].Status = "done"
+						mutated = true
+					}
+				}
+				if mutated {
+					_ = a.ws.WritePlan(*plan)
+					publishPlan(a, plan)
+				}
+			}
+		}
+
+		report := map[string]any{
+			"summary":      summary,
+			"status":       status,
+			"files":        files,
+			"tests_passed": act.TestsPassed,
+			"tests_failed": act.TestsFailed,
+			"confidence":   confidence,
+			"notes":        strings.TrimSpace(act.Notes),
+			"time":         time.Now().UTC().Format(time.RFC3339),
+		}
+
+		a.commit("task_completion", sanitizeName(summary), "", summary)
+		a.bus.Publish("task:completed", report)
+
+		res["ok"] = true
+		res["summary"] = summary
+		res["status"] = status
+		res["files"] = files
+		res["tests_passed"] = act.TestsPassed
+		res["tests_failed"] = act.TestsFailed
+		res["confidence"] = confidence
+		if act.Notes != "" {
+			res["notes"] = act.Notes
+		}
 
 	case "self_update":
 		ctx, cancel := contextWithTimeout(5 * time.Minute)
