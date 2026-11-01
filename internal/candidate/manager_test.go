@@ -67,3 +67,25 @@ func TestCandidateRejectsStaleStageAndPromotion(t *testing.T) {
 		t.Fatalf("stale promotion accepted: %v", err)
 	}
 }
+
+func TestPromotionRollsBackWhenLiveValidationFails(t *testing.T) {
+	mgr, source := testManager(t)
+	path := filepath.Join(source, "main.go")
+	original, _ := os.ReadFile(path)
+	next := "package main\nfunc main(){println(1)}\n"
+	man, err := mgr.Stage(context.Background(), Proposal{Name: "rollback", Files: map[string]string{"main.go": next}, ExpectedHashes: map[string]string{"main.go": hash(original)}})
+	if err != nil || man.Status != "ready" {
+		t.Fatalf("stage: %v %v", man, err)
+	}
+	if err = os.WriteFile(filepath.Join(source, "broken.go"), []byte("this is not go"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rolled, err := mgr.Promote(man.ID)
+	if err == nil || rolled == nil || rolled.Status != "promotion_failed" {
+		t.Fatalf("failed promotion was not rolled back: %+v %v", rolled, err)
+	}
+	live, _ := os.ReadFile(path)
+	if string(live) != string(original) {
+		t.Fatalf("rollback did not restore main.go: %s", live)
+	}
+}

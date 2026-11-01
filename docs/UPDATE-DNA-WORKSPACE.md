@@ -13,6 +13,7 @@ This update turns EVOLV's accumulated mutations into a manageable, theme-aware w
 - The smoke-test process is always terminated after the probe; its isolated runtime files and compiled artifact remain with the candidate evidence.
 - Failed candidates remain inspectable but cannot be promoted.
 - Promotion is explicit, revalidates every live source hash before the first write, and aborts if the source changed after staging.
+- Promotion writes recoverable backups, re-runs the full Go test/build gate against the updated live tree, and automatically restores every written file if a write or post-promotion check fails.
 - The Creation Library includes a Candidates view with validation evidence, changed files, status, and a confirmed promotion control.
 
 ### Live DNA experience

@@ -39,6 +39,7 @@ type Manifest struct {
 	Created    string   `json:"created"`
 	Promoted   string   `json:"promoted,omitempty"`
 	Artifact   string   `json:"artifact,omitempty"`
+	Rollback   string   `json:"rollback,omitempty"`
 	Changes    []Change `json:"changes"`
 	Checks     []Check  `json:"checks"`
 }
@@ -255,9 +256,16 @@ func (m *Manager) Promote(id string) (*Manifest, error) {
 	if man.Status != "ready" {
 		return nil, fmt.Errorf("candidate %s is %s, not ready", id, man.Status)
 	}
+	type prepared struct {
+		change       Change
+		next, before []byte
+		existed      bool
+	}
+	files := make([]prepared, 0, len(man.Changes))
 	for _, c := range man.Changes {
 		live := filepath.Join(m.SourceRoot, filepath.FromSlash(c.Path))
 		raw, err := os.ReadFile(live)
+		existed := err == nil
 		current := ""
 		if err == nil {
 			current = hash(raw)
@@ -267,23 +275,65 @@ func (m *Manager) Promote(id string) (*Manifest, error) {
 		if current != c.BeforeHash {
 			return nil, fmt.Errorf("promotion blocked: %s changed since staging", c.Path)
 		}
-	}
-	for _, c := range man.Changes {
-		src := filepath.Join(root, "source", filepath.FromSlash(c.Path))
-		raw, err := os.ReadFile(src)
+		next, err := os.ReadFile(filepath.Join(root, "source", filepath.FromSlash(c.Path)))
 		if err != nil {
 			return nil, err
 		}
-		dst := filepath.Join(m.SourceRoot, filepath.FromSlash(c.Path))
-		if err = os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		if hash(next) != c.AfterHash {
+			return nil, fmt.Errorf("candidate evidence mismatch for %s", c.Path)
+		}
+		files = append(files, prepared{change: c, next: next, before: raw, existed: existed})
+	}
+	backupRoot := filepath.Join(root, "promotion-backup", time.Now().UTC().Format("20060102-150405.000000000"))
+	for _, file := range files {
+		if !file.existed {
+			continue
+		}
+		backup := filepath.Join(backupRoot, filepath.FromSlash(file.change.Path))
+		if err := os.MkdirAll(filepath.Dir(backup), 0o755); err != nil {
 			return nil, err
 		}
-		if err = os.WriteFile(dst, raw, 0o644); err != nil {
+		if err := os.WriteFile(backup, file.before, 0o644); err != nil {
 			return nil, err
+		}
+	}
+	written := make([]prepared, 0, len(files))
+	rollback := func(cause error) error {
+		for i := len(written) - 1; i >= 0; i-- {
+			file := written[i]
+			dst := filepath.Join(m.SourceRoot, filepath.FromSlash(file.change.Path))
+			if file.existed {
+				_ = os.WriteFile(dst, file.before, 0o644)
+			} else {
+				_ = os.Remove(dst)
+			}
+		}
+		man.Status = "promotion_failed"
+		man.Rollback = filepath.ToSlash(backupRoot)
+		_ = writeManifest(root, man)
+		return fmt.Errorf("promotion rolled back: %w", cause)
+	}
+	for _, file := range files {
+		dst := filepath.Join(m.SourceRoot, filepath.FromSlash(file.change.Path))
+		if err = os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+			return man, rollback(err)
+		}
+		if err = os.WriteFile(dst, file.next, 0o644); err != nil {
+			return man, rollback(err)
+		}
+		written = append(written, file)
+	}
+	for _, args := range [][]string{{"go", "test", "./..."}, {"go", "build", "./..."}} {
+		check := runCommand(context.Background(), m.SourceRoot, args...)
+		check.Command = "post-promote " + check.Command
+		man.Checks = append(man.Checks, check)
+		if !check.OK {
+			return man, rollback(fmt.Errorf("%s failed", check.Command))
 		}
 	}
 	man.Status = "promoted"
 	man.Promoted = time.Now().UTC().Format(time.RFC3339)
+	man.Rollback = filepath.ToSlash(backupRoot)
 	return man, writeManifest(root, man)
 }
 func (m *Manager) List() []Manifest {
