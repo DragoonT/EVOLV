@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -135,6 +136,37 @@ func defaultConfig() *Config {
 // -ldflags "-X github.com/dxn111/EVOLV/internal/workspace.Version=...").
 var Version = "0.29.0"
 
+// versionLess reports whether semantic version a is older than b. It is a
+// deliberately small parser: three numeric fields, optional leading "v".
+func versionLess(a, b string) bool {
+	pa, pb := parseVersion(a), parseVersion(b)
+	for i := range pa {
+		if pa[i] != pb[i] {
+			return pa[i] < pb[i]
+		}
+	}
+	return false
+}
+
+func parseVersion(v string) [3]int {
+	v = strings.TrimPrefix(strings.TrimSpace(v), "v")
+	var out [3]int
+	for i, part := range strings.SplitN(v, ".", 3) {
+		if i > 2 {
+			break
+		}
+		n := 0
+		for _, r := range part {
+			if r < '0' || r > '9' {
+				break
+			}
+			n = n*10 + int(r-'0')
+		}
+		out[i] = n
+	}
+	return out
+}
+
 // Load opens (creating if needed) the workspace at ~/.evolv.
 // uiFS is the embedded factory genome used to seed on first run.
 func Load(uiFS fs.FS) (*W, error) {
@@ -149,6 +181,10 @@ func Load(uiFS fs.FS) (*W, error) {
 	// config
 	cfgPath := w.Dir(ConfigFile)
 	if raw, err := os.ReadFile(cfgPath); err == nil {
+		var prev struct {
+			Version string `json:"version"`
+		}
+		_ = json.Unmarshal(raw, &prev)
 		_ = json.Unmarshal(raw, w.Config) // partial merge; missing keys keep defaults
 		if w.Config.APIKeys == nil {
 			w.Config.APIKeys = map[string]string{}
@@ -156,7 +192,18 @@ func Load(uiFS fs.FS) (*W, error) {
 		if w.Config.BaseURLs == nil {
 			w.Config.BaseURLs = map[string]string{}
 		}
+		// v0.29.0 turned browser auto-open on by default. Older genomes wrote
+		// `open_browser: false` as the old default without the user choosing
+		// it, so migrate them once. Explicit opt-outs on current genomes stay.
+		migrated := false
+		if !w.Config.OpenBrowser && (prev.Version == "" || versionLess(prev.Version, "0.29.0")) {
+			w.Config.OpenBrowser = true
+			migrated = true
+		}
 		w.Config.Version = Version
+		if migrated {
+			w.SaveConfig()
+		}
 	} else {
 		w.SaveConfig()
 	}
@@ -313,20 +360,39 @@ func splitLines(raw []byte) [][]byte {
 }
 
 // OpenBrowser launches the user's default browser at url (best effort).
+// It tries the platform opener first, then common browser binaries, so a
+// minimal desktop without xdg-utils still gets a window.
 func OpenBrowser(url string) {
-	var cmd string
-	var args []string
+	type attempt struct {
+		cmd  string
+		args []string
+	}
+	var tries []attempt
 	switch runtime.GOOS {
 	case "darwin":
-		cmd, args = "open", []string{url}
+		tries = []attempt{{"open", []string{url}}}
 	case "windows":
-		cmd, args = "rundll32", []string{"url.dll,FileProtocolHandler", url}
+		tries = []attempt{{"rundll32", []string{"url.dll,FileProtocolHandler", url}}}
 	default:
-		cmd, args = "xdg-open", []string{url}
+		tries = []attempt{
+			{"xdg-open", []string{url}},
+			{"sensible-browser", []string{url}},
+			{"firefox", []string{url}},
+			{"chromium", []string{url}},
+			{"google-chrome", []string{url}},
+		}
 	}
-	p, err := os.StartProcess(cmd, args, &os.ProcAttr{Files: []*os.File{nil, nil, nil}})
-	if err == nil {
-		go p.Release()
+	for _, a := range tries {
+		path, err := exec.LookPath(a.cmd)
+		if err != nil {
+			continue
+		}
+		cmd := exec.Command(path, a.args...)
+		if err := cmd.Start(); err != nil {
+			continue
+		}
+		go func() { _ = cmd.Wait() }()
+		return
 	}
 }
 

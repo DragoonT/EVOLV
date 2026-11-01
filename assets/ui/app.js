@@ -530,7 +530,7 @@ function escapeHtml(s) {
   return (s || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-let currentAssistant = null; // {m, body, raw}
+let currentAssistant = null; // {m, body, raw, reason}
 function showThinking() {
   if (currentAssistant) return;
   const m = el('div', 'msg evolv');
@@ -543,16 +543,36 @@ function hideThinking() {
   if (state.thinkingEl) { state.thinkingEl.remove(); state.thinkingEl = null; }
 }
 
-function onToken(text) {
+/* One assistant bubble per turn. Reasoning can arrive before any visible
+   token, so both handlers need to be able to create it. */
+function ensureAssistant() {
+  if (currentAssistant) return currentAssistant;
   hideThinking();
-  if (!currentAssistant) {
-    const m = el('div', 'msg evolv');
-    m.innerHTML = `<div class="avatar">E</div><div class="body"></div>`;
-    $('#chat-scroll').appendChild(m);
-    currentAssistant = { m, body: m.querySelector('.body'), raw: '' };
-  }
-  currentAssistant.raw += text;
+  const m = el('div', 'msg evolv');
+  m.innerHTML = `<div class="avatar">E</div><div class="body"></div>`;
+  $('#chat-scroll').appendChild(m);
+  currentAssistant = { m, body: m.querySelector('.body'), raw: '', reason: null };
+  return currentAssistant;
+}
+
+function onToken(text) {
+  const a = ensureAssistant();
+  a.raw += text;
   scheduleRender();
+}
+
+/* reasoning / thinking tokens: streamed into a collapsible block kept out of
+   the markdown HTML, so renderAssistant() cannot wipe it. */
+function onReasoning(text) {
+  const a = ensureAssistant();
+  if (!a.reason) {
+    a.reason = el('details', 'reason');
+    a.reason.open = true;
+    a.reason.innerHTML = '<summary>🤔 thinking…</summary><pre></pre>';
+    a.body.prepend(a.reason);
+  }
+  a.reason.querySelector('pre').textContent += text;
+  scrollChat();
 }
 
 /* rAF batching: tokens can arrive in bursts of dozens per second, but the
@@ -583,18 +603,6 @@ function addCaret() {
   } else {
     last.appendChild(c);
   }
-}
-
-function onReasoning(text) {
-  if (!currentAssistant) return;
-  let d = currentAssistant.m.querySelector('details.reason');
-  if (!d) {
-    d = el('details', 'reason');
-    d.innerHTML = '<summary>🤔 thoughts</summary><pre></pre>';
-    currentAssistant.body.prepend(d);
-  }
-  d.querySelector('pre').textContent += text;
-  scrollChat();
 }
 
 /* Render streamed text: visible prose + tool call cards for evolv blocks.
@@ -664,6 +672,9 @@ function renderAssistant() {
     htmlOut += proseWithSalvage(tail);
   }
   body.innerHTML = htmlOut;
+  // the reasoning block is kept outside the rendered markdown: re-attach it
+  // after every re-render so thoughts do not vanish when content arrives
+  if (currentAssistant.reason) body.prepend(currentAssistant.reason);
   if (state.busy) addCaret();
 }
 
@@ -721,6 +732,11 @@ function finishAssistant() {
   if (!currentAssistant) return;
   hideThinking();
   renderAssistant();
+  if (currentAssistant.reason) {
+    currentAssistant.reason.open = false;
+    const s = currentAssistant.reason.querySelector('summary');
+    if (s) s.textContent = '🤔 thoughts';
+  }
   const c = currentAssistant.body.querySelector('.caret'); if (c) c.remove();
   addCopyBtn(currentAssistant.m, currentAssistant.raw);
   currentAssistant = null;
