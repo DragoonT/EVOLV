@@ -20,6 +20,8 @@ This update turns EVOLV's accumulated mutations into a manageable, theme-aware w
 - New strands receive stable names in sequence: EVOLV2, EVOLV3, and so on.
 - Each strand has separate profile data and conversation memory, can be monitored, and can be selected for interaction.
 - Clone IDs cannot overwrite an existing strand, and encoded capabilities are validated against the current genome before the clone is persisted.
+- The builder now consumes the host workspace's surface, accent, typography, radius, density, and light/dark palette tokens instead of carrying a separate purple theme.
+- Builder controls share the main app's focus, hover, input, button, and feedback patterns, with mobile reflow, backdrop/Escape close behavior, and inline request errors.
 
 ### Creation Library
 
