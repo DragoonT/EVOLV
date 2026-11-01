@@ -95,7 +95,9 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/wb/rename", s.handleWbRename)
 	s.mux.HandleFunc("/api/wb/search", s.handleWbSearch)
 	s.WatchReleases()
-	s.ag.StartDreaming() // the organism wakes itself when idle
+	if s.ag != nil {
+		s.ag.StartDreaming() // the organism wakes itself when idle
+	}
 }
 
 // Handler returns the root handler.
@@ -340,6 +342,10 @@ func (s *Server) agentCapabilityNames(rel, ext string) []string {
 
 func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+	if s.ag == nil {
+		http.Error(w, `{"error":"agent runtime unavailable"}`, http.StatusServiceUnavailable)
+		return
+	}
 	switch r.Method {
 	case http.MethodGet:
 		type view struct {
@@ -354,15 +360,19 @@ func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
 			Mutations    int      `json:"mutations"`
 			Active       bool     `json:"active"`
 		}
-		out := []view{{ID: "main", Number: 1, Name: "Prime", Identity: "Original living organism", History: s.ag.HistoryLen(), Mutations: s.ag.EvolutionCount(), Active: s.activeAgent == "main"}}
 		s.agentMu.RLock()
+		active := s.activeAgent
+		out := []view{{ID: "main", Number: 1, Name: "Prime", Identity: "Original living organism", History: s.ag.HistoryLen(), Mutations: s.ag.EvolutionCount(), Active: active == "main"}}
 		for id, p := range s.profiles {
 			a := s.agents[id]
-			out = append(out, view{ID: id, Number: p.Number, Name: p.Name, Identity: p.Identity, SystemPrompt: p.SystemPrompt, Tools: p.Tools, Skills: p.Skills, History: a.HistoryLen(), Mutations: a.EvolutionCount(), Active: s.activeAgent == id})
+			if a == nil {
+				continue
+			}
+			out = append(out, view{ID: id, Number: p.Number, Name: p.Name, Identity: p.Identity, SystemPrompt: p.SystemPrompt, Tools: p.Tools, Skills: p.Skills, History: a.HistoryLen(), Mutations: a.EvolutionCount(), Active: active == id})
 		}
 		s.agentMu.RUnlock()
 		sort.Slice(out[1:], func(i, j int) bool { return out[i+1].Number < out[j+1].Number })
-		json.NewEncoder(w).Encode(map[string]any{"agents": out, "active": s.activeAgent, "tools": s.agentCapabilityNames(workspace.ToolsDir, ".js"), "skills": s.agentCapabilityNames(workspace.SkillsDir, ".md")})
+		json.NewEncoder(w).Encode(map[string]any{"agents": out, "active": active, "tools": s.agentCapabilityNames(workspace.ToolsDir, ".js"), "skills": s.agentCapabilityNames(workspace.SkillsDir, ".md")})
 	case http.MethodPost:
 		var in struct {
 			Action       string   `json:"action"`
@@ -378,10 +388,10 @@ func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if in.Action == "switch" {
+			s.agentMu.Lock()
+			defer s.agentMu.Unlock()
 			if in.ID != "main" {
-				s.agentMu.RLock()
 				_, ok := s.agents[in.ID]
-				s.agentMu.RUnlock()
 				if !ok {
 					http.Error(w, "unknown agent", 404)
 					return
@@ -400,15 +410,29 @@ func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "agent name required", 400)
 			return
 		}
+		tools, err := validateCapabilities(in.Tools, s.agentCapabilityNames(workspace.ToolsDir, ".js"))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		skills, err := validateCapabilities(in.Skills, s.agentCapabilityNames(workspace.SkillsDir, ".md"))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		s.agentMu.Lock()
+		defer s.agentMu.Unlock()
+		if _, exists := s.profiles[id]; exists {
+			http.Error(w, "agent id already exists", http.StatusConflict)
+			return
+		}
 		number := 2
-		s.agentMu.RLock()
 		for _, existing := range s.profiles {
 			if existing.Number >= number {
 				number = existing.Number + 1
 			}
 		}
-		s.agentMu.RUnlock()
-		p := agent.Profile{ID: id, Number: number, Name: strings.TrimSpace(in.Name), Identity: strings.TrimSpace(in.Identity), SystemPrompt: strings.TrimSpace(in.SystemPrompt), Tools: in.Tools, Skills: in.Skills}
+		p := agent.Profile{ID: id, Number: number, Name: strings.TrimSpace(in.Name), Identity: strings.TrimSpace(in.Identity), SystemPrompt: strings.TrimSpace(in.SystemPrompt), Tools: tools, Skills: skills}
 		if p.Name == "" {
 			p.Name = id
 		}
@@ -416,16 +440,36 @@ func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), 500)
 			return
 		}
-		s.agentMu.Lock()
 		s.profiles[id] = p
 		s.agents[id] = s.ag.CloneProfile(p)
 		s.activeAgent = id
-		s.agentMu.Unlock()
 		s.bus.Publish("agent:cloned", map[string]string{"agent": id, "name": p.Name})
 		json.NewEncoder(w).Encode(map[string]any{"ok": true, "agent": p, "active": id})
 	default:
 		http.Error(w, "GET or POST only", 405)
 	}
+}
+
+func validateCapabilities(selected, available []string) ([]string, error) {
+	allowed := make(map[string]bool, len(available))
+	for _, name := range available {
+		allowed[name] = true
+	}
+	seen := map[string]bool{}
+	out := make([]string, 0, len(selected))
+	for _, raw := range selected {
+		name := strings.TrimSpace(raw)
+		if name == "" || seen[name] {
+			continue
+		}
+		if !allowed[name] {
+			return nil, fmt.Errorf("unknown capability %q", name)
+		}
+		seen[name] = true
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	return out, nil
 }
 
 func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {

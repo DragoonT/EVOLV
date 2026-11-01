@@ -50,6 +50,11 @@ func inline(s string) string {
 
 // Render converts README markdown into sections of HTML.
 func Render(readme string) []Section {
+	// Repositories checked out with core.autocrlf use CRLF. Normalize before
+	// parsing so generated headings and code blocks never retain stray '\r'
+	// bytes or fail git diff --check.
+	readme = strings.ReplaceAll(readme, "\r\n", "\n")
+	readme = strings.ReplaceAll(readme, "\r", "\n")
 	// drop the leading `# ` title (the page header shows it) and HTML comments
 	readme = regexp.MustCompile(`(?m)^# .*$`).ReplaceAllString(readme, "")
 	readme = regexp.MustCompile(`(?s)<!--.*?-->`).ReplaceAllString(readme, "")

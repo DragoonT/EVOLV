@@ -97,3 +97,11 @@ func TestNoRawMarkdownLeaks(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderNormalizesCRLF(t *testing.T) {
+	crlf := strings.ReplaceAll(sample, "\n", "\r\n")
+	p := Page("t", "d", Render(crlf))
+	if strings.Contains(p, "\r") {
+		t.Fatal("generated documentation retained carriage returns")
+	}
+}

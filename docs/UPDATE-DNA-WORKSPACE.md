@@ -19,6 +19,7 @@ This update turns EVOLV's accumulated mutations into a manageable, theme-aware w
 - Selected capabilities use a restrained green glow that remains clear across themes.
 - New strands receive stable names in sequence: EVOLV2, EVOLV3, and so on.
 - Each strand has separate profile data and conversation memory, can be monitored, and can be selected for interaction.
+- Clone IDs cannot overwrite an existing strand, and encoded capabilities are validated against the current genome before the clone is persisted.
 
 ### Creation Library
 
@@ -49,9 +50,9 @@ This update turns EVOLV's accumulated mutations into a manageable, theme-aware w
 | --- | --- |
 | `GET /api/agents` | List the main DNA and cloned agent profiles. |
 | `POST /api/agents` | Create a numbered DNA clone with identity, prompt, tools, and skills. |
-| `POST /api/agents/select` | Switch the active DNA strand. |
+| `POST /api/agents` with `action: "switch"` | Switch the active DNA strand. |
 | `GET /api/creations` | Return the normalized creation inventory and evolution history. |
-| `POST /api/creations/action` | Pin, archive, enable, or disable a creation. |
+| `POST /api/creations` | Pin, archive, enable, or disable a creation. |
 | `GET /api/widgets` | Return widget state for dashboard controls. |
 | `POST /api/widgets` | Enable or disable a grown widget. |
 
@@ -76,3 +77,5 @@ This update turns EVOLV's accumulated mutations into a manageable, theme-aware w
 - Browser scripts pass `node --check`.
 - Repository whitespace is checked with `git diff --check`.
 - Focused server tests cover the workbench-only initialization path; the existing full Windows suite still depends on isolated `~/.evolv` state and a POSIX `sh` executable.
+- DNA-agent API tests cover the single-main initial roster, stable numbering, persistence across restart, capability normalization, duplicate rejection, and unavailable-runtime behavior.
+- The branch includes upstream reasoning-token streaming and clean installer extraction changes merged from `upstream/main`.
