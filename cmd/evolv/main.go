@@ -184,6 +184,9 @@ func main() {
 		case "import":
 			runImport(os.Args[2:])
 			return
+		case "migrate":
+			runMigrate(os.Args[2:])
+			return
 		}
 	}
 	var (

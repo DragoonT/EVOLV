@@ -38,6 +38,13 @@ type Agent struct {
 	modelCalls         atomic.Int64
 	modelErrors        atomic.Int64
 	lastModelLatencyMS atomic.Int64
+	turns              atomic.Int64
+	turnsFailed        atomic.Int64
+	turnsCancelled     atomic.Int64
+	turnsLimited       atomic.Int64
+	toolCalls          atomic.Int64
+	toolFailures       atomic.Int64
+	lastTurnMS         atomic.Int64
 
 	lastAct      time.Time // last real user activity (drives dreaming)
 	dreaming     bool
@@ -147,10 +154,18 @@ func (a *Agent) EvolutionCount() int { return int(a.evolution.Load()) }
 
 // AgentStats is a cheap, lock-free snapshot of model activity for health and
 // metrics surfaces.
+// AgentStats is a cheap, allocation-free snapshot for health and metrics.
 type AgentStats struct {
 	ModelCalls         int64 `json:"model_calls"`
 	ModelErrors        int64 `json:"model_errors"`
 	LastModelLatencyMS int64 `json:"last_model_latency_ms"`
+	Turns              int64 `json:"turns"`
+	TurnsFailed        int64 `json:"turns_failed"`
+	TurnsCancelled     int64 `json:"turns_cancelled"`
+	TurnsLimited       int64 `json:"turns_limited"`
+	ToolCalls          int64 `json:"tool_calls"`
+	ToolFailures       int64 `json:"tool_failures"`
+	LastTurnMS         int64 `json:"last_turn_ms"`
 }
 
 func (a *Agent) Stats() AgentStats {
@@ -158,6 +173,13 @@ func (a *Agent) Stats() AgentStats {
 		ModelCalls:         a.modelCalls.Load(),
 		ModelErrors:        a.modelErrors.Load(),
 		LastModelLatencyMS: a.lastModelLatencyMS.Load(),
+		Turns:              a.turns.Load(),
+		TurnsFailed:        a.turnsFailed.Load(),
+		TurnsCancelled:     a.turnsCancelled.Load(),
+		TurnsLimited:       a.turnsLimited.Load(),
+		ToolCalls:          a.toolCalls.Load(),
+		ToolFailures:       a.toolFailures.Load(),
+		LastTurnMS:         a.lastTurnMS.Load(),
 	}
 }
 
@@ -445,8 +467,43 @@ func (a *Agent) Chat(ctx context.Context, userMsg string) string {
 		return msg
 	}
 
+	turnStart := time.Now()
+	turnStatus := "done"
+	defer func() {
+		a.turns.Add(1)
+		a.lastTurnMS.Store(time.Since(turnStart).Milliseconds())
+		switch turnStatus {
+		case "failed":
+			a.turnsFailed.Add(1)
+		case "cancelled":
+			a.turnsCancelled.Add(1)
+		case "limited":
+			a.turnsLimited.Add(1)
+		}
+	}()
 	final := ""
-	for loop := 0; loop < a.maxLoops; loop++ {
+	guard := newLoopGuard(defaultLoopBudget())
+	if a.maxLoops > 0 {
+		guard.budget.MaxTurns = a.maxLoops
+	}
+	for {
+		if reason := guard.nextTurn(); reason != "" {
+			turnStatus = "limited"
+			note := "\n\n⏸ **stopped**: " + reason
+			a.bus.Publish("agent:token", map[string]string{"text": note})
+			hist = append(hist, providers.Message{Role: "assistant", Content: reason})
+			final += note
+			break
+		}
+		if ctx.Err() != nil {
+			turnStatus = "cancelled"
+			note := "\n\n⏹ **cancelled** by the user."
+			a.bus.Publish("agent:token", map[string]string{"text": note})
+			hist = append(hist, providers.Message{Role: "assistant", Content: "cancelled by the user"})
+			final += note
+			break
+		}
+
 		msgs := append([]providers.Message{{Role: "system", Content: a.SystemPrompt()}}, hist...)
 
 		a.bus.Publish("agent:phase", map[string]string{"phase": "thinking"})
@@ -463,7 +520,7 @@ func (a *Agent) Chat(ctx context.Context, userMsg string) string {
 		}
 		callModel := func() (string, error) {
 			started := time.Now()
-			text, err := prov.Stream(ctx, model, msgs, stream)
+			text, err := providers.StreamWithRetry(ctx, prov, model, msgs, stream, providers.DefaultRetryPolicy())
 			a.modelCalls.Add(1)
 			a.lastModelLatencyMS.Store(time.Since(started).Milliseconds())
 			if err != nil {
@@ -472,15 +529,9 @@ func (a *Agent) Chat(ctx context.Context, userMsg string) string {
 			return text, err
 		}
 		text, err := callModel()
-		if err != nil && ctx.Err() == nil {
-			// free anonymous gateways hiccup constantly; one quiet
-			// retry before surfacing the error to the user
-			a.bus.Publish("agent:token", map[string]string{"text": "…\n\n"})
-			time.Sleep(1500 * time.Millisecond)
-			text, err = callModel()
-		}
 		if err != nil {
-			errMsg := fmt.Sprintf("\n\n⚠️ **model error**: `%s`\n\nTry another model in Settings — free anonymous models rotate often.", err.Error())
+			turnStatus = "failed"
+			errMsg := fmt.Sprintf("\n\n⚠️ **model error**: `%s`\n\n%s", providers.SafeErrorText(err), providers.ErrorHint(err))
 			a.bus.Publish("agent:token", map[string]string{"text": errMsg})
 			a.mu.Lock()
 			a.history = append(a.history, providers.Message{Role: "assistant", Content: errMsg})
@@ -488,28 +539,45 @@ func (a *Agent) Chat(ctx context.Context, userMsg string) string {
 			a.saveMemory()
 			return errMsg
 		}
+		if text == "" {
+			// An empty turn with no actions ends the conversation cleanly.
+			hist = append(hist, providers.Message{Role: "assistant", Content: "(empty response)"})
+			break
+		}
 
 		hist = append(hist, providers.Message{Role: "assistant", Content: text})
 		final = text
 
-		muts := extractMutations(text)
-		if len(muts) == 0 {
+		specs, problems := extractProtocol(text)
+		if len(specs) == 0 && len(problems) == 0 {
 			break // no mutations requested; conversation turn complete
 		}
 
-		// time travel: freeze the genome before this mutation batch lands
-		if id, err := a.ws.Snapshot(); err == nil {
-			a.mu.Lock()
-			a.lastSnapshot = id
-			a.mu.Unlock()
+		if len(specs) > 0 {
+			// time travel: freeze the genome before this mutation batch lands
+			if id, err := a.ws.Snapshot(); err == nil {
+				a.mu.Lock()
+				a.lastSnapshot = id
+				a.mu.Unlock()
+			}
 		}
 
-		// execute all requested mutations, then feed results back
-		var results []string
-		for _, line := range muts {
-			var act action
-			if err := json.Unmarshal([]byte(line), &act); err != nil {
-				results = append(results, "parse_error: "+err.Error())
+		results := make([]string, 0, len(specs)+len(problems))
+		keyParts := make([]string, 0, len(specs))
+		failed := false
+		for _, problem := range problems {
+			results = append(results, "protocol_error: "+problem.Reason)
+			if problem.Raw != "" {
+				results[len(results)-1] += " in " + clipProtocol(problem.Raw, 300)
+			}
+			failed = true
+		}
+		for _, spec := range specs {
+			keyParts = append(keyParts, spec.Raw)
+			act, parseErr := parseAction(spec.Raw)
+			if parseErr != nil {
+				results = append(results, "parse_error: "+parseErr.Error())
+				failed = true
 				continue
 			}
 			// live tool card update in the UI: running → ok/error
@@ -519,17 +587,34 @@ func (a *Agent) Chat(ctx context.Context, userMsg string) string {
 				"state": "running",
 			})
 			res := a.Execute(act)
+			status := resStatus(res)
+			a.toolCalls.Add(1)
+			if status != "ok" {
+				failed = true
+				a.toolFailures.Add(1)
+			}
 			a.bus.Publish("tool:call", map[string]any{
 				"action": act.Action,
 				"target": act.Name, "path": act.Path,
-				"state": resStatus(res),
+				"state": status,
 			})
 			results = append(results, res)
 		}
-		hist = append(hist, providers.Message{
-			Role:    "user",
-			Content: "EVOLV KERNEL — tool results:\n" + strings.Join(results, "\n") + "\nContinue the task with the next batch of mutations until it is fully done, then summarize what changed. Chain as many batches as the task needs — never stop after one.",
-		})
+
+		if reason := guard.observeBatch(strings.Join(keyParts, "\n"), failed); reason != "" {
+			turnStatus = "limited"
+			note := "\n\n⏸ **stopped**: " + reason
+			a.bus.Publish("agent:token", map[string]string{"text": note})
+			hist = append(hist, providers.Message{Role: "assistant", Content: reason})
+			final += note
+			break
+		}
+
+		payload := "EVOLV KERNEL — tool results:\n" + strings.Join(results, "\n") + "\nContinue the task with the next batch of mutations until it is fully done, then summarize what changed. Chain as many batches as the task needs — never stop after one."
+		if guard.accountBytes(len(payload)) {
+			payload += "\n\n(result budget reached: summarise what you changed and stop asking for more tool output this turn)"
+		}
+		hist = append(hist, providers.Message{Role: "user", Content: payload})
 		a.bus.Publish("agent:phase", map[string]string{"phase": "evolving"})
 		// visually separate the next stream round in the chat bubble
 		a.bus.Publish("agent:token", map[string]string{"text": "\n\n"})

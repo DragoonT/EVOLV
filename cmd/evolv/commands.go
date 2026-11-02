@@ -28,6 +28,8 @@ func printHelp() {
 		{"evolv status", "read a running organism's health card"},
 		{"evolv export <dir>", "export the workspace as an .evolvpack"},
 		{"evolv import <file>", "import an .evolvpack"},
+		{"evolv migrate", "upgrade the workspace schema (safe to re-run)"},
+		{"evolv migrate --dry-run", "preview pending workspace upgrades"},
 		{"evolv version", "print the version"},
 		{"evolv help", "show this screen"},
 	}

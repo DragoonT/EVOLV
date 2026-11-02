@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version, e.g. v0.30.0 (required for manual runs)"
+        description: "Release version, e.g. v0.31.0 (required for manual runs)"
         required: true
         type: string
       dry_run:

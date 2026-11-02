@@ -63,6 +63,9 @@ type W struct {
 	Root   string // absolute path to ~/.evolv
 	Config *Config
 	uiFS   fs.FS // embedded pristine UI for (re)seeding
+
+	migrated     MigrateReport
+	migrationErr error
 }
 
 // Dir returns an absolute path inside the workspace.
@@ -136,7 +139,7 @@ func defaultConfig() *Config {
 
 // Version is the organism's genome version (overridable at build time via
 // -ldflags "-X github.com/dxn111/EVOLV/internal/workspace.Version=...").
-var Version = "0.30.0"
+var Version = "0.31.0"
 
 // versionLess reports whether semantic version a is older than b. It is a
 // deliberately small parser: three numeric fields, optional leading "v".
@@ -223,8 +226,23 @@ func Load(uiFS fs.FS) (*W, error) {
 	if err := w.seedSeeds(); err != nil {
 		return nil, err
 	}
+	// versioned workspace migrations. A migration failure must not brick the
+	// boot: the workspace still opens, and the failure is surfaced through
+	// LastMigrationError for the UI and logs.
+	if report, err := w.Migrate(MigrateOptions{}); err != nil {
+		w.migrationErr = err
+		w.migrated = report
+	} else {
+		w.migrated = report
+	}
 	return w, nil
 }
+
+// MigrationReport returns the migrations applied during the last Load.
+func (w *W) MigrationReport() MigrateReport { return w.migrated }
+
+// MigrationError returns the error from the last migration run, if any.
+func (w *W) MigrationError() error { return w.migrationErr }
 
 // UIComponentsRel is the workspace-relative components path.
 func UIComponentsRel() string { return ComponentsDir }

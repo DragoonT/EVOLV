@@ -29,12 +29,40 @@ type pluginVM struct {
 	mu           sync.Mutex
 	events       chan bus.Event
 	handlers     map[string][]goja.Callable
+	handlerCount map[string]int
 	timers       []timer
 	perms        map[string]bool
 	loadTimeout  time.Duration
 	eventTimeout time.Duration
 	stop         chan struct{}
 	stopOnce     sync.Once
+	// Resource accounting: a plugin may not register unbounded listeners,
+	// timers or make unbounded bridge calls. Limits are enforced at the
+	// bridge, so a manifest permission never implies unlimited use.
+	bridgeCalls int
+	eventsFired int
+	timerFires  int
+}
+
+// Plugin resource limits. They are deliberately generous for real plugins and
+// strict enough that a runaway script cannot monopolise the loop.
+const (
+	maxPluginHandlers        = 64
+	maxPluginTimers          = 32
+	maxPluginTimersPerKey    = 8
+	maxPluginBridgeCalls     = 5000
+	maxPluginTimerFires      = 200000
+	maxPluginEventFires      = 50000
+	maxPluginEventQueueDrops = 1000
+)
+
+// bridgeAllowed accounts one host-bridge call; it returns false once the
+// plugin has exhausted its bridge budget for this load.
+func (p *pluginVM) bridgeAllowed() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.bridgeCalls++
+	return p.bridgeCalls <= maxPluginBridgeCalls
 }
 
 // Stop retires the plugin's scheduler. The VM is never reused after this; a
@@ -89,6 +117,7 @@ func (r *JSRuntime) buildPluginVM(name, code string, perms []string) (*pluginVM,
 		vm:           vm,
 		events:       make(chan bus.Event, pluginEventQueue),
 		handlers:     map[string][]goja.Callable{},
+		handlerCount: map[string]int{},
 		perms:        map[string]bool{},
 		loadTimeout:  loadTimeout,
 		eventTimeout: DefaultPluginEventTimeout,
@@ -125,15 +154,39 @@ func (r *JSRuntime) buildPluginVM(name, code string, perms []string) (*pluginVM,
 			return httpFetch(url)
 		},
 		"on": func(event string, fn goja.Value) {
+			event = strings.TrimSpace(event)
+			if event == "" || !p.bridgeAllowed() {
+				return
+			}
+			n := 0
+			for _, list := range p.handlers {
+				n += len(list)
+			}
+			if n >= maxPluginHandlers || p.handlerCount[event] >= maxPluginHandlers {
+				p.warn("on() limit reached: ", event, " — extra listeners ignored")
+				return
+			}
 			if cb, ok := goja.AssertFunction(fn); ok {
 				// stash the callable on the VM so it isn't garbage collected
 				vm.Set("__h_"+event+"_"+time.Now().Format("150405.000000000"), cb)
 				p.handlers[event] = append(p.handlers[event], cb)
+				p.handlerCount[event]++
 			}
 		},
+		"off": func(event string) {
+			delete(p.handlers, strings.TrimSpace(event))
+			delete(p.handlerCount, strings.TrimSpace(event))
+		},
 		"every": func(ms int, fn goja.Value) {
+			if !p.bridgeAllowed() {
+				return
+			}
 			if ms < 50 {
 				ms = 50
+			}
+			if len(p.timers) >= maxPluginTimers {
+				p.warn("every() limit reached — timer ignored (max ", maxPluginTimers, ")")
+				return
 			}
 			if cb, ok := goja.AssertFunction(fn); ok {
 				vm.Set("__t_"+time.Now().Format("150405.000000000"), cb)
@@ -186,6 +239,15 @@ func (p *pluginVM) loop() {
 		p.mu.Unlock()
 		for _, tm := range due {
 			p.mu.Lock()
+			p.timerFires++
+			if p.timerFires > maxPluginTimerFires {
+				p.mu.Unlock()
+				p.warn("timer budget exhausted — retiring timers")
+				p.mu.Lock()
+				p.timers = nil
+				p.mu.Unlock()
+				break
+			}
 			timeout := p.eventTimeout
 			if timeout <= 0 {
 				timeout = DefaultPluginEventTimeout
@@ -209,6 +271,12 @@ func (p *pluginVM) loop() {
 // fire runs all handlers registered for an event type.
 func (p *pluginVM) fire(eventType string, payload json.RawMessage) {
 	p.mu.Lock()
+	p.eventsFired++
+	if p.eventsFired > maxPluginEventFires {
+		p.mu.Unlock()
+		p.warn("event budget exhausted — dropping ", eventType)
+		return
+	}
 	fns := append([]goja.Callable{}, p.handlers[eventType]...)
 	var obj any
 	if err := json.Unmarshal(payload, &obj); err != nil {
@@ -235,6 +303,18 @@ func (p *pluginVM) fire(eventType string, payload json.RawMessage) {
 			})
 		}
 	}
+}
+
+// warn publishes a plugin:warning event so limits are visible, never silent.
+func (p *pluginVM) warn(parts ...any) {
+	if p.a == nil || p.a.bus == nil {
+		return
+	}
+	msg := ""
+	for _, part := range parts {
+		msg += fmt.Sprint(part)
+	}
+	p.a.bus.Publish("plugin:warning", map[string]string{"plugin": p.name, "text": msg})
 }
 
 // Dispatch fans a bus event out to every plugin VM (non-blocking; a slow

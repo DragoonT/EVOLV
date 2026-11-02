@@ -13,6 +13,8 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -45,17 +47,35 @@ type Registry struct{ m map[string]Provider }
 func NewRegistry() *Registry { return &Registry{m: map[string]Provider{}} }
 
 // Add registers a provider.
-func (r *Registry) Add(p Provider) { r.m[p.Name()] = p }
+func (r *Registry) Add(p Provider) {
+	if r == nil || p == nil {
+		return
+	}
+	if r.m == nil {
+		r.m = map[string]Provider{}
+	}
+	r.m[p.Name()] = p
+}
 
-// Get resolves a provider by name.
-func (r *Registry) Get(name string) Provider { return r.m[name] }
+// Get resolves a provider by name. A nil registry resolves to nil instead of
+// panicking, so read-only surfaces stay safe in partial deployments.
+func (r *Registry) Get(name string) Provider {
+	if r == nil {
+		return nil
+	}
+	return r.m[name]
+}
 
-// Names lists registered providers.
+// Names lists registered providers in a stable order.
 func (r *Registry) Names() []string {
 	out := []string{}
+	if r == nil {
+		return out
+	}
 	for k := range r.m {
 		out = append(out, k)
 	}
+	sort.Strings(out)
 	return out
 }
 
@@ -165,7 +185,7 @@ func (o *openaiCompat) Stream(ctx context.Context, model string, msgs []Message,
 
 	resp, err := o.client.Do(req)
 	if err != nil {
-		return "", err
+		return "", Classify(o.name, 0, err)
 	}
 	defer resp.Body.Close()
 
@@ -176,7 +196,9 @@ func (o *openaiCompat) Stream(ctx context.Context, model string, msgs []Message,
 
 	if resp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return "", fmt.Errorf("%s http %d: %s", o.name, resp.StatusCode, strings.TrimSpace(string(b)))
+		pe := Classify(o.name, resp.StatusCode, fmt.Errorf("%s", strings.TrimSpace(string(b))))
+		pe.RetryIn = retryAfter(resp.Header.Get("Retry-After"))
+		return "", pe
 	}
 
 	var full strings.Builder
@@ -229,27 +251,33 @@ func (o *openaiCompat) consumeJSON(raw []byte, full *strings.Builder, onDelta fu
 	return nil
 }
 
+// consumeSSE decodes a server-sent event stream without assuming one event
+// per line or one line per network chunk. It tolerates CRLF, comment lines,
+// multi-line data fields, empty events, malformed payloads (skipped, never
+// fatal) and streams that end without [DONE].
 func (o *openaiCompat) consumeSSE(r io.Reader, full *strings.Builder, onDelta func(Delta)) error {
-	sc := bufio.NewScanner(r)
-	sc.Buffer(make([]byte, 1<<20), 1<<20)
-	for sc.Scan() {
-		line := sc.Text()
-		if !strings.HasPrefix(line, "data:") {
-			continue
-		}
-		data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
-		if data == "" || data == "[DONE]" {
-			continue
+	return readSSE(r, func(payload string) error {
+		payload = strings.TrimSpace(payload)
+		if payload == "" || payload == "[DONE]" {
+			return nil
 		}
 		var ch oaiChunk
-		if err := json.Unmarshal([]byte(data), &ch); err != nil {
-			continue
+		if err := json.Unmarshal([]byte(payload), &ch); err != nil {
+			// Some gateways prefix the JSON with "event:" style payloads or
+			// send keep-alives; try to recover the object before giving up.
+			if obj := scanJSON(payload); obj != "" {
+				if json.Unmarshal([]byte(obj), &ch) != nil {
+					return nil
+				}
+			} else {
+				return nil
+			}
 		}
 		if ch.Error != nil {
-			return fmt.Errorf("%s: %s", o.name, ch.Error.Message)
+			return Classify(o.name, 0, fmt.Errorf("%s", ch.Error.Message))
 		}
 		if len(ch.Choices) == 0 {
-			continue
+			return nil
 		}
 		d := ch.Choices[0].Delta
 		dv := Delta{
@@ -262,8 +290,101 @@ func (o *openaiCompat) consumeSSE(r io.Reader, full *strings.Builder, onDelta fu
 		if onDelta != nil && (dv.Content != "" || dv.Reasoning != "") {
 			onDelta(dv)
 		}
+		return nil
+	})
+}
+
+// readSSE parses an SSE byte stream into event payloads. Data fields are
+// joined with newlines per the SSE spec; a blank line dispatches the event.
+func readSSE(r io.Reader, handle func(payload string) error) error {
+	reader := bufio.NewReaderSize(r, 64<<10)
+	var data []string
+	for {
+		line, err := reader.ReadString('\n')
+		if len(line) > 0 {
+			line = strings.TrimRight(line, "\r\n")
+			switch {
+			case line == "":
+				if len(data) > 0 {
+					if herr := handle(strings.Join(data, "\n")); herr != nil {
+						return herr
+					}
+					data = data[:0]
+				}
+			case strings.HasPrefix(line, ":"):
+				// comment / keep-alive
+			case strings.HasPrefix(line, "data:"):
+				field := strings.TrimPrefix(line, "data:")
+				data = append(data, strings.TrimPrefix(field, " "))
+			default:
+				// event:, id:, retry: are not needed for token streaming
+			}
+		}
+		if err != nil {
+			// Flush a final event that arrived without its blank-line
+			// terminator, then surface only real read failures.
+			if len(data) > 0 {
+				if herr := handle(strings.Join(data, "\n")); herr != nil {
+					return herr
+				}
+			}
+			if err == io.EOF {
+				return nil
+			}
+			if strings.Contains(err.Error(), "unexpected EOF") {
+				return nil
+			}
+			return Classify("", 0, err)
+		}
 	}
-	return sc.Err()
+}
+
+// scanJSON extracts the first balanced JSON object from s, or "".
+func scanJSON(s string) string {
+	start := strings.IndexByte(s, '{')
+	if start < 0 {
+		return ""
+	}
+	depth, inStr, esc := 0, false, false
+	for i := start; i < len(s); i++ {
+		c := s[i]
+		if esc {
+			esc = false
+			continue
+		}
+		switch {
+		case c == '\\' && inStr:
+			esc = true
+		case c == '"':
+			inStr = !inStr
+		case inStr:
+		case c == '{':
+			depth++
+		case c == '}':
+			depth--
+			if depth == 0 {
+				return s[start : i+1]
+			}
+		}
+	}
+	return ""
+}
+
+// retryAfter parses a Retry-After header (seconds or HTTP date).
+func retryAfter(v string) time.Duration {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return 0
+	}
+	if secs, err := strconv.Atoi(v); err == nil && secs >= 0 {
+		return time.Duration(secs) * time.Second
+	}
+	if t, err := http.ParseTime(v); err == nil {
+		if d := time.Until(t); d > 0 {
+			return d
+		}
+	}
+	return 0
 }
 
 // ---------- Anthropic native ----------
@@ -350,7 +471,7 @@ func (a *anthropic) Stream(ctx context.Context, model string, msgs []Message, on
 	thinking := anthropicThinking()
 	resp, err := send(build(thinking))
 	if err != nil {
-		return "", err
+		return "", Classify("anthropic", 0, err)
 	}
 	if thinking && resp.StatusCode == http.StatusBadRequest {
 		// The model does not accept extended thinking — retry plainly rather
@@ -358,30 +479,30 @@ func (a *anthropic) Stream(ctx context.Context, model string, msgs []Message, on
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		resp.Body.Close()
 		if !strings.Contains(strings.ToLower(string(b)), "thinking") {
-			return "", fmt.Errorf("anthropic http %d: %s", resp.StatusCode, strings.TrimSpace(string(b)))
+			return "", Classify("anthropic", resp.StatusCode, fmt.Errorf("%s", strings.TrimSpace(string(b))))
 		}
 		resp, err = send(build(false))
 		if err != nil {
-			return "", err
+			return "", Classify("anthropic", 0, err)
 		}
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return "", fmt.Errorf("anthropic http %d: %s", resp.StatusCode, strings.TrimSpace(string(b)))
+		pe := Classify("anthropic", resp.StatusCode, fmt.Errorf("%s", strings.TrimSpace(string(b))))
+		pe.RetryIn = retryAfter(resp.Header.Get("Retry-After"))
+		return "", pe
 	}
 
 	var full strings.Builder
-	sc := bufio.NewScanner(resp.Body)
-	sc.Buffer(make([]byte, 1<<20), 1<<20)
-	for sc.Scan() {
-		line := sc.Text()
-		if !strings.HasPrefix(line, "data:") {
-			continue
+	err = readSSE(resp.Body, func(payload string) error {
+		payload = strings.TrimSpace(payload)
+		if payload == "" {
+			return nil
 		}
 		var ev antStreamEvent
-		if err := json.Unmarshal([]byte(strings.TrimSpace(strings.TrimPrefix(line, "data:"))), &ev); err != nil {
-			continue
+		if err := json.Unmarshal([]byte(payload), &ev); err != nil {
+			return nil // unknown event shapes are ignored, not fatal
 		}
 		switch ev.Type {
 		case "content_block_delta":
@@ -398,14 +519,18 @@ func (a *anthropic) Stream(ctx context.Context, model string, msgs []Message, on
 			}
 		case "error":
 			if ev.Error != nil {
-				return full.String(), fmt.Errorf("anthropic: %s", ev.Error.Message)
+				return Classify("anthropic", 0, fmt.Errorf("%s", ev.Error.Message))
 			}
 		}
+		return nil
+	})
+	if err != nil {
+		return full.String(), err
 	}
 	if onDelta != nil {
 		onDelta(Delta{Done: true})
 	}
-	return full.String(), sc.Err()
+	return full.String(), nil
 }
 
 // ---------- Mock (offline demo / self-evolution showcase) ----------
@@ -485,7 +610,11 @@ var KiloPaidModels = []string{
 
 // Build wires the provider registry from config values.
 func Build(provider, model, apiKey string, base_urls map[string]string) (Provider, string) {
-	client := &http.Client{Timeout: 5 * time.Minute}
+	client := &http.Client{Timeout: 5 * time.Minute, Transport: &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		ResponseHeaderTimeout: 90 * time.Second,
+		IdleConnTimeout:       90 * time.Second,
+	}}
 	key := func(p string) string {
 		if apiKey != "" {
 			return apiKey

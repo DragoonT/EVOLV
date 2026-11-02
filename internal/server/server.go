@@ -28,6 +28,7 @@ import (
 	"github.com/dxn111/EVOLV/internal/agent"
 	"github.com/dxn111/EVOLV/internal/bus"
 	"github.com/dxn111/EVOLV/internal/candidate"
+	"github.com/dxn111/EVOLV/internal/execution"
 	"github.com/dxn111/EVOLV/internal/lint"
 	"github.com/dxn111/EVOLV/internal/providers"
 	"github.com/dxn111/EVOLV/internal/swarm"
@@ -63,6 +64,9 @@ type Server struct {
 	done          chan struct{}
 	closeOnce     sync.Once
 	latency       latencyHistogram
+	runStats      *runMetrics
+	execStore     *execution.Store
+	execMu        sync.Mutex
 }
 
 // New builds the server.
@@ -77,6 +81,7 @@ func New(ws *workspace.W, b *bus.Bus, ag *agent.Agent, reg *providers.Registry) 
 		},
 	}
 	s.swarmArchived = map[string]bool{}
+	s.runStats = newRunMetrics()
 	s.swarm = swarm.New(func() (providers.Provider, string) {
 		if s.ag == nil {
 			return nil, ""
@@ -104,6 +109,11 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/swarm/vote", s.handleSwarmVote)
 	s.mux.HandleFunc("/api/swarm/runs", s.handleSwarmRuns)
 	s.mux.HandleFunc("/api/swarm/history", s.handleSwarmHistory)
+	s.mux.HandleFunc("/api/runs", s.handleRuns)
+	s.mux.HandleFunc("/api/runs/detail", s.handleRunDetail)
+	s.mux.HandleFunc("/api/runs/events", s.handleRunEvents)
+	s.mux.HandleFunc("/api/runs/create", s.handleRunCreate)
+	s.mux.HandleFunc("/api/runs/transition", s.handleRunTransition)
 	s.mux.HandleFunc("/api/swarm/apply", s.handleSwarmApply)
 	s.mux.HandleFunc("/api/history", s.handleHistory)
 	s.mux.HandleFunc("/api/settings", s.handleSettings)
@@ -201,7 +211,7 @@ func (s *Server) handleUI(w http.ResponseWriter, r *http.Request) {
 		rel = workspace.UIRel() + "/swarm.html" // coming-soon preview, a real page not a modal
 	case strings.HasPrefix(r.URL.Path, "/ui/"):
 		rel = workspace.UIRel() + "/" + strings.TrimPrefix(r.URL.Path, "/ui/")
-	case r.URL.Path == "/style.css" || r.URL.Path == "/app.js":
+	case r.URL.Path == "/style.css" || r.URL.Path == "/app.js" || r.URL.Path == "/runs.js":
 		rel = workspace.UIRel() + r.URL.Path // shell assets live beside the genome
 	default:
 		http.NotFound(w, r)
@@ -1992,7 +2002,12 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
+	runSnapshot := map[string]any{}
+	if s.runStats != nil {
+		runSnapshot = s.runStats.snapshot()
+	}
 	json.NewEncoder(w).Encode(map[string]any{
+		"runs":                  runSnapshot,
 		"status":                "alive",
 		"version":               workspace.Version,
 		"uptime_seconds":        int64(time.Since(s.startedAt).Seconds()),
@@ -2047,6 +2062,20 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	busSubs, busDropped := 0, uint64(0)
 	if s.bus != nil {
 		busSubs, busDropped = s.bus.SubscriberCount(), s.bus.Dropped()
+	}
+	if s.ag != nil {
+		st := s.ag.Stats()
+		s.runStats.turnsStarted.Store(st.Turns)
+		s.runStats.turnsFinished.Store(st.Turns)
+		s.runStats.turnsFailed.Store(st.TurnsFailed)
+		s.runStats.turnsCanceled.Store(st.TurnsCancelled)
+		s.runStats.turnsLimited.Store(st.TurnsLimited)
+		s.runStats.toolCalls.Store(st.ToolCalls)
+		s.runStats.toolFailures.Store(st.ToolFailures)
+		s.runStats.lastTurnMS.Store(st.LastTurnMS)
+	}
+	if s.runStats != nil {
+		s.runStats.writePrometheus(w)
 	}
 
 	fmt.Fprintf(w, "# HELP evolv_up 1 while the organism is serving.\n")

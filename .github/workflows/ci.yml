@@ -83,6 +83,9 @@ jobs:
             exit 1
           }
 
+      - name: Fuzz seed corpus
+        run: go test ./internal/agent -run FuzzExtractProtocol -count=1
+
       - name: Build
         timeout-minutes: 10
         run: go build ./...

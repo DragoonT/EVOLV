@@ -147,3 +147,24 @@ func TestAnthropicThinkingOptIn(t *testing.T) {
 		t.Fatalf("expected thinking enabled, body = %s", gotBody)
 	}
 }
+
+func TestRegistryNilSafe(t *testing.T) {
+	var r *Registry
+	if r.Get("x") != nil {
+		t.Fatal("nil registry Get must return nil")
+	}
+	if names := r.Names(); len(names) != 0 {
+		t.Fatalf("nil registry names = %v", names)
+	}
+	r.Add(nil) // must not panic
+}
+
+func TestRegistryNamesStable(t *testing.T) {
+	r := NewRegistry()
+	r.Add(&openaiCompat{name: "zeta"})
+	r.Add(&openaiCompat{name: "alpha"})
+	got := r.Names()
+	if len(got) != 2 || got[0] != "alpha" || got[1] != "zeta" {
+		t.Fatalf("names = %v (must be sorted for stable clients)", got)
+	}
+}

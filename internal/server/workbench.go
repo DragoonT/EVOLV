@@ -2,12 +2,15 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/dxn111/EVOLV/internal/workspace"
 )
 
 // ---------- the workbench: a real dev environment for the user's project ----------
@@ -203,6 +206,10 @@ func (s *Server) handleWbRead(w http.ResponseWriter, r *http.Request) {
 		wbErr(w, 400, err.Error())
 		return
 	}
+	if err := workspace.CheckWithin(root, abs); err != nil {
+		wbErr(w, 400, err.Error())
+		return
+	}
 	info, err := os.Stat(abs)
 	if err != nil {
 		wbErr(w, 404, "no such file")
@@ -225,7 +232,11 @@ func (s *Server) handleWbRead(w http.ResponseWriter, r *http.Request) {
 		wbErr(w, 415, "binary file — the workbench edits text")
 		return
 	}
-	wbWriteJSON(w, map[string]any{"ok": true, "path": r.URL.Query().Get("path"), "content": string(raw), "size": info.Size()})
+	wbWriteJSON(w, map[string]any{
+		"ok": true, "path": r.URL.Query().Get("path"), "content": string(raw),
+		"size": info.Size(), "hash": workspace.HashBytes(raw),
+		"modified": info.ModTime().UTC().Format("2006-01-02T15:04:05Z07:00"),
+	})
 }
 
 // isMostlyText refuses NUL-bearing payloads (binaries) up to 8 KB probe.
@@ -249,8 +260,9 @@ func (s *Server) handleWbWrite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Path    string `json:"path"`
-		Content string `json:"content"`
+		Path         string `json:"path"`
+		Content      string `json:"content"`
+		ExpectedHash string `json:"expected_hash"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		wbErr(w, 400, "bad json")
@@ -266,16 +278,27 @@ func (s *Server) handleWbWrite(w http.ResponseWriter, r *http.Request) {
 		wbErr(w, 400, err.Error())
 		return
 	}
-	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
+	if err := workspace.CheckWithin(root, abs); err != nil {
 		wbErr(w, 400, err.Error())
 		return
 	}
-	if err := os.WriteFile(abs, []byte(req.Content), 0o644); err != nil {
+	hash, err := workspace.GuardedWrite(abs, []byte(req.Content), req.ExpectedHash)
+	if err != nil {
+		var fe *workspace.FileError
+		if errors.As(err, &fe) {
+			wbWriteJSONStatus(w, fe.Status, map[string]any{
+				"error":        fe.Detail,
+				"path":         req.Path,
+				"current_hash": hash,
+				"conflict":     fe.Status == 409,
+			})
+			return
+		}
 		wbErr(w, 400, err.Error())
 		return
 	}
 	s.bus.Publish("fs:change", map[string]string{"path": req.Path, "op": "write", "source": "workbench"})
-	wbWriteJSON(w, map[string]any{"ok": true, "path": req.Path, "bytes": len(req.Content)})
+	wbWriteJSON(w, map[string]any{"ok": true, "path": req.Path, "bytes": len(req.Content), "hash": hash})
 }
 
 // handleWbMkdir creates a directory (with parents).
@@ -462,4 +485,11 @@ func (s *Server) handleWbSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	wbWriteJSON(w, map[string]any{"ok": true, "q": q, "files": files, "hits": hits, "truncated": len(hits) >= 200})
+}
+
+// wbWriteJSONStatus writes a JSON body with an explicit status code.
+func wbWriteJSONStatus(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(v)
 }

@@ -973,3 +973,21 @@ body[data-appearance] .w-card, body[data-appearance] .input-wrap, body[data-appe
 .library-head-actions{display:flex;align-items:center;gap:8px;margin-left:auto;margin-right:12px}
 .library-head-actions button{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:8px;background:var(--bg3);color:var(--text);padding:6px 12px;font-size:11.5px;cursor:pointer;font-family:inherit;transition:all .15s}
 .library-head-actions button:hover{background:var(--bg4);border-color:var(--accent)}
+
+/* ---------------- durable runs panel ---------------- */
+.runs-list { display: flex; flex-direction: column; gap: 6px; }
+.runs-empty { color: var(--dim); font-size: 11px; line-height: 1.5; margin: 2px 2px 4px; }
+.run-card { border: 1px solid var(--line-soft); border-radius: 9px; padding: 7px 8px; background: transparent; }
+.run-head { display: flex; align-items: center; gap: 6px; justify-content: space-between; }
+.run-head b { font-size: 11.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.run-objective { color: var(--dim); font-size: 10px; margin: 2px 0 5px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.run-badge { font: 600 8.5px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; padding: 2px 5px; border-radius: 999px; border: 1px solid var(--line-soft); color: var(--dim); flex-shrink: 0; }
+.run-badge.run-running, .run-badge.run-verifying, .run-badge.run-planning { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--line-soft)); }
+.run-badge.run-completed { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, var(--line-soft)); }
+.run-badge.run-failed, .run-badge.run-cancelled { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, var(--line-soft)); }
+.run-bar { height: 3px; border-radius: 3px; background: var(--line-soft); overflow: hidden; }
+.run-bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .4s ease; }
+.run-card.run-completed .run-bar i { background: var(--ok); }
+.run-card.run-failed .run-bar i { background: var(--danger); }
+.run-meta { display: flex; gap: 8px; color: var(--dim); font: 500 9px/1.4 var(--mono); margin-top: 4px; }
+@media (prefers-reduced-motion: reduce) { .run-bar i { transition: none; } }
