@@ -699,6 +699,16 @@ func (a *Agent) Execute(act action) string {
 		res["symbols"] = mapped.Symbols
 		res["truncated"] = mapped.Truncated
 		res["cache"] = cache
+		if mapped.Profile != nil {
+			res["kind"] = string(mapped.Profile.Kind)
+			res["languages"] = mapped.Profile.Languages
+			res["frameworks"] = mapped.Profile.Frameworks
+			res["manifests"] = mapped.Profile.Manifests
+			res["entry_points"] = mapped.Profile.EntryPoints
+			res["test_roots"] = mapped.Profile.Tests
+			res["commands"] = mapped.Profile.Commands
+			res["notes"] = mapped.Profile.Notes
+		}
 
 	case "run_tests":
 		rawTarget := strings.TrimSpace(act.Path)
