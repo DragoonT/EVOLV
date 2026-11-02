@@ -72,11 +72,17 @@ func TestSwarmAPIStartStatusStop(t *testing.T) {
 	}
 	// Let the run goroutine observe cancellation and finish its persistence
 	// write before TempDir cleanup removes the workspace.
-	deadline := time.Now().Add(3 * time.Second)
-	for time.Now().Before(deadline) && s.swarm.Snapshot().Status == "running" {
+	// The run goroutine persists state after the status flips; wait until it is
+	// really gone before TempDir cleanup deletes the workspace underneath it.
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		st := s.swarm.Snapshot()
+		if st.Status != "running" && !swarmWritesPending(s) {
+			break
+		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	time.Sleep(20 * time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
 }
 
 func TestSwarmAPIRejectsEmptyMission(t *testing.T) {
@@ -300,4 +306,11 @@ func TestSwarmApplyProjectAndSecurity(t *testing.T) {
 	if missingRec.Code != http.StatusNotFound {
 		t.Fatalf("expected 404 for missing artifact, got %d", missingRec.Code)
 	}
+}
+
+// swarmWritesPending reports whether the swarm state file is still being
+// rewritten (a temp file exists), which means the run goroutine is mid-write.
+func swarmWritesPending(s *Server) bool {
+	_, err := os.Stat(s.swarmStatePath() + ".tmp")
+	return err == nil
 }
