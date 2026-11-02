@@ -28,6 +28,7 @@ import (
 	"github.com/dxn111/EVOLV/internal/agent"
 	"github.com/dxn111/EVOLV/internal/bus"
 	"github.com/dxn111/EVOLV/internal/candidate"
+	"github.com/dxn111/EVOLV/internal/lint"
 	"github.com/dxn111/EVOLV/internal/providers"
 	"github.com/dxn111/EVOLV/internal/swarm"
 	"github.com/dxn111/EVOLV/internal/update"
@@ -113,6 +114,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/mind", s.handleMind)
 	s.mux.HandleFunc("/api/widgets", s.handleWidgets)
 	s.mux.HandleFunc("/api/creations", s.handleCreations)
+	s.mux.HandleFunc("/api/lint", s.handleLint)
 	s.mux.HandleFunc("/api/pack/export", s.handlePackExport)
 	s.mux.HandleFunc("/api/pack/inspect", s.handlePackInspect)
 	s.mux.HandleFunc("/api/pack/import", s.handlePackImport)
@@ -1612,17 +1614,19 @@ func (s *Server) handleWidgets(w http.ResponseWriter, r *http.Request) {
 }
 
 type creationInfo struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Type     string `json:"type"`
-	Path     string `json:"path"`
-	Hash     string `json:"hash"`
-	Bytes    int64  `json:"bytes"`
-	Updated  string `json:"updated"`
-	Enabled  bool   `json:"enabled"`
-	Pinned   bool   `json:"pinned"`
-	Archived bool   `json:"archived"`
-	Status   string `json:"status"`
+	ID             string `json:"id"`
+	Name           string `json:"name"`
+	Type           string `json:"type"`
+	Path           string `json:"path"`
+	Hash           string `json:"hash"`
+	Bytes          int64  `json:"bytes"`
+	Updated        string `json:"updated"`
+	Enabled        bool   `json:"enabled"`
+	Pinned         bool   `json:"pinned"`
+	Archived       bool   `json:"archived"`
+	Status         string `json:"status"`
+	SecurityStatus string `json:"security_status"`
+	SecuritySum    string `json:"security_summary"`
 }
 
 func (s *Server) creationInventory() []creationInfo {
@@ -1645,7 +1649,28 @@ func (s *Server) creationInventory() []creationInfo {
 		if kind == "widget" && s.ws.Config.DisabledWidgets != nil && s.ws.Config.DisabledWidgets[name] {
 			enabled = false
 		}
-		out = append(out, creationInfo{ID: id, Name: name, Type: kind, Path: strings.ReplaceAll(rel, "\\", "/"), Hash: fmt.Sprintf("sha256:%x", sum), Bytes: info.Size(), Updated: info.ModTime().UTC().Format(time.RFC3339), Enabled: enabled, Pinned: s.ws.Config.PinnedCreations[id], Archived: s.ws.Config.ArchivedCreations[id], Status: status})
+		secReport := lint.Lint(kind, name, string(raw))
+		secStatus := "clean"
+		if secReport.ErrorsCount > 0 {
+			secStatus = "error"
+		} else if secReport.WarnCount > 0 {
+			secStatus = "warning"
+		}
+		out = append(out, creationInfo{
+			ID:             id,
+			Name:           name,
+			Type:           kind,
+			Path:           strings.ReplaceAll(rel, "\\", "/"),
+			Hash:           fmt.Sprintf("sha256:%x", sum),
+			Bytes:          info.Size(),
+			Updated:        info.ModTime().UTC().Format(time.RFC3339),
+			Enabled:        enabled,
+			Pinned:         s.ws.Config.PinnedCreations[id],
+			Archived:       s.ws.Config.ArchivedCreations[id],
+			Status:         status,
+			SecurityStatus: secStatus,
+			SecuritySum:    secReport.Summary(),
+		})
 	}
 	for _, src := range sources {
 		ents, _ := os.ReadDir(s.ws.Dir(src.rel))
@@ -1743,6 +1768,25 @@ func (s *Server) handleCreations(w http.ResponseWriter, r *http.Request) {
 	}
 	s.ws.SaveConfig()
 	json.NewEncoder(w).Encode(map[string]any{"ok": true})
+}
+
+func (s *Server) handleLint(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		Type    string `json:"type"`
+		Name    string `json:"name"`
+		Content string `json:"content"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	rep := lint.Lint(req.Type, req.Name, req.Content)
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	json.NewEncoder(w).Encode(rep)
 }
 
 func (s *Server) handlePackExport(w http.ResponseWriter, r *http.Request) {
