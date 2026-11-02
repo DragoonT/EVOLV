@@ -14,6 +14,7 @@ import (
 // mockAgent wires an agent to the offline mock mind.
 func mockAgent(t *testing.T) (*Agent, *workspace.W) {
 	t.Helper()
+	providers.ResetMockState() // each scenario starts from the factory demo brain
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
@@ -59,6 +60,7 @@ func TestHeartbeatTriggersDream(t *testing.T) {
 	a.ws.Config.AutoEvolve = true
 	a.ws.Config.HeartbeatMins = 1
 	a.StartDreaming()
+	defer a.StopDreaming() // wait for the in-flight dream; leaked loops race test teardown
 	// simulate long idle
 	a.mu.Lock()
 	a.lastAct = a.lastAct.Add(-2 * time.Minute)
