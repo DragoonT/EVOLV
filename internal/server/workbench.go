@@ -427,64 +427,25 @@ func (s *Server) handleWbSearch(w http.ResponseWriter, r *http.Request) {
 		wbErr(w, 405, "GET only")
 		return
 	}
-	q := r.URL.Query().Get("q")
-	if strings.TrimSpace(q) == "" {
-		wbErr(w, 400, "need q")
+	values := map[string]string{}
+	for _, key := range []string{"q", "regex", "case", "ext", "path", "limit"} {
+		values[key] = r.URL.Query().Get(key)
+	}
+	opts, perr := parseSearchOptions(values)
+	if perr != "" {
+		wbErr(w, 400, perr)
 		return
 	}
 	root, _ := s.wbRoot()
-	qLower := strings.ToLower(q)
-	type hit struct {
-		Path  string `json:"path"`
-		Line  int    `json:"line"`
-		Text  string `json:"text"`
-		Col   int    `json:"col"`
-		Count int    `json:"count"`
-	}
-	hits := []hit{}
-	files := 0
-	err := filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
-		if err != nil {
-			return nil
-		}
-		if d.IsDir() {
-			if wbSkip[d.Name()] && p != root {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if len(hits) >= 200 {
-			return filepath.SkipAll
-		}
-		info, err := d.Info()
-		if err != nil || info.Size() > wbMaxWrite {
-			return nil
-		}
-		raw, err := os.ReadFile(p)
-		if err != nil || !isMostlyText(raw) {
-			return nil
-		}
-		files++
-		rel, _ := filepath.Rel(root, p)
-		rel = filepath.ToSlash(rel)
-		for i, line := range strings.Split(string(raw), "\n") {
-			idx := strings.Index(strings.ToLower(line), qLower)
-			if idx < 0 {
-				continue
-			}
-			count := strings.Count(strings.ToLower(line), qLower)
-			hits = append(hits, hit{Path: rel, Line: i + 1, Text: line, Col: idx + 1, Count: count})
-			if len(hits) >= 200 {
-				return filepath.SkipAll
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		wbErr(w, 400, err.Error())
+	result := searchProject(root, opts)
+	if result.Error != "" {
+		wbErr(w, 400, result.Error)
 		return
 	}
-	wbWriteJSON(w, map[string]any{"ok": true, "q": q, "files": files, "hits": hits, "truncated": len(hits) >= 200})
+	wbWriteJSON(w, map[string]any{
+		"ok": true, "q": result.Query, "files": result.Files, "scanned": result.Scanned,
+		"hits": result.Hits, "truncated": result.Truncated, "regex": result.Regex,
+	})
 }
 
 // wbWriteJSONStatus writes a JSON body with an explicit status code.
