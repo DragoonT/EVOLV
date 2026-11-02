@@ -142,7 +142,9 @@ Every dream is a real conversation turn, so the organism *remembers its dreams* 
 
 ### Swarm mode: many minds, one organism
 
-Open **`/swarm`** (the 🐝 button in the sidebar) to convene a five-agent colony: **Ideator** finds three directions, **Coder** builds the chosen one, **Tester** tries to break it, **Critic** argues with both, and **Judge** writes the final decision. They share one transcript, work in phases, and settle decisions with explicit **polls** — every agent casts a vote with a reason. The page streams `swarm:state` over the existing WebSocket, so you watch the turns and vote bars land live. `POST /api/swarm` starts a run; `/api/swarm/stop` cancels it. Beta, and honest about it: artifacts are proposals until a tester actually runs them.
+Open **`/swarm`** (the 🐝 button in the sidebar) to convene a colony of **5–100 agents** across five roles: **Ideators** propose directions, **Coders** build the chosen one, **Testers** try to break it, **Critics** argue with both, and **Judges** write the final decision. They share one transcript, work in phases, and settle decisions with explicit **polls** — every agent casts a vote with a reason. Votes are collected in one call per role cohort, so a 100-agent poll costs five model calls instead of a hundred.
+
+If the ship poll says **revise**, the coders apply the critique and the testers retest before the judge closes the run. The page streams live `swarm:activity`, `swarm:state` and poll bars over the existing WebSocket, filters the roster by role, exports the whole run as Markdown, and restores the last run from `workspace/swarm/last.json` after a restart. Terminal runs are archived under `workspace/swarm/runs/` and reopen from the run picker. `POST /api/swarm` starts a run (`agents` 5–100); `/api/swarm/stop` cancels it. Beta, and honest about it: artifacts are proposals until a tester actually runs them.
 
 ### The full action list
 
@@ -348,7 +350,7 @@ Treat it like a very eager intern with root: brilliant, fun, supervise according
 - [x] The whole page is the canvas — **shipped in v0.10.0** (organs mount inline in the conversation, open full-window from the sidebar)
 - [x] A shell that doesn't embarrass itself — **shipped in v0.8.0** (markdown rendering, copy buttons, streaming caret, welcome screen, genome file deletion)
 - [ ] Component marketplace — export / import genomes as `.evolvpack` files
-- [x] Swarm mode — five role-specialised agents think, build, test and vote together; live beta at `/swarm`
+- [x] Swarm mode — 5–100 role-specialised agents think, build, test and vote together; live beta at `/swarm`
 - [ ] Vision — components that can see (canvas screenshots as tool input)
 - [ ] Voice
 
