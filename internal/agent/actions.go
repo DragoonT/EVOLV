@@ -1228,6 +1228,28 @@ func (a *Agent) Execute(act action) string {
 		items := a.candidateManager().List()
 		res["ok"], res["candidates"] = true, items
 
+	case "run_work":
+		res = a.runStart(act)
+
+	case "run_begin":
+		res = a.runBegin(act)
+
+	case "run_finish":
+		res = a.runFinish(act)
+
+	case "run_fail":
+		res = a.runFail(act)
+
+	case "run_status":
+		res = a.runStatus(act)
+
+	case "report":
+		rep := a.buildCompletionReport(firstNonEmptyText(act.Title, act.Summary, act.Desc))
+		res["ok"] = true
+		res["report"] = rep
+		res["markdown"] = renderCompletionReport(rep)
+		res["note"] = "this report contains only checks that really ran; do not restate it as more than it is"
+
 	case "promote_candidate":
 		confirmed := act.Confirm
 		if raw, ok := act.Args["confirm"].(bool); ok && raw {
@@ -1238,12 +1260,32 @@ func (a *Agent) Execute(act action) string {
 			res["error"] = "promote_candidate requires explicit user approval — ask the user, then retry with confirm:true"
 			break
 		}
-		man, err := a.candidateManager().Promote(act.Name)
+		opts := candidate.PromoteOptions{AllowUnverified: act.StageOnly}
+		if root := workspace.DetectSourceRoot(); root != "" {
+			// Swap the freshly built binary next to the running one, but only
+			// after it proves it can boot on an isolated home.
+			opts.BinaryDir = filepath.Dir(workspace.LauncherPath())
+			opts.HealthGate = opts.BinaryDir != "."
+		}
+		pctx, cancel := contextWithTimeout(6 * time.Minute)
+		pres, err := a.candidateManager().PromoteWithOptions(pctx, act.Name, opts)
+		cancel()
 		if err != nil {
 			res["ok"], res["error"] = false, err.Error()
+			if pres != nil && pres.Unverified != nil {
+				res["unverified"] = pres.Unverified
+			}
 			break
 		}
+		man := pres.Manifest
 		res["ok"], res["candidate"] = true, man
+		res["binary_swapped"] = pres.Swapped.Replaced
+		if pres.Swapped.Backup != "" {
+			res["binary_backup"] = pres.Swapped.Backup
+		}
+		if len(pres.Unverified) > 0 {
+			res["warning"] = "promoted despite failed checks: " + strings.Join(pres.Unverified, ", ")
+		}
 		a.bus.Publish("candidate:updated", man)
 
 	default:

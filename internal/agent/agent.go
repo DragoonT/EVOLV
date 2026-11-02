@@ -266,6 +266,10 @@ type action struct {
 	StageOnly      bool              `json:"stage_only,omitempty"`
 	Confirm        bool              `json:"confirm,omitempty"`
 	SourceRoot     string            `json:"source_root,omitempty"`
+	Run            string            `json:"run,omitempty"`            // durable run id
+	Task           string            `json:"task,omitempty"`           // durable task id
+	VerifyCommand  string            `json:"verify_command,omitempty"` // command whose exit status is the evidence
+	Reason         string            `json:"reason,omitempty"`         // why a task failed or is blocked
 	TargetLauncher string            `json:"target_launcher,omitempty"`
 	TestPkg        string            `json:"test_pkg,omitempty"`
 	TargetType     string            `json:"target_type,omitempty"`
@@ -279,8 +283,12 @@ func (a *Agent) candidateManager() *candidate.Manager {
 
 // planStepArg is one step of a set_plan action as it arrives over the wire.
 type planStepArg struct {
-	Title  string `json:"title"`
-	Status string `json:"status"`
+	Title  string   `json:"title"`
+	Status string   `json:"status"`
+	Text   string   `json:"text,omitempty"`   // objective / detail for durable runs
+	After  []string `json:"after,omitempty"`  // task ids this step waits for
+	Files  []string `json:"files,omitempty"`  // files this step expects to touch
+	Verify string   `json:"verify,omitempty"` // command that proves the step
 }
 
 // projectLine describes the bound user project for the prompt.
@@ -343,6 +351,9 @@ func (a *Agent) SystemPrompt() string {
 			}
 		}
 	}
+
+	// durable engineering work in flight — keeps long assignments anchored
+	b.WriteString(a.engineeringSection())
 
 	// evolvable system prompt fragments
 	if frags, err := a.listDir(a.ws.Dir(workspace.PromptsDir), ".md"); err == nil {
