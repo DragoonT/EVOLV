@@ -209,9 +209,30 @@ func TestProviderErrorRedactsSecrets(t *testing.T) {
 	}
 }
 
+// slowProvider takes a measurable amount of time per call so duration
+// accounting can be asserted without depending on machine speed.
+type slowProvider struct {
+	delay time.Duration
+	turns int
+}
+
+func (s *slowProvider) Name() string                             { return "slow" }
+func (s *slowProvider) Models(context.Context) ([]string, error) { return []string{"m"}, nil }
+func (s *slowProvider) Stream(ctx context.Context, _ string, _ []providers.Message, _ func(providers.Delta)) (string, error) {
+	s.turns++
+	if s.turns > 2 {
+		return "done", nil
+	}
+	select {
+	case <-ctx.Done():
+		return "", ctx.Err()
+	case <-time.After(s.delay):
+	}
+	return "```evolv\n{\"action\":\"list_dir\",\"path\":\".\"}\n```", nil
+}
+
 func TestTurnStatsAccounted(t *testing.T) {
-	p := &scriptedProvider{replies: []string{"```evolv\n{\"action\":\"list_dir\",\"path\":\".\"}\n```", "done"}}
-	a := newLoopTestAgent(t, p)
+	a := newLoopTestAgent(t, &slowProvider{delay: 15 * time.Millisecond})
 	a.Chat(context.Background(), "list something")
 	st := a.Stats()
 	if st.Turns != 1 {
@@ -220,8 +241,13 @@ func TestTurnStatsAccounted(t *testing.T) {
 	if st.ToolCalls == 0 {
 		t.Fatal("tool calls not counted")
 	}
+	// One turn ran at least two slow model calls: the recorded duration must
+	// reflect that work, not a rounding artifact of a sub-millisecond turn.
 	if st.LastTurnMS <= 0 {
-		t.Fatal("turn duration not recorded")
+		t.Fatalf("turn duration = %dms, want > 0", st.LastTurnMS)
+	}
+	if st.LastTurnMS >= 10_000 {
+		t.Fatalf("turn duration implausibly large: %dms", st.LastTurnMS)
 	}
 }
 
