@@ -1073,8 +1073,15 @@ async function saveGenomeFile() {
 
 /* ---------------- layout toggles ---------------- */
 function setSidebar(hidden) {
-  document.body.classList.toggle('sb-hidden', hidden);
-  localStorage.setItem('evolv.sb', hidden ? '1' : '');
+  const willHide = hidden !== undefined ? hidden : !document.body.classList.contains('sb-hidden');
+  document.body.classList.toggle('sb-hidden', willHide);
+  localStorage.setItem('evolv.sb', willHide ? '1' : '');
+  const toggle = document.getElementById('btn-sidebar');
+  if (toggle) {
+    toggle.setAttribute('aria-expanded', String(!willHide));
+    toggle.setAttribute('aria-label', willHide ? 'Show sidebar' : 'Hide sidebar');
+    toggle.textContent = willHide ? '›' : '‹';
+  }
 }
 function isNarrow() { return window.matchMedia('(max-width: 820px)').matches; }
 
@@ -1302,7 +1309,7 @@ window.addEventListener('DOMContentLoaded', () => {
   });
 
   // layout
-  $('#btn-sidebar').addEventListener('click', () => setSidebar(true));
+  $('#btn-sidebar').addEventListener('click', () => setSidebar());
   $('#btn-sidebar-open').addEventListener('click', () => setSidebar(false));
 
   // theme (dark obsidian <-> light paper), persisted

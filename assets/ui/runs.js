@@ -57,18 +57,21 @@
       const res = await fetch('/api/runs', { cache: 'no-store' });
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json();
-      const runs = data.runs || [];
+      const runs = data.runs.filter(r => r.title);
       render(container, runs);
-      const panel = document.getElementById('runs-panel');
       const count = document.getElementById('runs-count');
-      const sec = document.getElementById('plan-sec');
       const busy = runs.filter(r => r.status === 'running' || r.status === 'planning').length;
-      // Only claim sidebar space when there is real work to show.
-      if (panel) panel.hidden = runs.length === 0;
+      // Only claim space when there is real work to show. Placement belongs to
+      // the layout manager, so this never moves the panel between rails.
+      if (container.closest('.sb-sec')) {
+        container.closest('.sb-sec').hidden = runs.length === 0;
+      }
       if (count) count.textContent = busy ? busy + ' active' : String(runs.length);
-      if (panel && !panel.hidden && sec) sec.before(panel);
     } catch (e) {
-      container.replaceChildren(el('p', 'runs-empty', 'Runs unavailable: ' + e.message));
+      // A transient failure should not leave a stale panel shouting at the user.
+      const panel = container.closest('.sb-sec');
+      if (panel) panel.hidden = true;
+      container.replaceChildren();
     }
   }
 

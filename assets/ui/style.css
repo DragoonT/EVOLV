@@ -860,7 +860,6 @@ body.paper #welcome .w-mark { box-shadow: 0 8px 40px rgba(192, 95, 60, 0.18); }
 .logo-mark { border-radius: 4px; }
 .sb-top { border-bottom: 1px solid var(--line-soft); min-height: 58px; }
 .new-chat { margin-top: 14px; border-radius: 5px; }
-.sb-sec { border-top: 1px solid var(--line-soft); }
 .sb-head { display: flex; align-items: center; gap: 6px; letter-spacing: .12em; }
 .panel-controls { display: inline-flex; margin-left: auto; gap: 3px; }
 .panel-control { border: 1px solid transparent; background: transparent; color: var(--dim); cursor: pointer; padding: 2px 5px; font-size: 13px; }
@@ -991,3 +990,67 @@ body[data-appearance] .w-card, body[data-appearance] .input-wrap, body[data-appe
 .run-card.run-failed .run-bar i { background: var(--danger); }
 .run-meta { display: flex; gap: 8px; color: var(--dim); font: 500 9px/1.4 var(--mono); margin-top: 4px; }
 @media (prefers-reduced-motion: reduce) { .run-bar i { transition: none; } }
+
+/* ---------------- sidebar layout fixes ---------------- */
+/* Sections must never collapse to a border-only stub: the flex rule above
+   sets min-height:0, which let empty panels (organs/runs) shrink to 5px and
+   made their headings overlap the next section. Give every section a real
+   floor and keep half-pixel rounding from clipping the border. */
+#sidebar > .sb-sec,
+#inspector-panels > .sb-sec {
+  min-height: 34px;
+  flex-shrink: 0;
+  border-top: 1px solid var(--line-soft);
+  border-bottom: none;
+}
+/* The last section in a column shares its border with the footer/nothing. */
+#inspector-panels > .sb-sec:last-child { border-bottom: none; }
+/* Mind is the only section allowed to scroll its own list before the sidebar
+   scrolls as a whole. */
+#sidebar #mind-sec { max-height: 42%; }
+#sidebar #mind-list { max-height: none; }
+
+/* The navigation block keeps its structure but behaves like a section. */
+#sidebar .sb-bottom {
+  border-top: 1px solid var(--line-soft);
+  margin-top: 0;
+}
+
+/* Section headers: one line, controls aligned right, never overlapping. */
+.sb-head {
+  min-height: 26px;
+  padding: 6px 14px 4px 16px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.sb-head > :first-child { overflow: hidden; text-overflow: ellipsis; }
+.sb-head .panel-controls { margin-left: auto; flex-shrink: 0; }
+.sb-head .panel-control { line-height: 1; }
+.sb-head b { font-weight: 650; }
+
+/* Drag grips read as part of the header, not as a stray glyph. The later
+   layout-manager block re-declares .panel-control, so this must be specific. */
+.sb-head .panel-grip.panel-control { color: var(--faint); opacity: 0; transition: opacity .15s; }
+.sb-head:hover .panel-grip.panel-control,
+.sb-head:focus-within .panel-grip.panel-control { opacity: 1; }
+@media (hover: none) { .sb-head .panel-grip.panel-control { opacity: .5; } }
+
+/* Pinned/plan/runs lists breathe inside their own section only. */
+#plan-list, #organ-list, #stream-list, .runs-list { padding: 0 10px 8px; }
+#stream-list { padding-bottom: 4px; }
+
+/* Thin, quiet scrollbars for the sidebar and inspector. */
+#sidebar, #workspace-inspector { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+#sidebar::-webkit-scrollbar, #workspace-inspector::-webkit-scrollbar { width: 8px; }
+#sidebar::-webkit-scrollbar-thumb, #workspace-inspector::-webkit-scrollbar-thumb { background: var(--line); border-radius: 8px; }
+
+/* Explicit collapse state wins over the metric floor; the header stays. */
+.panel-collapsed { min-height: 0 !important; }
+.panel-collapsed > :not(.sb-head) { display: none !important; }
+
+/* Below 1050px the inspector takes the tighter panels and the sidebar gives
+   the conversation more room instead of squeezing three columns. */
+@media (max-width: 900px) {
+  #sidebar .sb-head { padding-right: 10px; }
+  .sb-btn { font-size: 12.5px; }
+}
