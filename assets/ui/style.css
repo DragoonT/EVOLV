@@ -1054,3 +1054,20 @@ body[data-appearance] .w-card, body[data-appearance] .input-wrap, body[data-appe
   #sidebar .sb-head { padding-right: 10px; }
   .sb-btn { font-size: 12.5px; }
 }
+
+/* Workbench search filters */
+.wb-filters { display: flex; align-items: center; gap: 4px; margin: 4px 8px 6px; }
+.wb-filter {
+  min-width: 26px; padding: 3px 6px; border: 1px solid var(--line-soft);
+  border-radius: 6px; background: transparent; color: var(--dim);
+  font: 600 10px var(--mono); cursor: pointer;
+}
+.wb-filter:hover { color: var(--text); border-color: var(--line); }
+.wb-filter.on { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+.wb-filter-input {
+  flex: 1; min-width: 0; padding: 3px 6px; border: 1px solid var(--line-soft);
+  border-radius: 6px; background: transparent; color: var(--text);
+  font: 10px var(--mono); outline: none;
+}
+.wb-filter-input:focus { border-color: var(--accent); }
+.wb-filter-input::placeholder { color: var(--faint); }

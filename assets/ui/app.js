@@ -1718,17 +1718,48 @@ $('#wb-search').addEventListener('keydown', (e) => {
   if (e.key === 'Escape') { e.target.value = ''; $('#wb-results').hidden = true; $('#wb-results').innerHTML = ''; }
 });
 
+function wbSearchQuery() {
+  const params = new URLSearchParams();
+  params.set('q', $('#wb-search').value.trim());
+  if ($('#wb-regex').getAttribute('aria-pressed') === 'true') params.set('regex', '1');
+  if ($('#wb-case').getAttribute('aria-pressed') === 'true') params.set('case', '1');
+  const ext = $('#wb-ext').value.trim();
+  if (ext) params.set('ext', ext);
+  const pathf = $('#wb-pathf').value.trim();
+  if (pathf) params.set('path', pathf);
+  params.set('limit', '100');
+  return params;
+}
+
+// toggle buttons reflect state in the DOM so the request is always truthful
+['#wb-regex', '#wb-case'].forEach((sel) => {
+  const btn = $(sel);
+  if (!btn) return;
+  btn.addEventListener('click', () => {
+    const on = btn.getAttribute('aria-pressed') !== 'true';
+    btn.setAttribute('aria-pressed', String(on));
+    btn.classList.toggle('on', on);
+    runWbSearch();
+  });
+});
+['#wb-ext', '#wb-pathf'].forEach((sel) => {
+  const input = $(sel);
+  if (!input) return;
+  input.addEventListener('input', () => { clearTimeout(wbSearchTimer); wbSearchTimer = setTimeout(runWbSearch, 250); });
+  input.addEventListener('keydown', (e) => e.stopPropagation());
+});
+
 async function runWbSearch() {
   const q = $('#wb-search').value.trim();
   const box = $('#wb-results');
   if (!q) { box.hidden = true; box.innerHTML = ''; return; }
   try {
-    const r = await fetch('/api/wb/search?q=' + encodeURIComponent(q));
+    const r = await fetch('/api/wb/search?' + wbSearchQuery().toString());
     const j = await r.json();
     if (!j.ok) { box.hidden = false; box.innerHTML = '<div class="wb-empty">⚠️ ' + escapeHtml(j.error || 'search failed') + '</div>'; return; }
     box.hidden = false;
     if (!j.hits.length) { box.innerHTML = `<div class="wb-empty">no matches for "${escapeHtml(q)}" in ${j.files} files</div>`; return; }
-    const head = `<div class="wb-res-head">${j.hits.length}${j.truncated ? '+' : ''} matches in ${j.files} files${j.truncated ? ' (showing first 200)' : ''}</div>`;
+    const head = `<div class="wb-res-head">${j.hits.length}${j.truncated ? '+' : ''} matches in ${j.files} files${j.truncated ? ' (showing the best matches)' : ''}</div>`;
     box.innerHTML = head + j.hits.map((h) =>
       `<button class="wb-res" data-path="${escapeHtml(h.path)}" data-line="${h.line}">` +
       `<span class="wb-res-path">${escapeHtml(h.path)}:${h.line}</span> — ${escapeHtml(h.text.trim().slice(0, 120))}</button>`).join('');
