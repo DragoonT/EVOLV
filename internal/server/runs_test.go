@@ -117,3 +117,57 @@ func TestRunsAPIValidation(t *testing.T) {
 		t.Fatalf("unknown id -> %d", rec.Code)
 	}
 }
+
+func TestRunsInsightsAfterCompletion(t *testing.T) {
+	s, _ := newWbServer(t)
+	create := `{"title":"insight run","tasks":[{"id":"a","title":"do it"}]}`
+	rec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/runs/create", strings.NewReader(create)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("create -> %d", rec.Code)
+	}
+	var run struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &run); err != nil {
+		t.Fatal(err)
+	}
+	for _, step := range []string{"running", "verifying"} {
+		body, _ := json.Marshal(map[string]any{"run": run.ID, "task": "a", "status": step})
+		rec = httptest.NewRecorder()
+		s.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/runs/transition", strings.NewReader(string(body))))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s -> %d", step, rec.Code)
+		}
+	}
+	body, _ := json.Marshal(map[string]any{
+		"run": run.ID, "task": "a", "status": "completed",
+		"verification": map[string]any{"kind": "test", "command": "go test ./...", "passed": true, "exit_code": 0},
+	})
+	rec = httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/runs/transition", strings.NewReader(string(body))))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("complete -> %d: %s", rec.Code, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/runs/insights", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("insights -> %d: %s", rec.Code, rec.Body.String())
+	}
+	var out struct {
+		Insights struct {
+			Tasks        int `json:"tasks"`
+			VerifiedRate int `json:"verified_rate"`
+		} `json:"insights"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	if out.Insights.Tasks == 0 {
+		t.Fatalf("no outcomes recorded: %s", rec.Body.String())
+	}
+	if out.Insights.VerifiedRate != 100 {
+		t.Fatalf("verified rate = %d", out.Insights.VerifiedRate)
+	}
+}
