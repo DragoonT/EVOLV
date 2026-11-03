@@ -76,15 +76,17 @@ func (a *Agent) recordPlaybook(runID, taskID, title, verify string, attempts int
 	_ = book.Record(p)
 }
 
-// lessonsFor returns prompt-ready advice for a task's traits.
+// lessonsFor returns prompt-ready advice for a task's traits and query.
 func (a *Agent) lessonsFor(text string) string {
 	book, err := a.openBook()
 	if err != nil {
 		return ""
 	}
 	traits := genome.Traits(text)
-	if len(traits) == 0 {
+	matches := book.Search(text, 2)
+	insights := book.InsightsFor(traits, 3)
+	if len(insights) == 0 && len(matches) == 0 {
 		return ""
 	}
-	return genome.RenderAdvice(book.InsightsFor(traits, 3))
+	return genome.RenderAdvice(insights, matches...)
 }

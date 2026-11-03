@@ -222,4 +222,91 @@ func TestOpenIndexToleratesCorruptIndex(t *testing.T) {
 	}
 }
 
+func TestPlaybookSearchBM25(t *testing.T) {
+	book := &Book{}
+	p1 := Playbook{
+		ID: "p1", Title: "fix postgres connection pool timeout under high concurrency",
+		Outcome: "verified", Attempts: 1, Verify: "go test -run TestPostgresPool ./...",
+		Skills: []string{"database", "debugging"}, At: "2026-11-01T10:00:00Z",
+	}
+	p2 := Playbook{
+		ID: "p2", Title: "flappy bird pipe collision detection and score counter",
+		Outcome: "verified", Attempts: 2, Verify: "npm test",
+		Skills: []string{"canvas-ui"}, At: "2026-11-02T10:00:00Z",
+	}
+	p3 := Playbook{
+		ID: "p3", Title: "postgres migration script rollback on failure",
+		Outcome: "failed", Attempts: 3, Verify: "go test ./...",
+		Skills: []string{"database"}, At: "2026-11-03T10:00:00Z",
+	}
+
+	_ = book.Record(p1)
+	_ = book.Record(p2)
+	_ = book.Record(p3)
+
+	// Query targeting postgres pool
+	res := book.Search("postgres connection pool timeout", 5)
+	if len(res) < 2 {
+		t.Fatalf("expected at least 2 matches for postgres, got %d", len(res))
+	}
+	if res[0].Playbook.ID != "p1" {
+		t.Fatalf("expected p1 as top result, got %s (score %f)", res[0].Playbook.ID, res[0].Score)
+	}
+	if res[0].Score <= res[1].Score {
+		t.Fatalf("expected p1 score (%f) > p2/p3 score (%f)", res[0].Score, res[1].Score)
+	}
+
+	// Query targeting flappy bird
+	resBird := book.Search("flappy bird collision", 5)
+	if len(resBird) == 0 || resBird[0].Playbook.ID != "p2" {
+		t.Fatalf("expected p2 as top result for flappy bird, got %+v", resBird)
+	}
+
+	// Empty query returns newest
+	emptyMatches := book.Search("", 2)
+	if len(emptyMatches) != 2 {
+		t.Fatalf("expected 2 matches on empty query, got %d", len(emptyMatches))
+	}
+}
+
+func TestRenderAdviceWithMatchedPlaybooks(t *testing.T) {
+	ins := []Insight{
+		{Trait: "bugfix", Advice: "3 of 3 similar tasks verified", Success: 100, Samples: 3, Verify: "go test ./..."},
+	}
+	matches := []SearchMatch{
+		{
+			Playbook: Playbook{
+				Title:   "fix postgres connection pool timeout",
+				Outcome: "verified",
+				Verify:  "go test -run TestPool",
+				Skills:  []string{"database"},
+			},
+			Score: 2.5,
+		},
+	}
+	text := RenderAdvice(ins, matches...)
+	if !contains(text, "WHAT WORKED BEFORE") {
+		t.Fatalf("missing header in advice: %q", text)
+	}
+	if !contains(text, "Relevant past tasks:") || !contains(text, "fix postgres connection pool timeout") {
+		t.Fatalf("missing matched playbook in advice: %q", text)
+	}
+	if !contains(text, "go test -run TestPool") {
+		t.Fatalf("missing verify command in advice: %q", text)
+	}
+}
+
+func TestTokenizeStopwords(t *testing.T) {
+	tokens := tokenize("How to fix the PostgreSQL connection pool timeout in Go?")
+	want := map[string]bool{"fix": true, "postgresql": true, "connection": true, "pool": true, "timeout": true, "go": true}
+	for _, tok := range tokens {
+		if !want[tok] {
+			t.Errorf("unexpected token %q", tok)
+		}
+	}
+	if len(tokens) != len(want) {
+		t.Errorf("got %d tokens, want %d: %v", len(tokens), len(want), tokens)
+	}
+}
+
 func contains(s, sub string) bool { return len(s) >= len(sub) && stringsContains(s, sub) }

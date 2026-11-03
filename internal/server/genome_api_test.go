@@ -156,9 +156,12 @@ func TestLessonsEndpoint(t *testing.T) {
 	}
 	for i := 0; i < 3; i++ {
 		_ = book.Record(genome.Playbook{
-			Traits: []string{"bugfix", "tests"}, Outcome: "verified",
-			Verify: "go test ./...", Skills: []string{"systematic-debugging"},
-			At: "2026-11-0" + string(rune('1'+i)),
+			Title:   "Fix broken login authentication tests",
+			Traits:  []string{"bugfix", "tests"},
+			Outcome: "verified",
+			Verify:  "go test ./...",
+			Skills:  []string{"systematic-debugging"},
+			At:      "2026-11-0" + string(rune('1'+i)),
 		})
 	}
 	rec := httptest.NewRecorder()
@@ -172,6 +175,12 @@ func TestLessonsEndpoint(t *testing.T) {
 			Success int    `json:"success_rate"`
 			Advice  string `json:"advice"`
 		} `json:"insights"`
+		Matches []struct {
+			Playbook struct {
+				Title string `json:"title"`
+			} `json:"playbook"`
+			Score float64 `json:"score"`
+		} `json:"matches"`
 		Advice string `json:"advice"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
@@ -183,8 +192,17 @@ func TestLessonsEndpoint(t *testing.T) {
 	if len(out.Insights) == 0 || out.Insights[0].Success != 100 {
 		t.Fatalf("insights = %+v", out.Insights)
 	}
+	if len(out.Matches) == 0 {
+		t.Fatalf("expected BM25 matches, got none: %s", rec.Body.String())
+	}
+	if out.Matches[0].Playbook.Title != "Fix broken login authentication tests" {
+		t.Fatalf("unexpected match title: %s", out.Matches[0].Playbook.Title)
+	}
 	if !strings.Contains(out.Advice, "recorded outcomes") {
 		t.Fatalf("advice = %q", out.Advice)
+	}
+	if !strings.Contains(out.Advice, "Fix broken login authentication tests") {
+		t.Fatalf("advice should include matched playbook title: %q", out.Advice)
 	}
 }
 

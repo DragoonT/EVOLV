@@ -173,9 +173,11 @@ func (s *Server) handleLessons(w http.ResponseWriter, r *http.Request) {
 	text := strings.TrimSpace(r.URL.Query().Get("q"))
 	traits := genome.Traits(text)
 	insights := book.InsightsFor(traits, 8)
+	matches := book.Search(text, 5)
 	writeJSONOK(w, map[string]any{
 		"query": text, "traits": traits, "insights": insights,
-		"advice": genome.RenderAdvice(insights), "samples": len(book.Playbooks),
+		"matches": matches,
+		"advice":  genome.RenderAdvice(insights, matches...), "samples": len(book.Playbooks),
 	})
 }
 
