@@ -24,7 +24,9 @@ func newWbServer(t *testing.T) (*Server, string) {
 	}
 	proj := t.TempDir()
 	ws.Config.ProjectDir = proj
-	return New(ws, bus.New(), nil, nil), proj
+	s := New(ws, bus.New(), nil, nil)
+	t.Cleanup(func() { s.Close() })
+	return s, proj
 }
 
 func wbGET(t *testing.T, s *Server, url string) map[string]any {

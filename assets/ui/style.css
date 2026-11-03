@@ -989,6 +989,11 @@ body[data-appearance] .w-card, body[data-appearance] .input-wrap, body[data-appe
 .run-card.run-completed .run-bar i { background: var(--ok); }
 .run-card.run-failed .run-bar i { background: var(--danger); }
 .run-meta { display: flex; gap: 8px; color: var(--dim); font: 500 9px/1.4 var(--mono); margin-top: 4px; }
+.run-actions { display: flex; gap: 6px; margin-top: 6px; }
+.run-btn { font: 500 9px/1 var(--mono); background: transparent; border: 1px solid var(--line-soft); border-radius: 4px; padding: 2px 7px; color: var(--dim); cursor: pointer; transition: color .15s ease, border-color .15s ease; }
+.run-btn:hover { color: var(--fg); border-color: var(--line); }
+.run-btn.run-btn-danger:hover { color: var(--danger); border-color: var(--danger); }
+.run-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 @media (prefers-reduced-motion: reduce) { .run-bar i { transition: none; } }
 
 /* ---------------- sidebar layout fixes ---------------- */

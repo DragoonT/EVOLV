@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/dxn111/EVOLV/internal/execution"
 )
 
 func TestRunsAPIEndToEnd(t *testing.T) {
@@ -169,5 +171,49 @@ func TestRunsInsightsAfterCompletion(t *testing.T) {
 	}
 	if out.Insights.VerifiedRate != 100 {
 		t.Fatalf("verified rate = %d", out.Insights.VerifiedRate)
+	}
+}
+
+func TestRunCancelAndRetryEndpoints(t *testing.T) {
+	s, _ := newWbServer(t)
+	create := `{"title":"cancel retry run","tasks":[{"id":"t1","title":"task 1"}]}`
+	rec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/runs/create", strings.NewReader(create)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("create -> %d", rec.Code)
+	}
+	var run struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &run); err != nil {
+		t.Fatal(err)
+	}
+
+	// Cancel endpoint
+	rec = httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/runs/cancel", strings.NewReader(`{"id":"`+run.ID+`","reason":"stop now"}`)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("cancel -> %d: %s", rec.Code, rec.Body.String())
+	}
+	var cancelResp struct {
+		Ok  bool           `json:"ok"`
+		Run *execution.Run `json:"run"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &cancelResp); err != nil || !cancelResp.Ok || cancelResp.Run.Status != execution.StatusCancelled {
+		t.Fatalf("cancel response invalid: %s", rec.Body.String())
+	}
+
+	// Retry endpoint
+	rec = httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/runs/retry", strings.NewReader(`{"id":"`+run.ID+`"}`)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("retry -> %d: %s", rec.Code, rec.Body.String())
+	}
+	var retryResp struct {
+		Ok  bool           `json:"ok"`
+		Run *execution.Run `json:"run"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &retryResp); err != nil || !retryResp.Ok || retryResp.Run.Status != execution.StatusQueued {
+		t.Fatalf("retry response invalid: %s", rec.Body.String())
 	}
 }

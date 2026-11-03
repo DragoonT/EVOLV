@@ -48,6 +48,45 @@
       if (p.failed) meta.append(el('span', null, p.failed + ' failed'));
       if (run.ready) meta.append(el('span', null, run.ready + ' ready'));
       card.append(meta);
+      const actions = el('div', 'run-actions');
+      if (run.status === 'running' || run.status === 'planning' || run.status === 'queued') {
+        const cancelBtn = el('button', 'run-btn run-btn-danger', 'Cancel');
+        cancelBtn.type = 'button';
+        cancelBtn.onclick = async (ev) => {
+          ev.stopPropagation();
+          cancelBtn.disabled = true;
+          try {
+            await fetch('/api/runs/cancel', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id: run.id }),
+            });
+            load(container);
+          } catch (e) {
+            cancelBtn.disabled = false;
+          }
+        };
+        actions.append(cancelBtn);
+      } else if (run.status === 'failed' || run.status === 'cancelled' || (p.failed && p.failed > 0)) {
+        const retryBtn = el('button', 'run-btn', 'Retry');
+        retryBtn.type = 'button';
+        retryBtn.onclick = async (ev) => {
+          ev.stopPropagation();
+          retryBtn.disabled = true;
+          try {
+            await fetch('/api/runs/retry', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id: run.id }),
+            });
+            load(container);
+          } catch (e) {
+            retryBtn.disabled = false;
+          }
+        };
+        actions.append(retryBtn);
+      }
+      if (actions.children.length) card.append(actions);
       container.append(card);
     }
   }

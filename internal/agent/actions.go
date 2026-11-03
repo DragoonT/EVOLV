@@ -361,6 +361,22 @@ func (a *Agent) Execute(act action) string {
 			res["error"] = "evolve_tool needs name + code"
 			break
 		}
+		// Security linting for evolved tools
+		lintRep := lint.LintTool(name, act.Code)
+		if !lintRep.Valid && !act.Force {
+			res["ok"] = false
+			res["error"] = fmt.Sprintf("security lint failed: %s; tools must remain safe and local (pass force:true to override)", lintRep.Summary())
+			res["security"] = lintRep
+			if a.bus != nil {
+				a.bus.Publish("security:lint", map[string]any{
+					"target":      name,
+					"target_type": "tool",
+					"status":      "blocked",
+					"report":      lintRep,
+				})
+			}
+			break
+		}
 		path := filepath.Join(a.ws.Dir(workspace.ToolsDir), name+".js")
 		hash, changed, err := guardedWrite(path, []byte(act.Code), act.ExpectedHash)
 		if err != nil {
@@ -403,6 +419,9 @@ func (a *Agent) Execute(act action) string {
 			note = fmt.Sprintf("tool v%d compiled with typed manifest — run_tool validates args against the schema", ver)
 		}
 		res["note"] = note
+		if len(lintRep.Findings) > 0 {
+			res["security"] = lintRep
+		}
 
 	case "run_tool":
 		if !a.AllowsTool(sanitizeName(act.Name)) {
@@ -511,6 +530,22 @@ func (a *Agent) Execute(act action) string {
 			res["error"] = "evolve_plugin needs name + code"
 			break
 		}
+		// Security linting for evolved plugins
+		lintRep := lint.LintPlugin(name, act.Code)
+		if !lintRep.Valid && !act.Force {
+			res["ok"] = false
+			res["error"] = fmt.Sprintf("security lint failed: %s; plugins must remain safe and local (pass force:true to override)", lintRep.Summary())
+			res["security"] = lintRep
+			if a.bus != nil {
+				a.bus.Publish("security:lint", map[string]any{
+					"target":      name,
+					"target_type": "plugin",
+					"status":      "blocked",
+					"report":      lintRep,
+				})
+			}
+			break
+		}
 		dir := filepath.Join(a.ws.Dir(workspace.PluginsDir), name)
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			res["ok"], res["error"] = false, err.Error()
@@ -560,6 +595,9 @@ func (a *Agent) Execute(act action) string {
 		res["organ"] = asset.ID
 		res["version"] = asset.Version
 		res["note"] = "plugin installed in its own sandbox; evolv.on/every are live now"
+		if len(lintRep.Findings) > 0 {
+			res["security"] = lintRep
+		}
 
 	case "write_file":
 		p, ok := a.resolvePath(act.Path, &res)
@@ -1286,6 +1324,12 @@ func (a *Agent) Execute(act action) string {
 
 	case "run_status":
 		res = a.runStatus(act)
+
+	case "run_cancel":
+		res = a.runCancel(act)
+
+	case "run_retry":
+		res = a.runRetry(act)
 
 	case "report":
 		rep := a.buildCompletionReport(firstNonEmptyText(act.Title, act.Summary, act.Desc))

@@ -114,6 +114,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/runs/events", s.handleRunEvents)
 	s.mux.HandleFunc("/api/runs/create", s.handleRunCreate)
 	s.mux.HandleFunc("/api/runs/transition", s.handleRunTransition)
+	s.mux.HandleFunc("/api/runs/cancel", s.handleRunCancel)
+	s.mux.HandleFunc("/api/runs/retry", s.handleRunRetry)
 	s.mux.HandleFunc("/api/plan/compile", s.handlePlanCompile)
 	s.mux.HandleFunc("/api/plan/start", s.handlePlanStart)
 	s.mux.HandleFunc("/api/runs/insights", s.handleRunInsights)
@@ -189,6 +191,13 @@ func (s *Server) Close() {
 	if s.swarm != nil {
 		s.swarm.Stop()
 	}
+
+	s.execMu.Lock()
+	if s.execStore != nil {
+		_ = s.execStore.CloseAll()
+		s.execStore = nil
+	}
+	s.execMu.Unlock()
 }
 
 // liveCount tracks WS clients (delta +1/-1, returns new total).

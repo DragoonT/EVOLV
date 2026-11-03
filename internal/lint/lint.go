@@ -202,6 +202,26 @@ var componentRules = []ruleDef{
 
 var toolRules = []ruleDef{
 	{
+		id:       RuleRemoteExfiltrate,
+		severity: SeverityError,
+		desc:     "Remote network call to external host; tools must only interact with local /api or localhost",
+		check: func(line string) (bool, string) {
+			if m := reFetchCall.FindStringSubmatch(line); len(m) > 1 && !isLocalURL(m[1]) {
+				return true, m[0]
+			}
+			if m := reXHRCall.FindStringSubmatch(line); len(m) > 1 && !isLocalURL(m[1]) {
+				return true, m[0]
+			}
+			if m := reWSCall.FindStringSubmatch(line); len(m) > 1 && !isLocalURL(m[1]) {
+				return true, m[0]
+			}
+			if m := reBeaconCall.FindStringSubmatch(line); len(m) > 1 && !isLocalURL(m[1]) {
+				return true, m[0]
+			}
+			return false, ""
+		},
+	},
+	{
 		id:       RuleDynamicCodeEval,
 		severity: SeverityWarning,
 		desc:     "Dynamic code evaluation via eval() or new Function() is discouraged in tools",
@@ -218,6 +238,26 @@ var toolRules = []ruleDef{
 }
 
 var pluginRules = []ruleDef{
+	{
+		id:       RuleRemoteExfiltrate,
+		severity: SeverityError,
+		desc:     "Remote network call to external host; plugins must only interact with local /api or localhost",
+		check: func(line string) (bool, string) {
+			if m := reFetchCall.FindStringSubmatch(line); len(m) > 1 && !isLocalURL(m[1]) {
+				return true, m[0]
+			}
+			if m := reXHRCall.FindStringSubmatch(line); len(m) > 1 && !isLocalURL(m[1]) {
+				return true, m[0]
+			}
+			if m := reWSCall.FindStringSubmatch(line); len(m) > 1 && !isLocalURL(m[1]) {
+				return true, m[0]
+			}
+			if m := reBeaconCall.FindStringSubmatch(line); len(m) > 1 && !isLocalURL(m[1]) {
+				return true, m[0]
+			}
+			return false, ""
+		},
+	},
 	{
 		id:       RuleDynamicCodeEval,
 		severity: SeverityWarning,

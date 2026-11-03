@@ -247,6 +247,47 @@ func (a *Agent) runStatus(act action) map[string]any {
 	return res
 }
 
+// runCancel cancels an in-flight run.
+func (a *Agent) runCancel(act action) map[string]any {
+	res := map[string]any{"action": "run_cancel", "run": act.Run}
+	if act.Run == "" {
+		return runErr(res, "run_cancel needs run")
+	}
+	store, err := a.runStore()
+	if err != nil {
+		return runErr(res, err.Error())
+	}
+	defer store.CloseAll()
+	run, err := store.Cancel(act.Run, act.Desc)
+	if err != nil {
+		return runErr(res, err.Error())
+	}
+	res["ok"] = true
+	res["status"] = string(run.Status)
+	return res
+}
+
+// runRetry requeues failed or cancelled tasks in a run.
+func (a *Agent) runRetry(act action) map[string]any {
+	res := map[string]any{"action": "run_retry", "run": act.Run}
+	if act.Run == "" {
+		return runErr(res, "run_retry needs run")
+	}
+	store, err := a.runStore()
+	if err != nil {
+		return runErr(res, err.Error())
+	}
+	defer store.CloseAll()
+	run, err := store.Retry(act.Run, act.Task)
+	if err != nil {
+		return runErr(res, err.Error())
+	}
+	res["ok"] = true
+	res["status"] = string(run.Status)
+	res["ready"] = idsOf(run.Graph().Ready())
+	return res
+}
+
 // runVerification executes a verification command and captures the evidence.
 // It is the same discipline the swarm execution mode uses: only a real exit
 // code counts, and only allow-listed commands run.

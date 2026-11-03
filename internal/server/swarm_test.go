@@ -188,10 +188,15 @@ func TestSwarmSteerEndpoint(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("stop -> %d", rec.Code)
 	}
-	deadline := time.Now().Add(3 * time.Second)
-	for time.Now().Before(deadline) && s.swarm.Snapshot().Status == "running" {
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		st := s.swarm.Snapshot()
+		if st.Status != "running" && !swarmWritesPending(s) {
+			break
+		}
 		time.Sleep(10 * time.Millisecond)
 	}
+	time.Sleep(50 * time.Millisecond)
 	found := false
 	for _, m := range s.swarm.Snapshot().Messages {
 		if m.Kind == "steer" && m.Agent == "human" {
