@@ -220,7 +220,7 @@ func (s *Server) handleUI(w http.ResponseWriter, r *http.Request) {
 		rel = workspace.UIRel() + "/swarm.html" // coming-soon preview, a real page not a modal
 	case strings.HasPrefix(r.URL.Path, "/ui/"):
 		rel = workspace.UIRel() + "/" + strings.TrimPrefix(r.URL.Path, "/ui/")
-	case r.URL.Path == "/style.css" || r.URL.Path == "/app.js" || r.URL.Path == "/runs.js":
+	case r.URL.Path == "/style.css" || r.URL.Path == "/app.js" || r.URL.Path == "/runs.js" || r.URL.Path == "/organs.js":
 		rel = workspace.UIRel() + r.URL.Path // shell assets live beside the genome
 	default:
 		http.NotFound(w, r)

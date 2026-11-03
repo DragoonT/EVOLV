@@ -203,3 +203,16 @@ func TestOrganStatusQuarantine(t *testing.T) {
 		t.Fatalf("bogus status -> %d", rec.Code)
 	}
 }
+
+func TestOrganJsServed(t *testing.T) {
+	s, _ := newWbServer(t)
+	// the real asset must exist in the workspace shell for the route to serve it
+	if _, err := os.Stat(s.ws.Dir("ui/organs.js")); err != nil {
+		t.Skip("workspace UI has no organs.js in this fixture")
+	}
+	rec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/organs.js", nil))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "organs") {
+		t.Fatalf("organs.js -> %d", rec.Code)
+	}
+}

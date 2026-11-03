@@ -1071,3 +1071,54 @@ body[data-appearance] .w-card, body[data-appearance] .input-wrap, body[data-appe
 }
 .wb-filter-input:focus { border-color: var(--accent); }
 .wb-filter-input::placeholder { color: var(--faint); }
+
+/* ---------------- organs ledger ---------------- */
+.organs-modal { display: none; position: fixed; inset: 0; z-index: 11000; padding: 28px;
+  background: color-mix(in srgb, var(--bg) 62%, transparent); backdrop-filter: blur(16px); }
+.organs-modal.open { display: grid; place-items: center; }
+.organs-shell { width: min(980px, 96vw); height: min(760px, 90vh); display: grid; grid-template-rows: auto 1fr;
+  background: var(--bg2); border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
+  box-shadow: 0 32px 100px rgba(0,0,0,.4); }
+.organs-head { display: flex; align-items: center; gap: 14px; padding: 18px 20px; border-bottom: 1px solid var(--line); }
+.organs-head h2 { margin: 0; font-size: 17px; }
+.organs-head p { margin: 3px 0 0; color: var(--dim); font-size: 12px; }
+.organs-summary { margin-left: auto; color: var(--dim); font: 11px var(--mono); }
+.organs-close { border: 1px solid var(--line); background: var(--bg3); color: var(--text);
+  border-radius: 8px; width: 30px; height: 30px; cursor: pointer; }
+.organs-body { display: grid; grid-template-columns: minmax(0, 1fr) 300px; overflow: hidden; }
+.organs-list { overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+.organ-empty { color: var(--dim); font-size: 12px; line-height: 1.6; padding: 18px; border: 1px dashed var(--line); border-radius: 10px; }
+.organ-card { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--bg3); }
+.organ-card.v-broken { box-shadow: inset 3px 0 var(--danger); }
+.organ-card.v-flaky { box-shadow: inset 3px 0 #d9a441; }
+.organ-card.v-healthy { box-shadow: inset 3px 0 var(--ok); }
+.organ-card.v-unproven { box-shadow: inset 3px 0 var(--line); }
+.organ-card.v-stale { opacity: .6; }
+.organ-top { display: flex; align-items: baseline; gap: 8px; }
+.organ-kind { color: var(--faint); font: 9px var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+.organ-name { font-size: 13px; }
+.organ-ver { color: var(--accent); font: 10px var(--mono); }
+.organ-verdict { margin-left: auto; font: 9px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
+.v-broken .organ-verdict { color: var(--danger); }
+.v-flaky .organ-verdict { color: #d9a441; }
+.v-healthy .organ-verdict { color: var(--ok); }
+.organ-meta { display: flex; gap: 10px; margin-top: 5px; color: var(--dim); font: 10px var(--mono); }
+.organ-rate { color: var(--text); }
+.organ-actions { display: flex; gap: 6px; margin-top: 8px; }
+.organ-btn { border: 1px solid var(--line); background: transparent; color: var(--dim);
+  border-radius: 6px; padding: 4px 8px; font-size: 11px; cursor: pointer; }
+.organ-btn:hover { color: var(--text); border-color: var(--accent); }
+.organ-btn.danger:hover { color: var(--danger); border-color: var(--danger); }
+.organ-versions { border-left: 1px solid var(--line); padding: 14px; overflow: auto; background: var(--bg3); }
+.organ-versions:not([hidden]) { display: block; }
+.organ-versions[hidden] { display: none; }
+.organ-versions-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 12px; }
+.organ-version { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line-soft); font: 11px var(--mono); color: var(--dim); }
+.organ-version.current { color: var(--text); }
+.organ-bytes { margin-left: auto; color: var(--faint); }
+@media (max-width: 820px) {
+  .organs-modal { padding: 0; }
+  .organs-shell { width: 100vw; height: 100dvh; border: 0; border-radius: 0; }
+  .organs-body { grid-template-columns: 1fr; }
+  .organ-versions { border-left: 0; border-top: 1px solid var(--line); }
+}
