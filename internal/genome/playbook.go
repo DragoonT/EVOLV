@@ -69,6 +69,9 @@ func (b *Book) Record(p Playbook) error {
 
 // Save persists the book atomically.
 func (b *Book) Save() error {
+	if b.Path == "" {
+		return nil
+	}
 	return writeFileAtomic(b.Path, mustJSON(map[string]any{"playbooks": b.Playbooks}))
 }
 
@@ -269,9 +272,9 @@ func topN(counts map[string]int, n int) []string {
 	return out
 }
 
-// RenderAdvice formats insights as prompt-ready text.
-func RenderAdvice(insights []Insight) string {
-	if len(insights) == 0 {
+// RenderAdvice formats insights and matched playbooks as prompt-ready text.
+func RenderAdvice(insights []Insight, matches ...SearchMatch) string {
+	if len(insights) == 0 && len(matches) == 0 {
 		return ""
 	}
 	var b strings.Builder
@@ -288,6 +291,26 @@ func RenderAdvice(insights []Insight) string {
 			b.WriteString(" · verification that passed: " + in.Verify)
 		}
 		b.WriteString("\n")
+	}
+	if len(matches) > 0 {
+		b.WriteString("\n### Relevant past tasks:\n")
+		for _, m := range matches {
+			p := m.Playbook
+			if p.Title == "" {
+				continue
+			}
+			b.WriteString("- \"" + p.Title + "\" [" + p.Outcome + "]")
+			if p.Verify != "" {
+				b.WriteString(" · verify: " + p.Verify)
+			}
+			if len(p.Skills) > 0 {
+				b.WriteString(" · skills: " + strings.Join(p.Skills, ", "))
+			}
+			if len(p.Tools) > 0 {
+				b.WriteString(" · tools: " + strings.Join(p.Tools, ", "))
+			}
+			b.WriteString("\n")
+		}
 	}
 	b.WriteString("Use this as a hint. Re-derive what the task needs; do not copy blindly.\n")
 	return b.String()
