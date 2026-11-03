@@ -31,7 +31,7 @@ func TestContractHealth(t *testing.T) {
 			t.Fatalf("health missing %q: %v", key, body)
 		}
 	}
-	if body["version"] != "0.31.0" {
+	if body["version"] != "0.31.1" {
 		t.Fatalf("version = %v", body["version"])
 	}
 }
