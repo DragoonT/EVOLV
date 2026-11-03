@@ -37,6 +37,7 @@ const (
 	KindVerify      = "verify.added"
 	KindCheckpoint  = "checkpoint"
 	KindRunClosed   = "run.closed"
+	KindRunReopened = "run.reopened"
 )
 
 // Store owns runs on disk: one directory per run with a journal and a
@@ -203,6 +204,16 @@ func applyEvent(run *Run, ev Event) {
 			run.Status = data.Status
 			run.ClosedAt = ev.At
 		}
+	case KindRunReopened:
+		var data struct {
+			Status Status `json:"status"`
+		}
+		if json.Unmarshal(ev.Data, &data) == nil && data.Status.Valid() {
+			run.Status = data.Status
+		} else {
+			run.Status = StatusQueued
+		}
+		run.ClosedAt = ""
 	}
 	run.UpdatedAt = ev.At
 }
@@ -478,6 +489,90 @@ func (s *Store) maybeCloseLocked(run *Run) {
 	}
 	run.Seq = ev.Seq
 	applyEvent(run, ev)
+}
+
+// Cancel transitions all unfinished tasks to StatusCancelled and closes the run.
+func (s *Store) Cancel(runID, reason string) (*Run, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	run, ok := s.runs[runID]
+	if !ok {
+		return nil, fmt.Errorf("run %q not found", runID)
+	}
+	if run.Status.Terminal() {
+		return nil, fmt.Errorf("run %q is already %s", runID, run.Status)
+	}
+	for i := range run.Tasks {
+		if !run.Tasks[i].Status.Terminal() {
+			from := run.Tasks[i].Status
+			ev, err := s.journ[runID].Append(KindTaskMoved, run.Tasks[i].ID, map[string]any{
+				"from": from,
+				"to":   StatusCancelled,
+			})
+			if err != nil {
+				return nil, err
+			}
+			run.Seq = ev.Seq
+			applyEvent(run, ev)
+		}
+	}
+	ev, err := s.journ[runID].Append(KindRunClosed, "", map[string]any{"status": StatusCancelled})
+	if err != nil {
+		return nil, err
+	}
+	run.Seq = ev.Seq
+	applyEvent(run, ev)
+	if err := s.snapshotLocked(run); err != nil {
+		return nil, err
+	}
+	return cloneRun(run), nil
+}
+
+// Retry resets failed or cancelled tasks back to StatusQueued and reopens the run if closed.
+func (s *Store) Retry(runID, taskID string) (*Run, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	run, ok := s.runs[runID]
+	if !ok {
+		return nil, fmt.Errorf("run %q not found", runID)
+	}
+	retried := 0
+	for i := range run.Tasks {
+		if taskID != "" && run.Tasks[i].ID != taskID {
+			continue
+		}
+		if run.Tasks[i].Status == StatusFailed || run.Tasks[i].Status == StatusCancelled {
+			from := run.Tasks[i].Status
+			ev, err := s.journ[runID].Append(KindTaskMoved, run.Tasks[i].ID, map[string]any{
+				"from": from,
+				"to":   StatusQueued,
+			})
+			if err != nil {
+				return nil, err
+			}
+			run.Seq = ev.Seq
+			applyEvent(run, ev)
+			retried++
+		}
+	}
+	if retried == 0 {
+		if taskID != "" {
+			return nil, fmt.Errorf("task %q is not failed or cancelled", taskID)
+		}
+		return nil, fmt.Errorf("no failed or cancelled tasks to retry in run %q", runID)
+	}
+	if run.Status.Terminal() {
+		ev, err := s.journ[runID].Append(KindRunReopened, "", map[string]any{"status": StatusQueued})
+		if err != nil {
+			return nil, err
+		}
+		run.Seq = ev.Seq
+		applyEvent(run, ev)
+	}
+	if err := s.snapshotLocked(run); err != nil {
+		return nil, err
+	}
+	return cloneRun(run), nil
 }
 
 // Get returns a copy of a run.

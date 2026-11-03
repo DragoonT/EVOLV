@@ -54,8 +54,8 @@ func (a *Agent) engineeringSection() string {
 		if shown == 0 {
 			b.WriteString("\n\n## IN-FLIGHT ENGINEERING WORK — keep this current\n")
 			b.WriteString("Durable runs outlive the conversation. Advance them with run_work (start), ")
-			b.WriteString("run_finish (record evidence + mark a task done), run_fail (block or fail), and ")
-			b.WriteString("run_status (inspect). Never claim a task is done without a passing verification.\n")
+			b.WriteString("run_finish (record evidence + mark a task done), run_fail (block or fail), ")
+			b.WriteString("run_cancel, run_retry, and run_status (inspect). Never claim a task is done without a passing verification.\n")
 		}
 		shown++
 		status := string(run.Status)

@@ -177,6 +177,8 @@ Every action returns a kernel JSON line. Read it; it is the ground truth.
                   passes. Without one the task is marked implemented-but-
                   unverified — which the completion report says out loud.
 - run_fail        {run, task, reason, status?}      Fail or cancel a task.
+- run_cancel      {run, reason?}                    Cancel an in-flight durable run.
+- run_retry       {run, task?}                      Requeue failed or cancelled tasks.
 - report          {title?}                          Structured completion report
                   built only from recorded checks: verified / partial /
                   untested / failed, plus blockers and remaining work.

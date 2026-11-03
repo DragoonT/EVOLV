@@ -235,3 +235,85 @@ func (s *Server) handleRunTransition(w http.ResponseWriter, r *http.Request) {
 	updated, _ := store.Get(in.Run)
 	writeJSONOK(w, map[string]any{"task": task, "run": updated})
 }
+
+// handleRunCancel cancels an active run and all unfinished tasks.
+func (s *Server) handleRunCancel(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
+	var in struct {
+		ID     string `json:"id"`
+		Run    string `json:"run"`
+		Reason string `json:"reason"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+	id := in.ID
+	if id == "" {
+		id = in.Run
+	}
+	if id == "" {
+		writeJSONError(w, http.StatusBadRequest, "id or run is required")
+		return
+	}
+	store, err := s.runsStore()
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	run, err := store.Cancel(id, in.Reason)
+	if err != nil {
+		code := http.StatusBadRequest
+		if strings.Contains(err.Error(), "not found") {
+			code = http.StatusNotFound
+		}
+		writeJSONError(w, code, err.Error())
+		return
+	}
+	s.recordOutcomes()
+	writeJSONOK(w, map[string]any{"ok": true, "run": run})
+}
+
+// handleRunRetry resets failed or cancelled tasks back to queued.
+func (s *Server) handleRunRetry(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
+	var in struct {
+		ID   string `json:"id"`
+		Run  string `json:"run"`
+		Task string `json:"task"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+	id := in.ID
+	if id == "" {
+		id = in.Run
+	}
+	if id == "" {
+		writeJSONError(w, http.StatusBadRequest, "id or run is required")
+		return
+	}
+	store, err := s.runsStore()
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	run, err := store.Retry(id, in.Task)
+	if err != nil {
+		code := http.StatusBadRequest
+		if strings.Contains(err.Error(), "not found") {
+			code = http.StatusNotFound
+		}
+		writeJSONError(w, code, err.Error())
+		return
+	}
+	s.recordOutcomes()
+	writeJSONOK(w, map[string]any{"ok": true, "run": run})
+}

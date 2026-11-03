@@ -221,4 +221,43 @@ func TestRunStatusUnknownRun(t *testing.T) {
 	}
 }
 
+func TestRunCancelAndRetryActions(t *testing.T) {
+	a, _ := mockAgent(t)
+	start := execRun(t, a, action{
+		Action: "run_work",
+		Title:  "cancel-retry assignment",
+		Desc:   "durable test",
+		Steps: []planStepArg{
+			{Title: "step 1", Text: "do 1"},
+			{Title: "step 2", Text: "do 2", After: []string{"t1"}},
+		},
+	})
+	runID, _ := start["run"].(string)
+	if runID == "" {
+		t.Fatalf("run_work did not return run id: %v", start)
+	}
+
+	// Cancel the run
+	cancelRes := execRun(t, a, action{Action: "run_cancel", Run: runID, Desc: "aborting assignment"})
+	if ok, _ := cancelRes["ok"].(bool); !ok || cancelRes["status"] != "cancelled" {
+		t.Fatalf("expected run_cancel to succeed with cancelled status: %v", cancelRes)
+	}
+
+	// Status confirms cancelled
+	statusRes := execRun(t, a, action{Action: "run_status", Run: runID})
+	if statusRes["status"] != "cancelled" {
+		t.Fatalf("expected run_status to report cancelled: %v", statusRes)
+	}
+
+	// Retry step 1
+	retryRes := execRun(t, a, action{Action: "run_retry", Run: runID, Task: "t1"})
+	if ok, _ := retryRes["ok"].(bool); !ok || retryRes["status"] != "queued" {
+		t.Fatalf("expected run_retry to reopen run as queued: %v", retryRes)
+	}
+	ready, _ := retryRes["ready"].([]any)
+	if len(ready) != 1 || ready[0] != "t1" {
+		t.Fatalf("expected t1 to be ready now: %v", ready)
+	}
+}
+
 var _ = context.Background

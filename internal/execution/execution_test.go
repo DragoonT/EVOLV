@@ -139,6 +139,7 @@ func TestStoreLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer reopened.CloseAll()
 	got, ok := reopened.Get("run-1")
 	if !ok {
 		t.Fatal("run lost after restart")
@@ -247,5 +248,77 @@ func TestVerificationLevels(t *testing.T) {
 	}
 	if (Task{Verify: []Verification{{Passed: false}}}).Level() != LevelFailed {
 		t.Fatal("failing check must be failed")
+	}
+}
+
+func TestStoreCancelAndRetry(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.CloseAll()
+
+	tasks := []Task{
+		{ID: "t1", Title: "first"},
+		{ID: "t2", Title: "second", DependsOn: []string{"t1"}},
+	}
+	if _, err := s.CreateRun("run-cr", "cancel retry", "", tasks); err != nil {
+		t.Fatal(err)
+	}
+
+	// Cancel the run
+	cancelled, err := s.Cancel("run-cr", "user requested cancel")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cancelled.Status != StatusCancelled || cancelled.ClosedAt == "" {
+		t.Fatalf("expected run to be cancelled, got %+v", cancelled)
+	}
+	if cancelled.Tasks[0].Status != StatusCancelled || cancelled.Tasks[1].Status != StatusCancelled {
+		t.Fatalf("expected tasks to be cancelled, got %+v", cancelled.Tasks)
+	}
+
+	// Cancelling an already terminal run fails
+	if _, err := s.Cancel("run-cr", "again"); err == nil {
+		t.Fatal("expected cancel on already cancelled run to fail")
+	}
+
+	// Retry specific task t1
+	reopened, err := s.Retry("run-cr", "t1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reopened.Status != StatusQueued || reopened.ClosedAt != "" {
+		t.Fatalf("expected run to reopen as queued, got %+v", reopened)
+	}
+	if reopened.Tasks[0].Status != StatusQueued {
+		t.Fatalf("expected t1 to be queued, got %s", reopened.Tasks[0].Status)
+	}
+	if reopened.Tasks[1].Status != StatusCancelled {
+		t.Fatalf("expected t2 to remain cancelled, got %s", reopened.Tasks[1].Status)
+	}
+
+	// Retry all remaining cancelled/failed tasks
+	allRetried, err := s.Retry("run-cr", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if allRetried.Tasks[1].Status != StatusQueued {
+		t.Fatalf("expected t2 to be queued now, got %s", allRetried.Tasks[1].Status)
+	}
+
+	// Persists across restart
+	if err := s.CloseAll(); err != nil {
+		t.Fatal(err)
+	}
+	s2, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s2.CloseAll()
+	persisted, ok := s2.Get("run-cr")
+	if !ok || persisted.Status != StatusQueued || len(persisted.Tasks) != 2 {
+		t.Fatalf("run not restored correctly: %+v", persisted)
 	}
 }
