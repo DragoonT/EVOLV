@@ -140,7 +140,7 @@ func defaultConfig() *Config {
 
 // Version is the organism's genome version (overridable at build time via
 // -ldflags "-X github.com/dxn111/EVOLV/internal/workspace.Version=...").
-var Version = "0.31.1"
+var Version = "0.32.0"
 
 // versionLess reports whether semantic version a is older than b. It is a
 // deliberately small parser: three numeric fields, optional leading "v".
