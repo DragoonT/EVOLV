@@ -39,6 +39,7 @@ type Agent struct {
 	modelErrors        atomic.Int64
 	lastModelLatencyMS atomic.Int64
 	turns              atomic.Int64
+	compactions        atomic.Int64
 	turnsFailed        atomic.Int64
 	turnsCancelled     atomic.Int64
 	turnsLimited       atomic.Int64
@@ -166,6 +167,7 @@ type AgentStats struct {
 	ToolCalls          int64 `json:"tool_calls"`
 	ToolFailures       int64 `json:"tool_failures"`
 	LastTurnMS         int64 `json:"last_turn_ms"`
+	Compactions        int64 `json:"context_compactions"`
 }
 
 func (a *Agent) Stats() AgentStats {
@@ -180,6 +182,7 @@ func (a *Agent) Stats() AgentStats {
 		ToolCalls:          a.toolCalls.Load(),
 		ToolFailures:       a.toolFailures.Load(),
 		LastTurnMS:         a.lastTurnMS.Load(),
+		Compactions:        a.compactions.Load(),
 	}
 }
 
@@ -266,6 +269,10 @@ type action struct {
 	StageOnly      bool              `json:"stage_only,omitempty"`
 	Confirm        bool              `json:"confirm,omitempty"`
 	SourceRoot     string            `json:"source_root,omitempty"`
+	Run            string            `json:"run,omitempty"`            // durable run id
+	Task           string            `json:"task,omitempty"`           // durable task id
+	VerifyCommand  string            `json:"verify_command,omitempty"` // command whose exit status is the evidence
+	Reason         string            `json:"reason,omitempty"`         // why a task failed or is blocked
 	TargetLauncher string            `json:"target_launcher,omitempty"`
 	TestPkg        string            `json:"test_pkg,omitempty"`
 	TargetType     string            `json:"target_type,omitempty"`
@@ -279,8 +286,12 @@ func (a *Agent) candidateManager() *candidate.Manager {
 
 // planStepArg is one step of a set_plan action as it arrives over the wire.
 type planStepArg struct {
-	Title  string `json:"title"`
-	Status string `json:"status"`
+	Title  string   `json:"title"`
+	Status string   `json:"status"`
+	Text   string   `json:"text,omitempty"`   // objective / detail for durable runs
+	After  []string `json:"after,omitempty"`  // task ids this step waits for
+	Files  []string `json:"files,omitempty"`  // files this step expects to touch
+	Verify string   `json:"verify,omitempty"` // command that proves the step
 }
 
 // projectLine describes the bound user project for the prompt.
@@ -343,6 +354,9 @@ func (a *Agent) SystemPrompt() string {
 			}
 		}
 	}
+
+	// durable engineering work in flight — keeps long assignments anchored
+	b.WriteString(a.engineeringSection())
 
 	// evolvable system prompt fragments
 	if frags, err := a.listDir(a.ws.Dir(workspace.PromptsDir), ".md"); err == nil {
@@ -622,9 +636,11 @@ func (a *Agent) Chat(ctx context.Context, userMsg string) string {
 
 	a.mu.Lock()
 	a.history = hist
-	// keep memory bounded
-	if len(a.history) > 80 {
-		a.history = a.history[len(a.history)-60:]
+	// keep memory bounded without losing the assignment: anchors (the original
+	// request, user constraints, declared decisions) survive in a summary.
+	if compacted, changed := compactHistory(a.history); changed {
+		a.history = compacted
+		a.compactions.Add(1)
 	}
 	a.mu.Unlock()
 	a.saveMemory()

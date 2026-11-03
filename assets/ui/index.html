@@ -253,7 +253,13 @@
     </div>
     <div class="gm-body">
       <div class="gm-side wb-side">
-        <input id="wb-search" class="wb-search" placeholder="⌕ search the whole project…" spellcheck="false">
+        <input id="wb-search" class="wb-search" placeholder="⌕ search the whole project…" spellcheck="false" aria-label="Search the project">
+        <div class="wb-filters" id="wb-filters">
+          <button type="button" class="wb-filter" id="wb-regex" title="Treat the query as a regular expression" aria-pressed="false">.*</button>
+          <button type="button" class="wb-filter" id="wb-case" title="Match case" aria-pressed="false">Aa</button>
+          <input id="wb-ext" class="wb-filter-input" placeholder="ext" spellcheck="false" aria-label="Filter by extension, e.g. go,ts">
+          <input id="wb-pathf" class="wb-filter-input" placeholder="path/" spellcheck="false" aria-label="Filter by path prefix">
+        </div>
         <div id="wb-results" class="wb-results" hidden></div>
         <div id="wb-tree" class="wb-tree"><div class="wb-loading">loading project…</div></div>
         <div class="wb-hint">click a file to open · double-click a folder to expand · right-click for actions</div>

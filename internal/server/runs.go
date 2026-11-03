@@ -107,6 +107,50 @@ func (s *Server) handleRunEvents(w http.ResponseWriter, r *http.Request) {
 	writeJSONOK(w, map[string]any{"id": id, "events": events})
 }
 
+// handleRunInsights reports what the outcome log has learned.
+func (s *Server) handleRunInsights(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "GET only", http.StatusMethodNotAllowed)
+		return
+	}
+	log, err := execution.OpenOutcomes(s.ws.Dir(runsDir))
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	outcomes := log.Read()
+	writeJSONOK(w, map[string]any{
+		"insights": execution.Summarise(outcomes),
+		"recent":   lastOutcomes(outcomes, 20),
+	})
+}
+
+// lastOutcomes returns the newest n outcomes.
+func lastOutcomes(list []execution.Outcome, n int) []execution.Outcome {
+	if len(list) <= n {
+		return list
+	}
+	return list[len(list)-n:]
+}
+
+// recordOutcomes persists terminal task outcomes so orchestration can learn
+// from what actually happened. Errors are not fatal: learning is best-effort.
+func (s *Server) recordOutcomes() {
+	store, err := s.runsStore()
+	if err != nil {
+		return
+	}
+	log, err := execution.OpenOutcomes(s.ws.Dir(runsDir))
+	if err != nil {
+		return
+	}
+	for _, run := range store.List() {
+		if run.Status.Terminal() {
+			log.RecordRunOutcomes(run)
+		}
+	}
+}
+
 // handleRunCreate registers a run from a plan (used by the agent's plan tool
 // and by clients that want durable tracking for a multi-step assignment).
 func (s *Server) handleRunCreate(w http.ResponseWriter, r *http.Request) {
@@ -133,6 +177,7 @@ func (s *Server) handleRunCreate(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	s.recordOutcomes()
 	writeJSONOK(w, run)
 }
 
@@ -186,6 +231,7 @@ func (s *Server) handleRunTransition(w http.ResponseWriter, r *http.Request) {
 	type runState struct {
 		Run *execution.Run `json:"run"`
 	}
+	s.recordOutcomes()
 	updated, _ := store.Get(in.Run)
 	writeJSONOK(w, map[string]any{"task": task, "run": updated})
 }

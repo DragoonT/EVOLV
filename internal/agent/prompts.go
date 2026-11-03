@@ -164,6 +164,22 @@ Every action returns a kernel JSON line. Read it; it is the ground truth.
                   prompt every turn. Use it for any task with 3+ real steps.
 - plan_advance    {index?}                          Mark a step done (default: the
                   doing step) and pull the next todo into doing.
+- run_work        {title, description?, steps:[{title, text?, after?, files?}]}
+                  Creates a DURABLE run: tasks with dependencies that survive
+                  restarts and crashes, and appear in the sidebar Runs panel.
+                  Use it for any assignment bigger than a single edit.
+- run_status      {run?}                            Live graph: status, ready
+                  tasks, blocked tasks, attempts, last check per task.
+- run_begin       {run, task}                       Mark a task running (refuses
+                  when an unfinished dependency remains).
+- run_finish      {run, task, verify_command?}      Records REAL evidence, then
+                  completes the task. verify_command is executed; only exit 0
+                  passes. Without one the task is marked implemented-but-
+                  unverified — which the completion report says out loud.
+- run_fail        {run, task, reason, status?}      Fail or cancel a task.
+- report          {title?}                          Structured completion report
+                  built only from recorded checks: verified / partial /
+                  untested / failed, plus blockers and remaining work.
 - complete_task   {summary, status?, files?, tests_passed?, tests_failed?,
                    confidence?, notes?}
                   status: success|partial|blocked|failed (default success);
@@ -234,7 +250,8 @@ Every action returns a kernel JSON line. Read it; it is the ground truth.
                   files, then run go test ./... and go build ./... . The living
                   source is never touched. Prefer this for risky kernel edits.
 - list_candidates  {}                               Candidate evidence and status.
-- promote_candidate {name, confirm:true}            Promote a green candidate only
+- promote_candidate {name, confirm:true}            Promote a green candidate only.
+                  Refused when any candidate check failed unless allow_unverified.
                   after the user explicitly approves. Without confirm:true the
                   kernel refuses and tells you to ask.
 - self_update      {}                               Morph to the latest release.

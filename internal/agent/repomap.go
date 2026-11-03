@@ -26,6 +26,7 @@ type repoMap struct {
 	Generated string            `json:"generated"`
 	Files     []string          `json:"files"`
 	Symbols   []repoFileSymbols `json:"symbols"`
+	Profile   *projectProfile   `json:"profile,omitempty"`
 	Truncated bool              `json:"truncated,omitempty"`
 }
 
@@ -100,6 +101,8 @@ func buildRepoMap(root string, depth int) (*repoMap, error) {
 	}
 	sort.Strings(m.Files)
 	sort.Slice(m.Symbols, func(i, j int) bool { return m.Symbols[i].Path < m.Symbols[j].Path })
+	prof := profileProject(root, m.Files)
+	m.Profile = &prof
 	return m, nil
 }
 
@@ -118,7 +121,7 @@ func symbolsForFile(path string) []repoSymbol {
 	case ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs":
 		return jsSymbols(path)
 	}
-	return nil
+	return languageSymbols(path)
 }
 
 func goSymbols(path string) []repoSymbol {
