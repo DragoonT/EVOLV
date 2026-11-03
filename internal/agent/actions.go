@@ -17,6 +17,7 @@ import (
 	"github.com/dop251/goja"
 
 	"github.com/dxn111/EVOLV/internal/candidate"
+	"github.com/dxn111/EVOLV/internal/genome"
 	"github.com/dxn111/EVOLV/internal/lint"
 	"github.com/dxn111/EVOLV/internal/redact"
 	"github.com/dxn111/EVOLV/internal/update"
@@ -309,9 +310,12 @@ func (a *Agent) Execute(act action) string {
 		if changed {
 			a.commit("component", name, path, act.Desc)
 		}
+		asset, _ := a.recordOrgan(genome.KindComponent, name, path, []byte(act.HTML), genome.Provenance{Trigger: "evolve_component", Notes: act.Desc})
 		res["ok"] = true
 		res["hash"], res["changed"] = hash, changed
 		res["path"] = "workspace/ui/components/" + name + ".html"
+		res["organ"] = asset.ID
+		res["version"] = asset.Version
 		res["note"] = "component hot-mounted live"
 		if len(lintRep.Findings) > 0 {
 			res["security"] = lintRep
@@ -379,8 +383,11 @@ func (a *Agent) Execute(act action) string {
 		if changed {
 			a.commit("tool", name, path, act.Desc)
 		}
+		asset, _ := a.recordOrgan(genome.KindTool, name, path, []byte(act.Code), genome.Provenance{Trigger: "evolve_tool", Notes: act.Desc})
 		res["ok"] = true
 		res["hash"], res["changed"] = hash, changed
+		res["organ"] = asset.ID
+		res["version"] = asset.Version
 		note := "tool compiled into the sandbox and callable via run_tool"
 		currentManifest := readToolManifest(a, name)
 		manifestChanged := len(act.Schema) > 0 && (currentManifest == nil || currentManifest.Description != act.Desc || !sameSchema(currentManifest.Schema, act.Schema))
@@ -413,7 +420,13 @@ func (a *Agent) Execute(act action) string {
 				break
 			}
 		}
+		toolName := sanitizeName(act.Name)
 		out, err := a.js.RunTool(act.Name, act.Args)
+		// every execution is a data point: health decides which organs to trust
+		a.noteOrganUse(genome.KindTool, toolName, err == nil, errText(err))
+		if err == nil {
+			a.noteUsedTool(toolName)
+		}
 		if err != nil {
 			res["ok"], res["error"] = false, err.Error()
 		} else {
@@ -462,8 +475,11 @@ func (a *Agent) Execute(act action) string {
 		if changed {
 			a.commit("skill", name, path, act.Desc)
 		}
+		asset, _ := a.recordOrgan(genome.KindSkill, name, path, []byte(act.Content), genome.Provenance{Trigger: "evolve_skill", Notes: act.Desc})
 		res["ok"] = true
 		res["hash"], res["changed"] = hash, changed
+		res["organ"] = asset.ID
+		res["version"] = asset.Version
 
 	case "evolve_prompt":
 		name := sanitizeName(act.Name)
@@ -481,8 +497,11 @@ func (a *Agent) Execute(act action) string {
 		if changed {
 			a.commit("prompt", name, path, act.Desc)
 		}
+		asset, _ := a.recordOrgan(genome.KindPrompt, name, path, []byte(act.Content), genome.Provenance{Trigger: "evolve_prompt", Notes: act.Desc})
 		res["ok"] = true
 		res["hash"], res["changed"] = hash, changed
+		res["organ"] = asset.ID
+		res["version"] = asset.Version
 		res["note"] = "system prompt rewritten; takes effect next turn"
 
 	case "evolve_plugin":
@@ -536,7 +555,10 @@ func (a *Agent) Execute(act action) string {
 		}
 		go p.loop()
 		a.commit("plugin", name, filepath.Join(dir, "plugin.js"), act.Desc)
+		asset, _ := a.recordOrgan(genome.KindPlugin, name, filepath.Join(dir, "plugin.js"), []byte(act.Code), genome.Provenance{Trigger: "evolve_plugin", Notes: act.Desc})
 		res["ok"] = true
+		res["organ"] = asset.ID
+		res["version"] = asset.Version
 		res["note"] = "plugin installed in its own sandbox; evolv.on/every are live now"
 
 	case "write_file":
@@ -1237,6 +1259,18 @@ func (a *Agent) Execute(act action) string {
 	case "list_candidates":
 		items := a.candidateManager().List()
 		res["ok"], res["candidates"] = true, items
+
+	case "organ_list":
+		res = a.organList(act)
+
+	case "organ_history":
+		res = a.organHistory(act)
+
+	case "organ_rollback":
+		res = a.organRollback(act)
+
+	case "organ_disable":
+		res = a.organDisable(act)
 
 	case "run_work":
 		res = a.runStart(act)

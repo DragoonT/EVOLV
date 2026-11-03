@@ -1,0 +1,16 @@
+{
+  "playbooks": [
+    {
+      "id": "refactor@2026-11-01",
+      "title": "",
+      "traits": [
+        "refactor"
+      ],
+      "skills": null,
+      "tools": null,
+      "attempts": 0,
+      "outcome": "verified",
+      "at": "2026-11-01"
+    }
+  ]
+}

@@ -54,6 +54,7 @@ type Config struct {
 	DisabledWidgets   map[string]bool   `json:"disabled_widgets,omitempty"`
 	PinnedCreations   map[string]bool   `json:"pinned_creations,omitempty"`
 	ArchivedCreations map[string]bool   `json:"archived_creations,omitempty"`
+	Contributing      string            `json:"contributing,omitempty"` // "" | "on" — may contribute upstream
 	Version           string            `json:"version"`
 	InstalledAt       string            `json:"installed_at"`
 }
