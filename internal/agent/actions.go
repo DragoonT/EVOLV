@@ -20,6 +20,7 @@ import (
 	"github.com/dxn111/EVOLV/internal/genome"
 	"github.com/dxn111/EVOLV/internal/lint"
 	"github.com/dxn111/EVOLV/internal/redact"
+	"github.com/dxn111/EVOLV/internal/search"
 	"github.com/dxn111/EVOLV/internal/update"
 	"github.com/dxn111/EVOLV/internal/workspace"
 )
@@ -769,6 +770,93 @@ func (a *Agent) Execute(act action) string {
 			res["commands"] = mapped.Profile.Commands
 			res["notes"] = mapped.Profile.Notes
 		}
+
+	case "search_code", "grep":
+		query := strings.TrimSpace(firstNonEmptyText(act.Query, act.Find))
+		if raw, ok := act.Args["query"].(string); ok && query == "" {
+			query = strings.TrimSpace(raw)
+		}
+		if raw, ok := act.Args["q"].(string); ok && query == "" {
+			query = strings.TrimSpace(raw)
+		}
+		if query == "" {
+			res["ok"] = false
+			res["error"] = "search_code requires a non-empty query"
+			break
+		}
+
+		root := strings.TrimSpace(act.Path)
+		if root == "" {
+			root = strings.TrimSpace(act.Cwd)
+		}
+		if root == "" {
+			root = a.ws.Config.ProjectDir
+		}
+		if root == "" {
+			root = a.ws.Root
+		}
+		abs, err := filepath.Abs(root)
+		if err != nil || !dirExists(abs) {
+			res["ok"], res["error"] = false, "directory does not exist: "+root
+			break
+		}
+
+		opts := search.Options{
+			Query:    query,
+			Regex:    act.Regex,
+			CaseSens: act.Case,
+			Exts:     act.Exts,
+			Limit:    act.Limit,
+			Context:  2,
+		}
+		if raw, ok := act.Args["regex"].(bool); ok {
+			opts.Regex = raw
+		}
+		if raw, ok := act.Args["case"].(bool); ok {
+			opts.CaseSens = raw
+		}
+		if raw, ok := act.Args["case_sensitive"].(bool); ok {
+			opts.CaseSens = raw
+		}
+		if raw, ok := act.Args["path_glob"].(string); ok && raw != "" {
+			opts.PathGlob = strings.TrimSpace(raw)
+		} else if raw, ok := act.Args["glob"].(string); ok && raw != "" {
+			opts.PathGlob = strings.TrimSpace(raw)
+		}
+		if raw, ok := act.Args["exts"].([]any); ok {
+			for _, item := range raw {
+				if s, ok := item.(string); ok && strings.TrimSpace(s) != "" {
+					opts.Exts = append(opts.Exts, strings.TrimSpace(s))
+				}
+			}
+		} else if raw, ok := act.Args["ext"].(string); ok && raw != "" {
+			for _, p := range strings.Split(raw, ",") {
+				if p = strings.TrimSpace(p); p != "" {
+					opts.Exts = append(opts.Exts, p)
+				}
+			}
+		}
+		if raw, ok := act.Args["limit"].(float64); ok && raw > 0 {
+			opts.Limit = int(raw)
+		}
+		if raw, ok := act.Args["context"].(float64); ok && raw >= 0 {
+			opts.Context = int(raw)
+		}
+
+		searchRes := search.Scan(abs, opts)
+		if searchRes.Error != "" {
+			res["ok"] = false
+			res["error"] = searchRes.Error
+			break
+		}
+
+		res["ok"] = true
+		res["query"] = searchRes.Query
+		res["root"] = abs
+		res["hits"] = searchRes.Hits
+		res["count"] = len(searchRes.Hits)
+		res["files"] = searchRes.Files
+		res["truncated"] = searchRes.Truncated
 
 	case "run_tests":
 		rawTarget := strings.TrimSpace(act.Path)
