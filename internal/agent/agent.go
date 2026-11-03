@@ -39,6 +39,8 @@ type Agent struct {
 	modelErrors        atomic.Int64
 	lastModelLatencyMS atomic.Int64
 	turns              atomic.Int64
+	consulted          map[string]bool // skills/tools consulted this turn
+	lessons            string          // advice derived from recorded outcomes
 	compactions        atomic.Int64
 	turnsFailed        atomic.Int64
 	turnsCancelled     atomic.Int64
@@ -278,6 +280,10 @@ type action struct {
 	TargetType     string            `json:"target_type,omitempty"`
 	Force          bool              `json:"force,omitempty"`
 	Strict         bool              `json:"strict,omitempty"`
+	Kind           string            `json:"kind,omitempty"`    // organ kind for organ_* actions
+	Version        int               `json:"version,omitempty"` // organ version for history/rollback
+	Lesson         string            `json:"lesson,omitempty"`  // what was learned, for playbooks
+	Outcome        string            `json:"outcome,omitempty"` // verified | unverified | failed
 }
 
 func (a *Agent) candidateManager() *candidate.Manager {
@@ -322,6 +328,9 @@ func (a *Agent) SystemPrompt() string {
 
 	var b strings.Builder
 	b.WriteString(prompt)
+	if a.lessons != "" {
+		b.WriteString(a.lessons)
+	}
 	if a.profile != nil {
 		b.WriteString("\n\n## CLONED DNA IDENTITY\nYou are " + a.profile.Name + ", a distinct sub-agent strand of EVOLV.\n")
 		if a.profile.Identity != "" {
@@ -357,6 +366,9 @@ func (a *Agent) SystemPrompt() string {
 
 	// durable engineering work in flight — keeps long assignments anchored
 	b.WriteString(a.engineeringSection())
+
+	// organs that are failing, so the agent repairs instead of piling on more
+	b.WriteString(a.organHealthSection())
 
 	// evolvable system prompt fragments
 	if frags, err := a.listDir(a.ws.Dir(workspace.PromptsDir), ".md"); err == nil {
@@ -467,8 +479,16 @@ func (a *Agent) Chat(ctx context.Context, userMsg string) string {
 		a.lastAct = time.Now()
 	}
 	prov, model := a.prov, a.Model
+	a.consulted = nil
 	a.history = append(a.history, providers.Message{Role: "user", Content: userMsg})
 	hist := append([]providers.Message{}, a.history...)
+	a.mu.Unlock()
+
+	// Lessons from previously recorded outcomes for tasks like this one. This
+	// reads the playbook book and takes no agent lock (calling it while holding
+	// a.mu deadlocked the loop), so it runs after the lock is released.
+	a.mu.Lock()
+	a.lessons = a.lessonsFor(userMsg)
 	a.mu.Unlock()
 
 	if prov == nil {

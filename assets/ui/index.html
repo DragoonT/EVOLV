@@ -60,6 +60,7 @@
       <a class="sb-btn swarm-btn" id="btn-swarm" href="/swarm" title="Swarm mode — many minds, one organism">
         <span>🐝</span> Swarm mode
       </a>
+      <button class="sb-btn" id="btn-organs" data-open-organs title="Every grown tool, skill and plugin — with health and rollback"><span>🧬</span> Organs <b class="wb-badge" id="organs-badge" hidden></b></button>
       <button class="sb-btn" id="btn-files"><span>🗂</span> Genome inspector</button>
       <button class="sb-btn" id="btn-settings"><span>⚙️</span> Settings</button>
       <div class="pill" id="provider-pill" title="click to configure models">
@@ -328,9 +329,26 @@
 
 <div id="toasts"></div>
 
+<div id="organs-modal" class="organs-modal" role="dialog" aria-label="Organs" aria-modal="true">
+  <div class="organs-shell">
+    <header class="organs-head">
+      <div>
+        <h2>Organs</h2>
+        <p>Everything EVOLV grew — with real usage data and a rollback that works.</p>
+      </div>
+      <span class="organs-summary" id="organs-summary"></span>
+      <button class="organs-close" id="organs-close" aria-label="Close organs">✕</button>
+    </header>
+    <div class="organs-body">
+      <div id="organs-list" class="organs-list"><div class="organ-empty">loading…</div></div>
+      <div id="organ-versions" class="organ-versions" hidden></div>
+    </div>
+  </div>
+</div>
 <script src="/app.js?v=20261101-appearance"></script>
 <script src="/ui/workspace-layout.js"></script>
 <script src="/runs.js"></script>
+<script src="/organs.js"></script>
 <script src="/ui/appearance.js?v=20261101-2"></script>
 </body>
 </html>

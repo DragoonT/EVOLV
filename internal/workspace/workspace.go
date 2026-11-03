@@ -54,6 +54,7 @@ type Config struct {
 	DisabledWidgets   map[string]bool   `json:"disabled_widgets,omitempty"`
 	PinnedCreations   map[string]bool   `json:"pinned_creations,omitempty"`
 	ArchivedCreations map[string]bool   `json:"archived_creations,omitempty"`
+	Contributing      string            `json:"contributing,omitempty"` // "" | "on" — may contribute upstream
 	Version           string            `json:"version"`
 	InstalledAt       string            `json:"installed_at"`
 }
@@ -139,7 +140,7 @@ func defaultConfig() *Config {
 
 // Version is the organism's genome version (overridable at build time via
 // -ldflags "-X github.com/dxn111/EVOLV/internal/workspace.Version=...").
-var Version = "0.31.1"
+var Version = "0.32.0"
 
 // versionLess reports whether semantic version a is older than b. It is a
 // deliberately small parser: three numeric fields, optional leading "v".

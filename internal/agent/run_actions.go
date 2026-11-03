@@ -117,7 +117,8 @@ func (a *Agent) runFinish(act action) map[string]any {
 		}
 	}
 
-	if strings.TrimSpace(act.VerifyCommand) != "" {
+	verify := strings.TrimSpace(act.VerifyCommand)
+	if verify != "" {
 		v := a.runVerification(run.ID, task.ID, act.VerifyCommand)
 		if err := store.RecordVerification(run.ID, task.ID, v); err != nil {
 			return runErr(res, err.Error())
@@ -128,6 +129,7 @@ func (a *Agent) runFinish(act action) map[string]any {
 		if !v.Passed {
 			_, _ = store.Transition(run.ID, task.ID, execution.StatusFailed)
 			_ = store.RecordAttempt(run.ID, task.ID, "verification failed: "+v.Command)
+			a.recordPlaybook(run.ID, task.ID, task.Title, verify, task.Attempts+1, "failed", v.DurationMS)
 			res["ok"] = false
 			res["error"] = "verification failed — the task is marked failed, not done"
 			res["status"] = string(execution.StatusFailed)
@@ -140,11 +142,13 @@ func (a *Agent) runFinish(act action) map[string]any {
 	}
 	res["ok"] = true
 	res["status"] = string(execution.StatusCompleted)
-	if strings.TrimSpace(act.VerifyCommand) == "" {
+	if verify == "" {
 		res["verification"] = "untested"
 		res["warning"] = "no verify_command was run: the task is recorded as implemented-but-unverified"
+		a.recordPlaybook(run.ID, task.ID, task.Title, "", task.Attempts, "unverified", 0)
 	} else {
 		res["verification"] = "verified"
+		a.recordPlaybook(run.ID, task.ID, task.Title, verify, task.Attempts, "verified", 0)
 	}
 	if updated, ok := store.Get(run.ID); ok {
 		progress := updated.Graph().Progress()
@@ -174,6 +178,7 @@ func (a *Agent) runFail(act action) map[string]any {
 		}
 	}
 	_ = store.RecordAttempt(run.ID, task.ID, reason)
+	a.recordPlaybook(run.ID, task.ID, task.Title, "", task.Attempts+1, "failed", 0)
 	if updated, ok := store.Get(run.ID); ok {
 		graph := updated.Graph()
 		res["blocked"] = graph.Blocked()

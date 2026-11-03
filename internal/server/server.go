@@ -117,6 +117,12 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/plan/compile", s.handlePlanCompile)
 	s.mux.HandleFunc("/api/plan/start", s.handlePlanStart)
 	s.mux.HandleFunc("/api/runs/insights", s.handleRunInsights)
+	s.mux.HandleFunc("/api/organs", s.handleOrgans)
+	s.mux.HandleFunc("/api/organs/versions", s.handleGenomeVersions)
+	s.mux.HandleFunc("/api/organs/rollback", s.handleGenomeRollback)
+	s.mux.HandleFunc("/api/organs/status", s.handleGenomeStatus)
+	s.mux.HandleFunc("/api/organs/backfill", s.handleGenomeBackfill)
+	s.mux.HandleFunc("/api/lessons", s.handleLessons)
 	s.mux.HandleFunc("/api/swarm/apply", s.handleSwarmApply)
 	s.mux.HandleFunc("/api/history", s.handleHistory)
 	s.mux.HandleFunc("/api/settings", s.handleSettings)
@@ -214,7 +220,7 @@ func (s *Server) handleUI(w http.ResponseWriter, r *http.Request) {
 		rel = workspace.UIRel() + "/swarm.html" // coming-soon preview, a real page not a modal
 	case strings.HasPrefix(r.URL.Path, "/ui/"):
 		rel = workspace.UIRel() + "/" + strings.TrimPrefix(r.URL.Path, "/ui/")
-	case r.URL.Path == "/style.css" || r.URL.Path == "/app.js" || r.URL.Path == "/runs.js":
+	case r.URL.Path == "/style.css" || r.URL.Path == "/app.js" || r.URL.Path == "/runs.js" || r.URL.Path == "/organs.js":
 		rel = workspace.UIRel() + r.URL.Path // shell assets live beside the genome
 	default:
 		http.NotFound(w, r)
