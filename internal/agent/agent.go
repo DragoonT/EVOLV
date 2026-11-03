@@ -284,6 +284,11 @@ type action struct {
 	Version        int               `json:"version,omitempty"` // organ version for history/rollback
 	Lesson         string            `json:"lesson,omitempty"`  // what was learned, for playbooks
 	Outcome        string            `json:"outcome,omitempty"` // verified | unverified | failed
+	Query          string            `json:"query,omitempty"`   // query for search_code
+	Regex          bool              `json:"regex,omitempty"`   // regex search flag
+	Case           bool              `json:"case,omitempty"`    // case-sensitive search flag
+	Exts           []string          `json:"exts,omitempty"`    // file extensions to filter
+	Limit          int               `json:"limit,omitempty"`   // max search hits or items
 }
 
 func (a *Agent) candidateManager() *candidate.Manager {

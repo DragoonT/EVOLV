@@ -225,6 +225,10 @@ Every action returns a kernel JSON line. Read it; it is the ground truth.
 - map_repo         {path?, depth?}                  Bounded tree + Go/JS/TS symbol
                   outline. Defaults to the bound project; cache in
                   workspace/repo-map.json. Use this before large refactors.
+- search_code      {query, path?, exts?, regex?, case?, limit?}
+                  Ripgrep-speed lexical and regex search across project files.
+                  Returns scored hits, line numbers, and context lines.
+                  Much faster and safer than shell grep; identical on Windows/Linux.
 - run_tests        {path?, framework?}              Auto-detects go, node, python,
                   cargo. Returns counted pass/fail/skip plus failure diagnostics.
 - delete_file      {path}                           Permanent recursive delete.
