@@ -1,0 +1,126 @@
+name: package
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Version to inject into every binary (no leading v)
+        required: true
+        type: string
+    outputs:
+      version:
+        description: Version that was packaged and verified
+        value: ${{ jobs.verify.outputs.version }}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CGO_ENABLED: "0"
+  GOTOOLCHAIN: local
+  GOFLAGS: -mod=readonly
+
+jobs:
+  build:
+    name: build / ${{ matrix.goos }}-${{ matrix.goarch }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+          - goos: windows
+            goarch: arm64
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-go
+
+      - name: Build ${{ matrix.goos }} / ${{ matrix.goarch }}
+        timeout-minutes: 8
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          out="dist/evolv_${GOOS}_${GOARCH}"
+          if [ "$GOOS" = "windows" ]; then
+            out="${out}.exe"
+          fi
+          go build -trimpath \
+            -ldflags="-s -w -X github.com/dxn111/EVOLV/internal/workspace.Version=${VERSION}" \
+            -o "$out" ./cmd/evolv
+          if [ "$GOOS" = "linux" ] && [ "$GOARCH" = "amd64" ]; then
+            chmod +x "$out"
+            test "$("$out" --version)" = "evolv ${VERSION}"
+          fi
+          ls -lh "$out"
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v7
+        with:
+          name: package-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/evolv_*
+          retention-days: 2
+          if-no-files-found: error
+
+  verify:
+    name: verify artifacts
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Download every platform binary
+        uses: actions/download-artifact@v8
+        with:
+          pattern: package-*
+          path: dist
+          merge-multiple: true
+
+      - name: Record version
+        id: meta
+        env:
+          VERSION: ${{ inputs.version }}
+        run: echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify manifest, version and checksums
+        timeout-minutes: 5
+        env:
+          VERSION: ${{ inputs.version }}
+        run: bash scripts/verify-artifacts.sh dist "$VERSION"
+
+      - name: Boot the packaged Linux binary
+        timeout-minutes: 8
+        run: bash scripts/smoke.sh dist/evolv_linux_amd64 17391
+
+      - name: Upload verified distribution
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-dist
+          path: dist/
+          retention-days: 2
+          if-no-files-found: error

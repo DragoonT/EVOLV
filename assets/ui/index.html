@@ -5,10 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>EVOLV</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23121715'/%3E%3Cpath d='M32 7 53 19v25L32 57 11 44V19Z' fill='none' stroke='%23c9ef72' stroke-width='3'/%3E%3Cpath d='M32 15 46 32 32 49 18 32Z' fill='%23c9ef72'/%3E%3Ccircle cx='32' cy='32' r='7' fill='%23121715'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="/style.css?v=20261101-appearance">
+<link rel="stylesheet" href="/style.css?v=20261104-2">
 </head>
 <body>
-<iframe id="dna-ambient" src="/ui/genome.html?ambient=1" title="" aria-hidden="true" tabindex="-1"></iframe>
+<div id="ambient-stage" aria-hidden="true">
+  <canvas id="ambient-canvas"></canvas>
+  <div class="ambient-grain"></div>
+</div>
 <div id="app">
 
   <!-- ===== left sidebar ===== -->
@@ -86,7 +89,7 @@
       <button class="icon-btn" id="btn-sound" title="sound & soul — tiny blips on mutation (default off)">🔇</button>
       <button class="icon-btn" id="btn-theme" title="toggle light / dark (ctrl+shift+l)">☀️</button>
       <button class="dna-view-btn" id="btn-dna" type="button" title="Open the live, interactive DNA genome view"><span>🧬</span><b>Live DNA View</b></button>
-      <span class="live" title="components hot-reload as files change"><i></i> whole page is the canvas</span>
+      <span class="live" title="components hot-reload as files change"><i></i> live genome</span>
     </header>
 
     <div id="search-bar" hidden>
@@ -384,10 +387,11 @@
     </div>
   </div>
 </div>
-<script src="/app.js?v=20261101-appearance"></script>
+<script src="/ui/ambient.js?v=20261104-1"></script>
+<script src="/app.js?v=20261104-1"></script>
 <script src="/ui/workspace-layout.js"></script>
 <script src="/runs.js"></script>
 <script src="/organs.js"></script>
-<script src="/ui/appearance.js?v=20261101-2"></script>
+<script src="/ui/appearance.js?v=20261104-1"></script>
 </body>
 </html>

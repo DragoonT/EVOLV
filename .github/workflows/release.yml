@@ -6,11 +6,11 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version, e.g. v0.31.0 (required for manual runs)"
+        description: "Release version, e.g. v0.33.0 (must match internal/workspace.Version)"
         required: true
         type: string
       dry_run:
-        description: "Build and validate the artifacts, but do not publish a release"
+        description: "Build and verify every artifact, but do not publish a release"
         required: false
         type: boolean
         default: false
@@ -29,33 +29,47 @@ env:
 
 jobs:
   validate:
-    name: validate
+    name: validate / v${{ github.ref_name }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v7
-      - uses: ./.github/actions/setup-go
         with:
-          go-version: "1.27.x"
+          persist-credentials: false
 
-      - name: Resolve version
+      - uses: ./.github/actions/setup-go
+
+      - name: Resolve and validate the version
         id: version
         env:
           INPUT_VERSION: ${{ github.event.inputs.version }}
+          REF_NAME: ${{ github.ref_name }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
-          raw="$INPUT_VERSION"
+          set -euo pipefail
+          raw="${INPUT_VERSION}"
           if [ -z "$raw" ]; then
-            raw="${GITHUB_REF_NAME}"
+            raw="$REF_NAME"
           fi
           version="${raw#v}"
           if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "::error::invalid release version: $raw (expected vMAJOR.MINOR.PATCH)"
+            echo "::error::invalid release version: ${raw} (expected vMAJOR.MINOR.PATCH)"
             exit 1
           fi
-          echo "VERSION=$version" >> "$GITHUB_ENV"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "$EVENT_NAME" = "push" ] && [ "$REF_NAME" != "v${version}" ]; then
+            echo "::error::tag ${REF_NAME} does not match version v${version}"
+            exit 1
+          fi
+          source_version="$(sed -n 's/^var Version = "\([0-9][0-9.]*\)"$/\1/p' internal/workspace/workspace.go | head -1)"
+          if [ "$source_version" != "$version" ]; then
+            echo "::error::internal/workspace.Version is ${source_version}, but the release is ${version}; bump the source before tagging"
+            exit 1
+          fi
+          echo "VERSION=${version}" >> "$GITHUB_ENV"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "releasing v${version} from ${GITHUB_SHA}"
 
       - name: Test
         timeout-minutes: 15
@@ -67,6 +81,12 @@ jobs:
           go vet ./...
           go build ./...
 
+      - name: Generated docs are current
+        timeout-minutes: 5
+        run: |
+          go run ./cmd/evolv-docs
+          git diff --exit-code -- docs/index.html
+
       - name: Diagnostics on failure
         if: failure()
         run: |
@@ -74,108 +94,30 @@ jobs:
           go env GOOS GOARCH CGO_ENABLED GOCACHE GOMODCACHE
           git status --short
 
-  build:
-    name: build / ${{ matrix.goos }}-${{ matrix.goarch }}
+  package:
+    name: package / verified artifacts
     needs: validate
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - goos: linux
-            goarch: amd64
-          - goos: linux
-            goarch: arm64
-          - goos: darwin
-            goarch: amd64
-          - goos: darwin
-            goarch: arm64
-          - goos: windows
-            goarch: amd64
-          - goos: windows
-            goarch: arm64
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/setup-go
-        with:
-          go-version: "1.27.x"
+    uses: ./.github/workflows/_package.yml
+    with:
+      version: ${{ needs.validate.outputs.version }}
 
-      - name: Build
-        timeout-minutes: 8
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          VERSION: ${{ needs.validate.outputs.version }}
-        run: |
-          mkdir -p dist
-          out="dist/evolv_${GOOS}_${GOARCH}"
-          [ "$GOOS" = "windows" ] && out="${out}.exe"
-          echo "building $out (v$VERSION)"
-          go build -trimpath \
-            -ldflags="-s -w -X github.com/dxn111/EVOLV/internal/workspace.Version=$VERSION" \
-            -o "$out" ./cmd/evolv
-          ls -lh "$out"
-
-      - name: Upload binary
-        uses: actions/upload-artifact@v7
-        with:
-          name: evolv-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: dist/evolv_*
-          retention-days: 1
-          if-no-files-found: error
-
-  release:
+  publish:
     name: publish
-    needs: [validate, build]
+    needs: [validate, package]
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.dry_run != true }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     permissions:
       contents: write
       actions: read
       id-token: write
       attestations: write
     steps:
-      - name: Download binaries
+      - name: Download the verified distribution
         uses: actions/download-artifact@v8
         with:
-          pattern: evolv-*
+          name: release-dist
           path: dist
-          merge-multiple: true
-
-      - name: Verify artifact set
-        timeout-minutes: 3
-        run: |
-          expected=(
-            evolv_linux_amd64
-            evolv_linux_arm64
-            evolv_darwin_amd64
-            evolv_darwin_arm64
-            evolv_windows_amd64.exe
-            evolv_windows_arm64.exe
-          )
-          missing=0
-          for f in "${expected[@]}"; do
-            if [ ! -f "dist/$f" ]; then
-              echo "::error::missing release artifact: dist/$f"
-              missing=1
-            fi
-          done
-          [ "$missing" -eq 0 ]
-          ls -lh dist
-
-      - name: Verify the Linux binary reports the release version
-        timeout-minutes: 3
-        env:
-          VERSION: ${{ needs.validate.outputs.version }}
-        run: |
-          chmod +x dist/evolv_linux_amd64
-          got="$(dist/evolv_linux_amd64 --version)"
-          want="evolv $VERSION"
-          if [ "$got" != "$want" ]; then
-            echo "::error::version mismatch: got '$got', want '$want'"
-            exit 1
-          fi
 
       - name: Generate SBOM
         timeout-minutes: 10
@@ -186,13 +128,19 @@ jobs:
           output-file: dist/evolv.spdx.json
           upload-artifact: false
 
-      - name: Checksums
+      - name: Checksums over the complete release set
+        timeout-minutes: 3
         run: |
-          sha256sum dist/evolv_* dist/evolv.spdx.json > dist/checksums.txt
-          sha256sum -c dist/checksums.txt
+          set -euo pipefail
+          cd dist
+          sha256sum evolv_* evolv.spdx.json > checksums.txt
+          sha256sum -c checksums.txt
+          grep -q ' evolv_linux_amd64$' checksums.txt
+          grep -q ' evolv_darwin_arm64$' checksums.txt
+          grep -q ' evolv_windows_amd64.exe$' checksums.txt
+          cat checksums.txt
 
       - name: Attest build provenance
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.dry_run != true }}
         uses: actions/attest-build-provenance@v4
         with:
           subject-path: |
@@ -200,7 +148,6 @@ jobs:
             dist/checksums.txt
 
       - name: Publish GitHub release
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.dry_run != true }}
         uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ needs.validate.outputs.version }}
@@ -209,6 +156,7 @@ jobs:
           fail_on_unmatched_files: true
           files: |
             dist/evolv_*
+            dist/evolv.spdx.json
             dist/checksums.txt
 
       - name: Diagnostics on failure

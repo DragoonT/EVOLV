@@ -37,7 +37,11 @@ files.each do |file|
       errors << "#{file}: job #{job_name} is not a mapping"
       next
     end
-    errors << "#{file}: job #{job_name} missing timeout-minutes" unless job["timeout-minutes"]
+    # Reusable-workflow calls declare their own job timeouts inside the
+    # called workflow; GitHub rejects timeout-minutes on a `uses` job.
+    unless job["uses"]
+      errors << "#{file}: job #{job_name} missing timeout-minutes" unless job["timeout-minutes"]
+    end
 
     checks = []
     checks << ["job #{job_name}", job["uses"]] if job["uses"]

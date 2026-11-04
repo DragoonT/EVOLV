@@ -86,5 +86,30 @@ themselves in `workspace/migrations.json`, and must never delete user data.
 ## Metrics
 
 `/api/metrics` exposes Prometheus text; `/api/health` exposes the same data
-as JSON under `runs`. Label cardinality is bounded: action names are clipped
-to 32 characters and nothing model- or path-specific becomes a label.
+as JSON under `runs`.Label cardinality is bounded: action names are clipped
+ to 32 characters and nothing model- or path-specific becomes a label.
+
+## Release pipeline
+
+Packaging lives in `.github/workflows/_package.yml` and is reused by CI on
+`every pull request` and by `release.yml` on tags. It builds the six supported
+targets with the version injected at link time, then:
+
+- `scripts/verify-artifacts.sh dist <version>` enforces the exact artifact
+  manifest, rejects stale extras, checks the Linux binary's reported version,
+  and generates/checks `checksums.txt`;
+- `scripts/smoke.sh <binary>` boots the packaged binary against a throwaway
+  `HOME` and exercises health, metrics, UI assets, swarm routes, a full
+  `.evolvpack` export/inspect/import round-trip, the 403/421 security
+  boundaries, the CLI surface, and a clean SIGTERM drain.
+
+`release.yml` refuses to build unless the tag, the requested version and
+`internal/workspace.Version` all agree. Publish reuses the verified `dist`,
+adds the SBOM, regenerates checksums over the complete set, and attests it.
+
+Run the same checks locally:
+
+```bash
+make smoke
+scripts/verify-artifacts.sh dist 0.33.0
+```

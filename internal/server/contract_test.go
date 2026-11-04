@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/dxn111/EVOLV/internal/workspace"
 )
 
 // Contract tests pin the shape of the critical endpoints so the frontend and
@@ -31,7 +33,7 @@ func TestContractHealth(t *testing.T) {
 			t.Fatalf("health missing %q: %v", key, body)
 		}
 	}
-	if body["version"] != "0.32.0" {
+	if body["version"] != workspace.Version {
 		t.Fatalf("version = %v", body["version"])
 	}
 }

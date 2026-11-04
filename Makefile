@@ -1,7 +1,9 @@
 # EVOLV — build the organism
-.PHONY: build install run release cross clean test vet fmt check
+.PHONY: build install run release cross clean test vet fmt check smoke
 
-VERSION ?= $(shell git describe --tags --always 2>/dev/null || echo "0.1.0")
+# Default to the source version so local builds and releases agree; override
+# explicitly with `make build VERSION=x.y.z` when needed.
+VERSION ?= $(shell sed -n 's/^var Version = "\([0-9][0-9.]*\)"$$/\1/p' internal/workspace/workspace.go)
 
 build:
 	CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X github.com/dxn111/EVOLV/internal/workspace.Version=$(VERSION)" -o evolv ./cmd/evolv
@@ -26,6 +28,10 @@ check:
 	@test -z "$$(gofmt -l .)" || { echo "gofmt needed:"; gofmt -l .; exit 1; }
 	go vet ./...
 	go test ./... -count=1
+
+# boot the real binary against a throwaway HOME (same check CI and releases run)
+smoke: build
+	bash scripts/smoke.sh ./evolv
 
 # cross-compile all release targets (CGO-free: pure Go + goja)
 cross:
