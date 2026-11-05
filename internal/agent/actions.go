@@ -1120,6 +1120,41 @@ func (a *Agent) Execute(act action) string {
 			a.AttachPendingImage(capRes.DataURL)
 		}
 
+	case "speak", "voice_narrate", "say":
+		text := strings.TrimSpace(act.Text)
+		if text == "" {
+			text = strings.TrimSpace(act.Message)
+		}
+		if text == "" {
+			text = strings.TrimSpace(act.Content)
+		}
+		if text == "" && act.Args != nil {
+			if t, ok := act.Args["text"].(string); ok {
+				text = strings.TrimSpace(t)
+			} else if m, ok := act.Args["message"].(string); ok {
+				text = strings.TrimSpace(m)
+			}
+		}
+		if text == "" {
+			res["ok"] = false
+			res["error"] = "speak requires text to say"
+			break
+		}
+		ut, err := a.Speak(context.Background(), text, act.Voice, act.Rate, act.Pitch)
+		if err != nil {
+			res["ok"] = false
+			res["error"] = err.Error()
+			break
+		}
+		res["ok"] = true
+		res["id"] = ut.ID
+		res["text"] = ut.Text
+		summaryText := ut.Text
+		if len(summaryText) > 60 {
+			summaryText = summaryText[:60] + "..."
+		}
+		res["summary"] = fmt.Sprintf("Spoke aloud: %q", summaryText)
+
 	case "set_plan":
 		// persistent task state: the agent declares/updates its plan and
 		// the UI renders it live; plan.json survives restarts
