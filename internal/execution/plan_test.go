@@ -138,3 +138,147 @@ func TestPlanCanBeExecutedByStore(t *testing.T) {
 		t.Fatalf("tasks = %d", len(run.Tasks))
 	}
 }
+
+// --- validation error sharpening (wave hardening) ---
+
+func TestCompilePlanUnknownDependencyNamesStepAndReason(t *testing.T) {
+	res := CompilePlan(PlanSpec{Title: "x", Steps: []PlanStepSpec{
+		{ID: "build", Title: "Build", After: []string{"ghost"}},
+	}})
+	if len(res.Problems) != 1 {
+		t.Fatalf("problems = %v, want exactly one", res.Problems)
+	}
+	want := `step "build" depends on unknown step "ghost"`
+	if res.Problems[0] != want {
+		t.Fatalf("problem = %q, want %q", res.Problems[0], want)
+	}
+	if len(res.Waves) != 0 {
+		t.Fatalf("produced a schedule for a broken plan: %v", res.Waves)
+	}
+}
+
+func TestCompilePlanSelfDependencyNamesStep(t *testing.T) {
+	res := CompilePlan(PlanSpec{Title: "x", Steps: []PlanStepSpec{
+		{ID: "a", Title: "a", After: []string{"a"}},
+	}})
+	joined := strings.Join(res.Problems, "; ")
+	if !strings.Contains(joined, `step "a" depends on itself`) {
+		t.Fatalf("problems %v do not name the self-dependent step", res.Problems)
+	}
+}
+
+func TestCompilePlanDuplicateIDReportsBothOccurrences(t *testing.T) {
+	res := CompilePlan(PlanSpec{Title: "x", Steps: []PlanStepSpec{
+		{ID: "a", Title: "one"},
+		{ID: "a", Title: "two"},
+	}})
+	joined := strings.Join(res.Problems, "; ")
+	if !strings.Contains(joined, `duplicate step id "a" (steps 1 and 2)`) {
+		t.Fatalf("problems %v do not report both duplicate occurrences", res.Problems)
+	}
+}
+
+func TestCompilePlanDuplicateTitleNamesBothSteps(t *testing.T) {
+	res := CompilePlan(PlanSpec{Title: "x", Steps: []PlanStepSpec{
+		{ID: "a", Title: "Same"},
+		{ID: "b", Title: "Same"},
+	}})
+	joined := strings.Join(res.Problems, "; ")
+	if !strings.Contains(joined, `duplicate step title "Same" (steps "a" and "b")`) {
+		t.Fatalf("problems %v do not name both steps sharing the title", res.Problems)
+	}
+}
+
+func TestCompilePlanRejectsWhitespaceOnlyStepIDs(t *testing.T) {
+	res := CompilePlan(PlanSpec{Title: "x", Steps: []PlanStepSpec{
+		{ID: "   ", Title: "blank id"},
+		{ID: "\t\n ", Title: "tabs and newlines"},
+	}})
+	if len(res.Problems) != 2 {
+		t.Fatalf("problems = %v, want two whitespace-id problems", res.Problems)
+	}
+	for i, want := range []string{`step 1 has a whitespace-only id "   "`, `step 2 has a whitespace-only id "\t\n "`} {
+		if res.Problems[i] != want {
+			t.Errorf("problem %d = %q, want %q", i, res.Problems[i], want)
+		}
+	}
+	if len(res.Waves) != 0 {
+		t.Fatalf("produced a schedule despite whitespace-only ids: %v", res.Waves)
+	}
+	// An absent id (empty string) keeps the auto-assign contract.
+	ok := CompilePlan(PlanSpec{Title: "y", Steps: []PlanStepSpec{{Title: "solo"}}})
+	if len(ok.Problems) != 0 || len(ok.Tasks) != 1 || ok.Tasks[0].ID != "t1" {
+		t.Fatalf("absent id should auto-assign: problems %v, tasks %v", ok.Problems, ok.Tasks)
+	}
+}
+
+func TestCompilePlanSurfacesCyclePath(t *testing.T) {
+	res := CompilePlan(PlanSpec{Title: "x", Steps: []PlanStepSpec{
+		{ID: "a", Title: "a", After: []string{"b"}},
+		{ID: "b", Title: "b", After: []string{"c"}},
+		{ID: "c", Title: "c", After: []string{"a"}},
+	}})
+	joined := strings.Join(res.Problems, "; ")
+	if !strings.Contains(joined, "dependency cycle: a → b → c → a") {
+		t.Fatalf("problems %v do not surface the concrete cycle path", res.Problems)
+	}
+}
+
+// --- Summary renderer ---
+
+func TestCompileResultSummaryListsWavesAndDeps(t *testing.T) {
+	res := CompilePlan(PlanSpec{Title: "s", Steps: []PlanStepSpec{
+		{ID: "one", Title: "First"},
+		{ID: "two", Title: "Second", After: []string{"one"}},
+		{ID: "three", Title: "Third", After: []string{"one"}},
+		{ID: "four", Title: "Fourth", After: []string{"two", "three"}},
+	}})
+	if len(res.Problems) != 0 {
+		t.Fatalf("problems: %v", res.Problems)
+	}
+	s := res.Summary()
+	for _, want := range []string{
+		"plan: 4 step(s), 3 wave(s)",
+		"wave 1: one (First)",
+		"wave 2: two (Second) after: one",
+		"wave 2: three (Third) after: one",
+		"wave 3: four (Fourth) after: two, three",
+	} {
+		if !strings.Contains(s, want) {
+			t.Fatalf("summary %q missing %q", s, want)
+		}
+	}
+	// Deterministic: identical plans render identically.
+	if again := CompilePlan(resToSpec(res)).Summary(); again != s {
+		t.Fatalf("summary not deterministic:\n%q\n%q", s, again)
+	}
+}
+
+// resToSpec rebuilds a spec from a compiled result so the determinism check
+// exercises the same input shape twice.
+func resToSpec(res CompileResult) PlanSpec {
+	byID := map[string]Task{}
+	for _, tk := range res.Tasks {
+		byID[tk.ID] = tk
+	}
+	spec := PlanSpec{Title: "s"}
+	for _, id := range res.Order {
+		tk := byID[id]
+		spec.Steps = append(spec.Steps, PlanStepSpec{ID: id, Title: tk.Title, After: tk.DependsOn})
+	}
+	return spec
+}
+
+func TestCompileResultSummaryListsProblemsWhenInvalid(t *testing.T) {
+	bad := CompilePlan(PlanSpec{Steps: []PlanStepSpec{{Title: "a"}}})
+	s := bad.Summary()
+	if !strings.Contains(s, "plan invalid: 1 problem(s)") {
+		t.Fatalf("summary %q does not report the problem count", s)
+	}
+	if !strings.Contains(s, "plan needs a title") {
+		t.Fatalf("summary %q does not list the problem", s)
+	}
+	if strings.Contains(s, "wave") {
+		t.Fatalf("summary %q must not show waves for an invalid plan", s)
+	}
+}
