@@ -13,6 +13,7 @@ func TestStorePublishesToBus(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
+	defer s.CloseAll()
 	bus := NewBus()
 	s.SetBus(bus)
 	sub, err := bus.Subscribe(16)
