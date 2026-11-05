@@ -17,6 +17,7 @@ import (
 	"github.com/dop251/goja"
 
 	"github.com/dxn111/EVOLV/internal/candidate"
+	"github.com/dxn111/EVOLV/internal/deploy"
 	"github.com/dxn111/EVOLV/internal/genome"
 	"github.com/dxn111/EVOLV/internal/lint"
 	"github.com/dxn111/EVOLV/internal/redact"
@@ -1154,6 +1155,38 @@ func (a *Agent) Execute(act action) string {
 			summaryText = summaryText[:60] + "..."
 		}
 		res["summary"] = fmt.Sprintf("Spoke aloud: %q", summaryText)
+
+	case "deploy_organ", "deploy_app", "deploy":
+		comp := strings.TrimSpace(act.Target)
+		if comp == "" {
+			comp = strings.TrimSpace(act.Name)
+		}
+		if comp == "" && act.Args != nil {
+			if c, ok := act.Args["component"].(string); ok {
+				comp = strings.TrimSpace(c)
+			}
+		}
+		if comp == "" {
+			comp = "canvas"
+		}
+		targetHost := "local_preview"
+		if act.Args != nil {
+			if th, ok := act.Args["target"].(string); ok && th != "" {
+				targetHost = strings.TrimSpace(th)
+			}
+		}
+		mgr := deploy.NewManager(a.ws)
+		dep, err := mgr.DeployPackage(context.Background(), comp, targetHost)
+		if err != nil {
+			res["ok"] = false
+			res["error"] = err.Error()
+			break
+		}
+		res["ok"] = true
+		res["deployment_id"] = dep.ID
+		res["url"] = dep.URL
+		res["dist_path"] = dep.DistPath
+		res["summary"] = dep.Summary
 
 	case "set_plan":
 		// persistent task state: the agent declares/updates its plan and
