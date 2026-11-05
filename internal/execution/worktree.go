@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -274,6 +275,10 @@ func RemoveWorktree(repoDir string, wt *Worktree, deleteBranch bool) error {
 // sync directories; callers doing best-effort cleanup should tolerate the
 // error, callers needing durability should propagate it.
 func syncDir(dir string) error {
+	// Windows NTFS/FAT32 does not support directory fsync (FlushFileBuffers on directory handles returns Access Denied).
+	if runtime.GOOS == "windows" {
+		return nil
+	}
 	f, err := os.Open(dir)
 	if err != nil {
 		return fmt.Errorf("opening directory %s for fsync: %w", dir, err)
