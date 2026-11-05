@@ -51,6 +51,34 @@ type Store struct {
 	root  string
 	runs  map[string]*Run
 	journ map[string]*Journal
+	bus   *Bus
+}
+
+// SetBus installs an optional observer bus: every journal event appended
+// afterwards is republished to its subscribers (live UI / webhooks). Nil
+// clears it. Safe to call before or after runs are created.
+func (s *Store) SetBus(b *Bus) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.bus = b
+}
+
+// appendEv appends to the run's journal and republishes the event to the
+// observer bus when one is installed. Bus delivery is best-effort and never
+// blocks or fails the journal write.
+func (s *Store) appendEv(runID, kind, taskID string, data any) (Event, error) {
+	j, ok := s.journ[runID]
+	if !ok {
+		return Event{}, fmt.Errorf("run %q has no journal", runID)
+	}
+	ev, err := j.Append(kind, taskID, data)
+	if err != nil {
+		return ev, err
+	}
+	if s.bus != nil {
+		s.bus.Publish(BusEventFrom(runID, ev))
+	}
+	return ev, nil
 }
 
 // Open loads (and recovers) every run under root.
@@ -261,8 +289,25 @@ func normalizeRunTasks(tasks []Task) []Task {
 		}
 		out = append(out, t)
 	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].CreatedAt < out[j].CreatedAt })
+	sort.SliceStable(out, func(i, j int) bool { return createdAtLess(out[i].CreatedAt, out[j].CreatedAt) })
 	return out
+}
+
+// createdAtLess orders RFC3339Nano stamps chronologically. Plain string
+// comparison is wrong here: RFC3339Nano trims trailing fraction zeros, so
+// "…T10:00:00Z" (older) sorts after "…T10:00:00.5Z" (newer) because 'Z' >
+// '.' in byte order. Unparsable stamps fall back to legacy string order so
+// behaviour stays deterministic for hand-written fixtures.
+func createdAtLess(a, b string) bool {
+	ta, aerr := time.Parse(time.RFC3339Nano, a)
+	tb, berr := time.Parse(time.RFC3339Nano, b)
+	if aerr == nil && berr == nil {
+		if !ta.Equal(tb) {
+			return ta.Before(tb)
+		}
+		return a < b // identical instants: stable string tie-break
+	}
+	return a < b
 }
 
 // CreateRun opens a new run with its task graph.
@@ -331,7 +376,7 @@ func (s *Store) AddTasks(runID string, tasks []Task) error {
 			return fmt.Errorf("task id is required")
 		}
 		t = mergeTaskDefaults(t)
-		ev, err := s.journ[runID].Append(KindTaskAdded, t.ID, t)
+		ev, err := s.appendEv(runID, KindTaskAdded, t.ID, t)
 		if err != nil {
 			return err
 		}
@@ -373,7 +418,7 @@ func (s *Store) Transition(runID, taskID string, to Status) (Task, error) {
 	if !CanTransition(from, to) {
 		return Task{}, &TransitionError{TaskID: taskID, From: from, To: to}
 	}
-	ev, err := s.journ[runID].Append(KindTaskMoved, taskID, map[string]any{"from": from, "to": to})
+	ev, err := s.appendEv(runID, KindTaskMoved, taskID, map[string]any{"from": from, "to": to})
 	if err != nil {
 		return Task{}, err
 	}
@@ -399,14 +444,14 @@ func (s *Store) RecordAttempt(runID, taskID, reason string) error {
 	if taskIndex(run.Tasks, taskID) < 0 {
 		return fmt.Errorf("task %q not found", taskID)
 	}
-	ev, err := s.journ[runID].Append(KindTaskAttempt, taskID, map[string]any{"reason": reason})
+	ev, err := s.appendEv(runID, KindTaskAttempt, taskID, map[string]any{"reason": reason})
 	if err != nil {
 		return err
 	}
 	run.Seq = ev.Seq
 	applyEvent(run, ev)
 	if reason != "" {
-		ev, err = s.journ[runID].Append(KindTaskError, taskID, map[string]any{"error": reason})
+		ev, err = s.appendEv(runID, KindTaskError, taskID, map[string]any{"error": reason})
 		if err != nil {
 			return err
 		}
@@ -430,7 +475,7 @@ func (s *Store) RecordVerification(runID, taskID string, v Verification) error {
 	if v.RanAt == "" {
 		v.RanAt = timestamp()
 	}
-	ev, err := s.journ[runID].Append(KindVerify, taskID, v)
+	ev, err := s.appendEv(runID, KindVerify, taskID, v)
 	if err != nil {
 		return err
 	}
@@ -447,7 +492,7 @@ func (s *Store) Checkpoint(runID, taskID, snapshotID string) error {
 	if !ok {
 		return fmt.Errorf("run %q not found", runID)
 	}
-	ev, err := s.journ[runID].Append(KindCheckpoint, taskID, map[string]any{"id": snapshotID})
+	ev, err := s.appendEv(runID, KindCheckpoint, taskID, map[string]any{"id": snapshotID})
 	if err != nil {
 		return err
 	}
@@ -464,7 +509,7 @@ func (s *Store) Close(runID string, status Status) error {
 	if !ok {
 		return fmt.Errorf("run %q not found", runID)
 	}
-	ev, err := s.journ[runID].Append(KindRunClosed, "", map[string]any{"status": status})
+	ev, err := s.appendEv(runID, KindRunClosed, "", map[string]any{"status": status})
 	if err != nil {
 		return err
 	}
@@ -497,7 +542,7 @@ func (s *Store) maybeCloseLocked(run *Run) {
 			return
 		}
 	}
-	ev, err := s.journ[run.ID].Append(KindRunClosed, "", map[string]any{"status": status})
+	ev, err := s.appendEv(run.ID, KindRunClosed, "", map[string]any{"status": status})
 	if err != nil {
 		return
 	}
@@ -519,7 +564,7 @@ func (s *Store) Cancel(runID, reason string) (*Run, error) {
 	for i := range run.Tasks {
 		if !run.Tasks[i].Status.Terminal() {
 			from := run.Tasks[i].Status
-			ev, err := s.journ[runID].Append(KindTaskMoved, run.Tasks[i].ID, map[string]any{
+			ev, err := s.appendEv(runID, KindTaskMoved, run.Tasks[i].ID, map[string]any{
 				"from": from,
 				"to":   StatusCancelled,
 			})
@@ -530,7 +575,7 @@ func (s *Store) Cancel(runID, reason string) (*Run, error) {
 			applyEvent(run, ev)
 		}
 	}
-	ev, err := s.journ[runID].Append(KindRunClosed, "", map[string]any{"status": StatusCancelled})
+	ev, err := s.appendEv(runID, KindRunClosed, "", map[string]any{"status": StatusCancelled})
 	if err != nil {
 		return nil, err
 	}
@@ -557,7 +602,7 @@ func (s *Store) Retry(runID, taskID string) (*Run, error) {
 		}
 		if run.Tasks[i].Status == StatusFailed || run.Tasks[i].Status == StatusCancelled {
 			from := run.Tasks[i].Status
-			ev, err := s.journ[runID].Append(KindTaskMoved, run.Tasks[i].ID, map[string]any{
+			ev, err := s.appendEv(runID, KindTaskMoved, run.Tasks[i].ID, map[string]any{
 				"from": from,
 				"to":   StatusQueued,
 			})
@@ -576,7 +621,7 @@ func (s *Store) Retry(runID, taskID string) (*Run, error) {
 		return nil, fmt.Errorf("no failed or cancelled tasks to retry in run %q", runID)
 	}
 	if run.Status.Terminal() {
-		ev, err := s.journ[runID].Append(KindRunReopened, "", map[string]any{"status": StatusQueued})
+		ev, err := s.appendEv(runID, KindRunReopened, "", map[string]any{"status": StatusQueued})
 		if err != nil {
 			return nil, err
 		}
@@ -658,7 +703,7 @@ func (s *Store) AttachWorktree(runID string, wt Worktree) error {
 	if !ok {
 		return fmt.Errorf("run %q not found", runID)
 	}
-	ev, err := s.journ[runID].Append(KindWorktreeCreated, "", wt)
+	ev, err := s.appendEv(runID, KindWorktreeCreated, "", wt)
 	if err != nil {
 		return err
 	}
@@ -675,7 +720,7 @@ func (s *Store) UpdateWorktree(runID string, wt Worktree) error {
 	if !ok {
 		return fmt.Errorf("run %q not found", runID)
 	}
-	ev, err := s.journ[runID].Append(KindWorktreeUpdated, "", wt)
+	ev, err := s.appendEv(runID, KindWorktreeUpdated, "", wt)
 	if err != nil {
 		return err
 	}
@@ -692,7 +737,7 @@ func (s *Store) DetachWorktree(runID string) error {
 	if !ok {
 		return fmt.Errorf("run %q not found", runID)
 	}
-	ev, err := s.journ[runID].Append(KindWorktreeRemoved, "", nil)
+	ev, err := s.appendEv(runID, KindWorktreeRemoved, "", nil)
 	if err != nil {
 		return err
 	}
