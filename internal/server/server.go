@@ -35,6 +35,7 @@ import (
 	"github.com/dxn111/EVOLV/internal/providers"
 	"github.com/dxn111/EVOLV/internal/swarm"
 	"github.com/dxn111/EVOLV/internal/update"
+	"github.com/dxn111/EVOLV/internal/workflow"
 	"github.com/dxn111/EVOLV/internal/workspace"
 )
 
@@ -71,6 +72,7 @@ type Server struct {
 	execStore     *execution.Store
 	execMu        sync.Mutex
 	cloudAPI      *cloud.API
+	wfRunner      *workflow.Runner
 }
 
 // New builds the server.
@@ -179,6 +181,9 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/voice/history", s.handleVoiceHistory)
 	s.mux.HandleFunc("/api/deploy", s.handleDeploy)
 	s.mux.HandleFunc("/api/deploy/list", s.handleDeployList)
+	s.mux.HandleFunc("/api/workflows", s.handleWorkflows)
+	s.mux.HandleFunc("/api/workflows/run", s.handleWorkflowRun)
+	s.mux.HandleFunc("/api/workflows/history", s.handleWorkflowHistory)
 	if s.cloudAPI != nil {
 		s.cloudAPI.RegisterRoutes(s.mux)
 	}

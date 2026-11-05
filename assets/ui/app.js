@@ -177,6 +177,17 @@ function handle(ev) {
       }
       break;
     }
+    case 'workflow:start': {
+      const p = ev.payload || {};
+      toast(`⚡ Workflow started: ${p.name || 'pipeline'} (${p.steps || 0} steps)`);
+      break;
+    }
+    case 'workflow:done': {
+      const p = ev.payload || {};
+      const statusIcon = p.succeeded ? '✓' : '⚠️';
+      toast(`${statusIcon} Workflow ${p.name || ''} finished in ${(p.duration_ms || 0).toFixed(0)}ms (succeeded: ${p.succeeded})`);
+      break;
+    }
   }
 }
 
