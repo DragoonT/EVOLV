@@ -946,9 +946,90 @@ function addMsg(role, text) {
   return m;
 }
 
+/* ---------------- command palette + "/command" routing ----------------
+   Every command here calls a real handler in this file — nothing stubbed.
+   Typing "/name rest…" in the chat input runs the command instead of
+   chatting; unknown "/foo" text still goes to the chat unchanged. The
+   optional palette UI (ui/command-palette.js, window.EVOLVPalette) reads
+   this same registry via getCommands. */
+const SLASH_COMMANDS = [
+  { name: 'new', title: 'New conversation', desc: 'clear the chat and reset the organism', action: () => $('#btn-new').click() },
+  { name: 'genome', title: 'Open genome inspector', desc: "browse and edit the organism's own files", action: () => openGenome() },
+  { name: 'workbench', title: 'Open workbench', desc: 'edit your bound project in place', action: () => openWorkbench() },
+  { name: 'library', title: 'Open creation library', desc: 'everything it grew — inbox, candidates, history', action: () => openCreationLibrary() },
+  { name: 'settings', title: 'Open settings', desc: 'provider, model, project binding, dreaming', action: () => openDrawer() },
+  { name: 'replay', title: 'Open replay timeline', desc: 'watch the whole mutation history grow', action: () => openReplay() },
+  { name: 'diff', title: 'Open snapshot diff', desc: 'compare two genome snapshots', action: () => openDiff() },
+  { name: 'hologram', title: 'Open DNA hologram', desc: 'the full-screen organism visual', action: () => openHologram() },
+  { name: 'theme', title: 'Toggle appearance', desc: 'dark obsidian ↔ light paper', action: () => applyTheme(document.body.classList.contains('paper') ? 'dark' : 'paper') },
+  { name: 'sound', title: 'Toggle sound', desc: 'WebAudio blips on/off', action: () => setSound(localStorage.getItem('evolv.sound') !== '1') },
+  { name: 'sidebar', title: 'Toggle sidebar', desc: 'fold or unfold the sidebar', action: () => setSidebar() },
+  { name: 'search', title: 'Focus conversation search', desc: 'find text in this conversation (ctrl+f)', action: () => openSearch() },
+  { name: 'share', title: 'Share transcript', desc: 'download this conversation as one HTML file', action: () => exportTranscript() },
+  { name: 'help', title: 'List commands', desc: 'show every /command in the chat', action: () => showCommandHelp() },
+];
+
+function showCommandHelp() {
+  const lines = SLASH_COMMANDS.map((c) => `- **/${c.name}** — ${c.desc}`);
+  addMsg('evolv', '**Commands** — type them in the input, or press `/` for the palette:\n' + lines.join('\n'));
+}
+
+// execute a palette pick: accepts a command object ({name}) or a name string
+function runCommand(cmd) {
+  const c = typeof cmd === 'string'
+    ? SLASH_COMMANDS.find((x) => x.name === cmd)
+    : (cmd && (SLASH_COMMANDS.find((x) => x.name === cmd.name) || (typeof cmd.action === 'function' ? cmd : null)));
+  if (!c || typeof c.action !== 'function') return false;
+  c.action('');
+  return true;
+}
+
+// "/name rest…" in the send path → run that command; unknown names stay chat
+function routeSlashCommand(text, fromInput) {
+  const m = /^\/([a-z][a-z0-9_-]*)(?:\s|$)/i.exec(text);
+  if (!m) return false;
+  const cmd = SLASH_COMMANDS.find((c) => c.name === m[1].toLowerCase());
+  if (!cmd) return false;
+  if (fromInput) { $('#input').value = ''; $('#input').style.height = 'auto'; }
+  cmd.action(text.slice(m[0].length).trim());
+  return true;
+}
+
+// wire the optional palette (ui/command-palette.js) to the chat input.
+// Guarded: the app boots normally when that script is missing or broken.
+let paletteAttached = false;
+let paletteHandle = null;
+function attachPalette() {
+  if (paletteAttached) return true;
+  const input = document.getElementById('input');
+  if (!input || !window.EVOLVPalette || typeof window.EVOLVPalette.attach !== 'function') return false;
+  try {
+    paletteHandle = window.EVOLVPalette.attach(input, {
+      getCommands: () => SLASH_COMMANDS,
+      // palette contract: return true = consumed; the caller then clears the
+      // input so the "/ne" draft never lingers or gets sent later
+      onSubmit: (cmd) => {
+        const ok = runCommand(cmd);
+        if (ok) { input.value = ''; input.style.height = 'auto'; }
+        return ok;
+      },
+    });
+    paletteAttached = true;
+  } catch (e) { console.warn('[evolv] command palette attach failed:', e); }
+  return paletteAttached;
+}
+// true while the palette UI is showing — its own keydown listener then owns
+// Enter/Tab (accept highlighted command) and this file must not send().
+function paletteOpen() {
+  return !!(paletteHandle && typeof paletteHandle.isOpen === 'function' && paletteHandle.isOpen());
+}
+
 async function send(text) {
-  text = (text !== undefined ? text : $('#input').value).trim();
-  if (!text || state.busy) return;
+  const fromInput = text === undefined;
+  text = (fromInput ? $('#input').value : text).trim();
+  if (!text) return;
+  if (routeSlashCommand(text, fromInput)) return; // command input never reaches the chat
+  if (state.busy) return;
   hideWelcome();
   $('#input').value = '';
   $('#input').style.height = 'auto';
@@ -1308,11 +1389,18 @@ window.addEventListener('DOMContentLoaded', () => {
 
   $('#send').addEventListener('click', () => { if (state.busy) stopGeneration(); else { blip(660, 0.06, 'sine', 0.04); send(); } });
   $('#input').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (paletteOpen()) return; // palette owns Enter while open: accept command, no send
+      send();
+    }
   });
   $('#input').addEventListener('input', function () {
     this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 140) + 'px';
   });
+  // optional command palette — attach now, retry at window load in case the
+  // palette script registers after app.js; silent no-op if it never loads
+  if (!attachPalette()) window.addEventListener('load', attachPalette);
   document.querySelectorAll('.quick').forEach((b) => b.addEventListener('click', () => send(b.dataset.q)));
   $('#btn-settings').addEventListener('click', openDrawer);
   $('#provider-pill').addEventListener('click', openDrawer);
