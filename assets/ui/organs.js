@@ -12,25 +12,58 @@
     broken: 'broken', stale: 'retired',
   };
 
+  // Health tiers, worst first — mirrors internal/genome HealthReport ordering
+  // (broken, flaky, unproven, healthy, stale) so the ledger reads the same on
+  // both sides of the API. Unknown verdicts sink below stale.
+  const HEALTH_TIER = { broken: 0, flaky: 1, unproven: 2, healthy: 3, stale: 4 };
+  const UNKNOWN_TIER = 5;
+
+  function healthTier(verdict) {
+    return Object.prototype.hasOwnProperty.call(HEALTH_TIER, verdict) ? HEALTH_TIER[verdict] : UNKNOWN_TIER;
+  }
+
+  // Stable, deterministic order: health tier, then name, then kind, then
+  // version — so the same data always renders in the same row order.
+  function sortedOrgans(organs) {
+    return organs.slice().sort((a, b) => {
+      const tier = healthTier(a.verdict) - healthTier(b.verdict);
+      if (tier) return tier;
+      const an = String(a.name || '');
+      const bn = String(b.name || '');
+      if (an !== bn) return an < bn ? -1 : 1;
+      const ak = String(a.kind || '');
+      const bk = String(b.kind || '');
+      if (ak !== bk) return ak < bk ? -1 : 1;
+      return (a.version || 0) - (b.version || 0);
+    });
+  }
+
+  // Status chips reuse the existing run-badge pill style: active is green,
+  // quarantined red, anything else the plain dim badge.
+  const STATUS_CHIP_CLASS = { active: 'run-completed', quarantined: 'run-cancelled' };
+
   let cache = { organs: [] };
 
   async function load() {
     const list = $('#organs-list');
     if (!list) return;
+    list.setAttribute('aria-busy', 'true');
     try {
       const res = await fetch('/api/organs', { cache: 'no-store' });
       if (!res.ok) throw new Error('HTTP ' + res.status);
       cache = await res.json();
       render();
     } catch (e) {
-      list.innerHTML = '<div class="organ-empty">Organs unavailable: ' + esc(e.message) + '</div>';
+      list.innerHTML = '<div class="organ-empty"><b>Organs unavailable.</b><br>' + esc(e.message) + '</div>';
+    } finally {
+      list.removeAttribute('aria-busy');
     }
   }
 
   function render() {
     const list = $('#organs-list');
     const summary = $('#organs-summary');
-    const organs = cache.organs || [];
+    const organs = sortedOrgans(cache.organs || []);
     if (summary) {
       const s = cache.summary || {};
       summary.textContent = organs.length
@@ -38,8 +71,8 @@
         : '';
     }
     if (!organs.length) {
-      list.innerHTML = '<div class="organ-empty">Nothing grown yet. Ask EVOLV to grow a tool, skill or plugin — ' +
-        'it will appear here with a version and a health record.</div>';
+      list.innerHTML = '<div class="organ-empty"><b>Nothing grown yet.</b><br>' +
+        'Ask EVOLV to grow a tool, skill or plugin — it will appear here with a version and a health record.</div>';
       return;
     }
     list.innerHTML = organs.map((o) => card(o)).join('');
@@ -69,11 +102,16 @@
     } else {
       actions.push('<button class="organ-btn" data-retire data-kind="' + esc(o.kind) + '" data-name="' + esc(o.name) + '" data-status="active">re-activate</button>');
     }
-    return '<article class="organ-card v-' + esc(o.verdict) + '">' +
+    const status = String(o.status || 'active');
+    const statusCls = STATUS_CHIP_CLASS[status] ? ' ' + STATUS_CHIP_CLASS[status] : '';
+    const verdict = esc(VERDICT_LABEL[o.verdict] || o.verdict || 'unknown');
+    return '<article class="organ-card v-' + esc(o.verdict) + '" tabindex="0"' +
+      ' aria-label="' + esc(o.kind) + ': ' + esc(o.name) + ' v' + o.version + ', ' + verdict + ', ' + esc(status) + '">' +
       '<div class="organ-top"><span class="organ-kind">' + esc(o.kind) + '</span>' +
       '<b class="organ-name">' + esc(o.name) + '</b>' +
       '<span class="organ-ver">v' + o.version + '</span>' +
-      '<span class="organ-verdict">' + esc(VERDICT_LABEL[o.verdict] || o.verdict) + '</span></div>' +
+      '<span class="run-badge' + statusCls + '">' + esc(status) + '</span>' +
+      '<span class="organ-verdict run-badge">' + verdict + '</span></div>' +
       '<div class="organ-meta"><span class="organ-rate">' + esc(rate) + ' success</span>' +
       '<span>' + esc(usage) + '</span>' +
       (o.reverts ? '<span>' + o.reverts + ' rollback' + (o.reverts === 1 ? '' : 's') + '</span>' : '') +
@@ -143,6 +181,20 @@
 
   function mount() {
     const panel = $('#organs-modal');
+    // Keyboard access on rows: each organ card is focusable; Enter/Space on the
+    // card itself (not a nested button) steps focus into its first action.
+    const list = $('#organs-list');
+    if (list) list.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const row = e.target;
+      if (row !== list && row.classList && row.classList.contains('organ-card')) {
+        const first = row.querySelector('button');
+        if (first) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    });
     const openers = document.querySelectorAll('[data-open-organs]');
     openers.forEach((btn) => btn.addEventListener('click', () => {
       panel.classList.add('open');
