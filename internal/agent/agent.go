@@ -49,11 +49,13 @@ type Agent struct {
 	toolFailures       atomic.Int64
 	lastTurnMS         atomic.Int64
 
-	lastAct      time.Time // last real user activity (drives dreaming)
-	dreaming     bool
-	dreamStop    chan struct{}
-	dreamWG      sync.WaitGroup
-	lastSnapshot string
+	lastAct       time.Time // last real user activity (drives dreaming)
+	dreaming      bool
+	dreamStop     chan struct{}
+	dreamWG       sync.WaitGroup
+	lastSnapshot  string
+	visionMgr     *VisionManager
+	pendingImages []string
 }
 
 type Profile struct {
@@ -76,7 +78,7 @@ func NewProfile(ws *workspace.W, b *bus.Bus, prov providers.Provider, model stri
 }
 
 func newAgent(ws *workspace.W, b *bus.Bus, prov providers.Provider, model string, profile *Profile) *Agent {
-	a := &Agent{ws: ws, bus: b, prov: prov, Model: model, maxLoops: 10, lastAct: time.Now(), profile: profile}
+	a := &Agent{ws: ws, bus: b, prov: prov, Model: model, maxLoops: 10, lastAct: time.Now(), profile: profile, visionMgr: NewVisionManager()}
 	a.js = NewJSRuntime(a)
 	a.js.LoadAll()
 	a.loadMemory() // the mind remembers across restarts
@@ -154,6 +156,39 @@ func (a *Agent) Reset() {
 
 // EvolutionCount returns how many mutations have happened.
 func (a *Agent) EvolutionCount() int { return int(a.evolution.Load()) }
+
+// VisionManager returns the agent's visual capture manager.
+func (a *Agent) VisionManager() *VisionManager {
+	if a == nil {
+		return nil
+	}
+	return a.visionMgr
+}
+
+// AttachPendingImage buffers an image DataURL to be attached to the next user message turn.
+func (a *Agent) AttachPendingImage(img string) {
+	if a == nil || img == "" {
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.pendingImages = append(a.pendingImages, img)
+}
+
+// PopPendingImages retrieves and clears all pending buffered images.
+func (a *Agent) PopPendingImages() []string {
+	if a == nil {
+		return nil
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if len(a.pendingImages) == 0 {
+		return nil
+	}
+	imgs := a.pendingImages
+	a.pendingImages = nil
+	return imgs
+}
 
 // AgentStats is a cheap, lock-free snapshot of model activity for health and
 // metrics surfaces.
@@ -293,6 +328,9 @@ type action struct {
 	Case           bool              `json:"case,omitempty"`    // case-sensitive search flag
 	Exts           []string          `json:"exts,omitempty"`    // file extensions to filter
 	Limit          int               `json:"limit,omitempty"`   // max search hits or items
+	Target         string            `json:"target,omitempty"`  // target organ or canvas for capture_canvas
+	SavePath       string            `json:"save_path,omitempty"`
+	Format         string            `json:"format,omitempty"` // png | jpeg
 }
 
 func (a *Agent) candidateManager() *candidate.Manager {
@@ -657,7 +695,11 @@ func (a *Agent) Chat(ctx context.Context, userMsg string) string {
 		if guard.accountBytes(len(payload)) {
 			payload += "\n\n(result budget reached: summarise what you changed and stop asking for more tool output this turn)"
 		}
-		hist = append(hist, providers.Message{Role: "user", Content: payload})
+		userMsg := providers.Message{Role: "user", Content: payload}
+		if attached := a.PopPendingImages(); len(attached) > 0 {
+			userMsg.Images = attached
+		}
+		hist = append(hist, userMsg)
 		a.bus.Publish("agent:phase", map[string]string{"phase": "evolving"})
 		// visually separate the next stream round in the chat bubble
 		a.bus.Publish("agent:token", map[string]string{"text": "\n\n"})
