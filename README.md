@@ -166,6 +166,7 @@ You are in the room too: **type while the colony is working to steer it**, and *
 | `reload_shell` | forces the browser to recompile its UI now |
 | `capture_canvas` | visual snapshot of any organ or the full canvas (PNG + visual metadata) |
 | `speak` | speaks concise audible voice narration aloud via browser speech synthesis |
+| `run_workflow` | executes declarative DAG pipelines (`quality_gate`, `security_audit`, `workspace_health`) with concurrent steps and structured verdicts |
 
 Every mutation is logged to `workspace/evolution.jsonl` and streamed to your screen as it happens. And you can play too: **the body is plain files.** Edit anything in `~/.evolv/workspace/` — it hot-reloads.
 

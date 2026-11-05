@@ -12,6 +12,7 @@ package workflow
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -60,23 +61,68 @@ const (
 
 // StepResult records the outcome of one step.
 type StepResult struct {
-	ID       string
-	Status   Status
-	Output   any           // set when Status is succeeded
-	Err      error         // why the step failed or was skipped
-	Duration time.Duration // wall time spent on the step, across attempts
-	Attempts int           // attempts actually made; 1 when not retried
+	ID       string        `json:"id"`
+	Status   Status        `json:"status"`
+	Output   any           `json:"output,omitempty"`
+	Err      error         `json:"-"`
+	Duration time.Duration `json:"duration_ns"`
+	Attempts int           `json:"attempts"`
+}
+
+// MarshalJSON serializes StepResult with human-readable error and duration in milliseconds.
+func (sr StepResult) MarshalJSON() ([]byte, error) {
+	type Alias StepResult
+	errMsg := ""
+	if sr.Err != nil {
+		errMsg = sr.Err.Error()
+	}
+	return json.Marshal(&struct {
+		Alias
+		Error      string  `json:"error,omitempty"`
+		DurationMs float64 `json:"duration_ms"`
+	}{
+		Alias:      Alias(sr),
+		Error:      errMsg,
+		DurationMs: float64(sr.Duration.Microseconds()) / 1000.0,
+	})
 }
 
 // Result summarises a whole run. Run returns a Result for every valid spec,
 // even when individual steps failed or were skipped; inspect the per-step
 // statuses. The error return of Run is reserved for invalid specs.
 type Result struct {
-	Name     string
-	Steps    map[string]StepResult // by step ID
-	Order    []string              // step IDs in spec order
-	Outputs  map[string]any        // outputs of succeeded steps, by step ID
-	Duration time.Duration         // wall time of the whole run
+	Name     string                `json:"name"`
+	Steps    map[string]StepResult `json:"steps"`
+	Order    []string              `json:"order"`
+	Outputs  map[string]any        `json:"outputs,omitempty"`
+	Duration time.Duration         `json:"duration_ns"`
+}
+
+// Succeeded returns true when all steps in the result succeeded.
+func (r Result) Succeeded() bool {
+	if len(r.Steps) == 0 {
+		return false
+	}
+	for _, sr := range r.Steps {
+		if sr.Status != StatusSucceeded {
+			return false
+		}
+	}
+	return true
+}
+
+// MarshalJSON serializes Result with total duration in milliseconds and overall success.
+func (r Result) MarshalJSON() ([]byte, error) {
+	type Alias Result
+	return json.Marshal(&struct {
+		Alias
+		DurationMs float64 `json:"duration_ms"`
+		Succeeded  bool    `json:"succeeded"`
+	}{
+		Alias:      Alias(r),
+		DurationMs: float64(r.Duration.Microseconds()) / 1000.0,
+		Succeeded:  r.Succeeded(),
+	})
 }
 
 // Validate reports structural problems with spec: empty or duplicate step
@@ -506,12 +552,16 @@ func (s *wfScheduler) maybeCloseLocked() {
 func (s *wfScheduler) result(spec Spec, start time.Time) *Result {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	d := time.Since(start)
+	if d <= 0 {
+		d = time.Nanosecond
+	}
 	res := &Result{
 		Name:     spec.Name,
 		Steps:    make(map[string]StepResult, len(s.order)),
 		Order:    append([]string(nil), s.order...),
 		Outputs:  make(map[string]any, len(s.terminal)),
-		Duration: time.Since(start),
+		Duration: d,
 	}
 	for _, id := range s.order {
 		sr := s.terminal[id]

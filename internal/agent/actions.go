@@ -1156,6 +1156,45 @@ func (a *Agent) Execute(act action) string {
 		}
 		res["summary"] = fmt.Sprintf("Spoke aloud: %q", summaryText)
 
+	case "run_workflow", "workflow_run", "workflow":
+		wfName := strings.TrimSpace(act.Workflow)
+		if wfName == "" {
+			wfName = strings.TrimSpace(act.Pipeline)
+		}
+		if wfName == "" {
+			wfName = strings.TrimSpace(act.Name)
+		}
+		if wfName == "" && act.Args != nil {
+			if w, ok := act.Args["workflow"].(string); ok {
+				wfName = strings.TrimSpace(w)
+			} else if w, ok := act.Args["name"].(string); ok {
+				wfName = strings.TrimSpace(w)
+			}
+		}
+		if wfName == "" {
+			wfName = "quality_gate"
+		}
+		if a.workflowRunner == nil {
+			res["ok"] = false
+			res["error"] = "workflow runner unavailable"
+			break
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		wfRes, err := a.workflowRunner.Run(ctx, wfName, nil)
+		if err != nil {
+			res["ok"] = false
+			res["error"] = err.Error()
+			break
+		}
+		res["ok"] = wfRes.Succeeded()
+		res["workflow"] = wfRes.Name
+		res["succeeded"] = wfRes.Succeeded()
+		res["duration_ms"] = float64(wfRes.Duration.Microseconds()) / 1000.0
+		res["steps"] = wfRes.Steps
+		res["summary"] = fmt.Sprintf("Workflow %q completed (%d steps, succeeded: %v)",
+			wfRes.Name, len(wfRes.Steps), wfRes.Succeeded())
+
 	case "deploy_organ", "deploy_app", "deploy":
 		comp := strings.TrimSpace(act.Target)
 		if comp == "" {

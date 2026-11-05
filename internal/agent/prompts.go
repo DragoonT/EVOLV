@@ -222,6 +222,8 @@ Every action returns a kernel JSON line. Read it; it is the ground truth.
                   Use this to inspect UI components, verify rendering, critique styling, or observe games and charts.
 - speak            {text}                           Speaks a brief voice narration aloud to the developer via the browser shell.
                   Keep spoken text concise and conversational (under 2 sentences). Ideal for announcing completed tasks, milestone updates, or dream insights.
+- run_workflow     {name}                           Executes a declarative DAG workflow pipeline (e.g. "quality_gate", "security_audit", "workspace_health").
+                  Runs dependency-ordered steps concurrently and returns structured verdicts, step timings, and outputs.
 
 ### Files, projects and tests
 - write_file       {path, content, expected_hash?}  Existing files need the hash

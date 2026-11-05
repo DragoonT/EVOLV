@@ -19,6 +19,7 @@ import (
 	"github.com/dxn111/EVOLV/internal/bus"
 	"github.com/dxn111/EVOLV/internal/candidate"
 	"github.com/dxn111/EVOLV/internal/providers"
+	"github.com/dxn111/EVOLV/internal/workflow"
 	"github.com/dxn111/EVOLV/internal/workspace"
 )
 
@@ -49,14 +50,15 @@ type Agent struct {
 	toolFailures       atomic.Int64
 	lastTurnMS         atomic.Int64
 
-	lastAct       time.Time // last real user activity (drives dreaming)
-	dreaming      bool
-	dreamStop     chan struct{}
-	dreamWG       sync.WaitGroup
-	lastSnapshot  string
-	visionMgr     *VisionManager
-	voiceMgr      *VoiceManager
-	pendingImages []string
+	lastAct        time.Time // last real user activity (drives dreaming)
+	dreaming       bool
+	dreamStop      chan struct{}
+	dreamWG        sync.WaitGroup
+	lastSnapshot   string
+	visionMgr      *VisionManager
+	voiceMgr       *VoiceManager
+	workflowRunner *workflow.Runner
+	pendingImages  []string
 }
 
 type Profile struct {
@@ -79,7 +81,31 @@ func NewProfile(ws *workspace.W, b *bus.Bus, prov providers.Provider, model stri
 }
 
 func newAgent(ws *workspace.W, b *bus.Bus, prov providers.Provider, model string, profile *Profile) *Agent {
-	a := &Agent{ws: ws, bus: b, prov: prov, Model: model, maxLoops: 10, lastAct: time.Now(), profile: profile, visionMgr: NewVisionManager(), voiceMgr: NewVoiceManager(b)}
+	var wfRunner *workflow.Runner
+	if ws != nil || b != nil {
+		wfRunner = workflow.NewRunner(workflow.RunnerConfig{
+			ProjectRoot: func() string {
+				if ws != nil && ws.Config != nil && ws.Config.ProjectDir != "" {
+					return ws.Config.ProjectDir
+				}
+				if ws != nil {
+					return ws.Root
+				}
+				return ""
+			},
+			BusPub: func(event string, payload any) {
+				if b != nil {
+					b.Publish(event, payload)
+				}
+			},
+		})
+	}
+	a := &Agent{
+		ws: ws, bus: b, prov: prov, Model: model, maxLoops: 10, lastAct: time.Now(), profile: profile,
+		visionMgr:      NewVisionManager(),
+		voiceMgr:       NewVoiceManager(b),
+		workflowRunner: wfRunner,
+	}
 	a.js = NewJSRuntime(a)
 	a.js.LoadAll()
 	a.loadMemory() // the mind remembers across restarts
@@ -331,11 +357,21 @@ type action struct {
 	Limit          int               `json:"limit,omitempty"`   // max search hits or items
 	Target         string            `json:"target,omitempty"`  // target organ or canvas for capture_canvas
 	SavePath       string            `json:"save_path,omitempty"`
-	Format         string            `json:"format,omitempty"` // png | jpeg
-	Text           string            `json:"text,omitempty"`   // spoken text for speak action
-	Voice          string            `json:"voice,omitempty"`  // optional voice identifier or mood
-	Rate           float64           `json:"rate,omitempty"`   // speech rate multiplier (e.g. 1.0)
-	Pitch          float64           `json:"pitch,omitempty"`  // speech pitch multiplier (e.g. 1.0)
+	Format         string            `json:"format,omitempty"`   // png | jpeg
+	Text           string            `json:"text,omitempty"`     // spoken text for speak action
+	Voice          string            `json:"voice,omitempty"`    // optional voice identifier or mood
+	Rate           float64           `json:"rate,omitempty"`     // speech rate multiplier (e.g. 1.0)
+	Pitch          float64           `json:"pitch,omitempty"`    // speech pitch multiplier (e.g. 1.0)
+	Workflow       string            `json:"workflow,omitempty"` // workflow pipeline name
+	Pipeline       string            `json:"pipeline,omitempty"` // alternative workflow name
+}
+
+// WorkflowRunner returns the agent's workflow runner.
+func (a *Agent) WorkflowRunner() *workflow.Runner {
+	if a == nil {
+		return nil
+	}
+	return a.workflowRunner
 }
 
 func (a *Agent) candidateManager() *candidate.Manager {
