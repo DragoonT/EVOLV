@@ -28,6 +28,7 @@ import (
 	"github.com/dxn111/EVOLV/internal/agent"
 	"github.com/dxn111/EVOLV/internal/bus"
 	"github.com/dxn111/EVOLV/internal/candidate"
+	"github.com/dxn111/EVOLV/internal/cloud"
 	"github.com/dxn111/EVOLV/internal/deploy"
 	"github.com/dxn111/EVOLV/internal/execution"
 	"github.com/dxn111/EVOLV/internal/lint"
@@ -69,6 +70,7 @@ type Server struct {
 	runStats      *runMetrics
 	execStore     *execution.Store
 	execMu        sync.Mutex
+	cloudAPI      *cloud.API
 }
 
 // New builds the server.
@@ -100,6 +102,9 @@ func New(ws *workspace.W, b *bus.Bus, ag *agent.Agent, reg *providers.Registry) 
 	}
 	s.loadSwarmState()
 	s.loadAgentProfiles()
+	cloudMeter := cloud.NewMeter()
+	cloudBot := cloud.NewBot(os.Getenv("EVOLV_GITHUB_WEBHOOK_SECRET"), cloudMeter, nil, nil)
+	s.cloudAPI = cloud.NewAPI(cloudBot, cloudMeter)
 	s.routes()
 	return s
 }
@@ -174,6 +179,9 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/voice/history", s.handleVoiceHistory)
 	s.mux.HandleFunc("/api/deploy", s.handleDeploy)
 	s.mux.HandleFunc("/api/deploy/list", s.handleDeployList)
+	if s.cloudAPI != nil {
+		s.cloudAPI.RegisterRoutes(s.mux)
+	}
 	s.WatchReleases()
 	if s.ag != nil {
 		s.ag.StartDreaming() // the organism wakes itself when idle
