@@ -16,56 +16,62 @@
 
   <!-- ===== left sidebar ===== -->
   <div id="sb-backdrop" title="close sidebar"></div>
-  <aside id="sidebar">
+  <aside id="sidebar" aria-label="Workspace sidebar">
     <div class="sb-top">
       <div class="logo">
         <div class="logo-mark evolv-mark" role="img" aria-label="EVOLV evolving emblem"><svg viewBox="0 0 64 64" aria-hidden="true"><circle class="em-orbit em-orbit-outer" cx="32" cy="32" r="25"/><circle class="em-orbit em-orbit-inner" cx="32" cy="32" r="19"/><path class="em-core em-core-one" d="M32 11 49 32 32 53 15 32Z"/><path class="em-core em-core-two" d="M32 14 46 22 46 42 32 50 18 42 18 22Z"/><path class="em-core em-core-three" d="M32 13 38 26 51 32 38 38 32 51 26 38 13 32 26 26Z"/><circle class="em-seed" cx="32" cy="32" r="5"/><circle class="em-satellite" cx="32" cy="7" r="3"/></svg></div>
         <div class="logo-word">EV<em>OLV</em></div>
       </div>
-      <button class="icon-btn" id="btn-sidebar" title="hide sidebar" aria-label="Hide sidebar" aria-expanded="true">‹</button>
+      <button type="button" class="icon-btn" id="btn-sidebar" title="hide sidebar" aria-label="Hide sidebar" aria-expanded="true">‹</button>
     </div>
-    <button class="new-chat" id="btn-new"><span>＋</span> New chat</button>
+    <button type="button" class="new-chat" id="btn-new"><span>＋</span> New chat</button>
 
     <div class="sb-sec" id="mind-sec">
+      <div class="sb-group-label" data-sb-group="workspace">WORKSPACE</div>
       <div class="sb-head">Mind <span id="mind-stats"></span></div>
       <div id="mind-list"></div>
     </div>
 
     <div class="sb-sec" id="plan-sec" hidden>
+      <div class="sb-group-label" data-sb-group="workspace">WORKSPACE</div>
       <div class="sb-head">Plan <span id="plan-stats"></span></div>
       <div id="plan-list"></div>
     </div>
 
     <div class="sb-sec" id="runs-panel" hidden>
+      <div class="sb-group-label" data-sb-group="execution">EXECUTION</div>
       <div class="sb-head">Runs <b id="runs-count"></b></div>
       <div class="runs-list"></div>
     </div>
 
     <div class="sb-sec" id="organs-sec">
+      <div class="sb-group-label" data-sb-group="knowledge">KNOWLEDGE</div>
       <div class="sb-head">Organs <b id="organ-count">0</b></div>
       <div id="organ-list"></div>
     </div>
     <div class="sb-sec" id="pinned-sec">
+      <div class="sb-group-label" data-sb-group="knowledge">KNOWLEDGE</div>
       <div class="sb-head">Pinned <b id="pinned-count">0</b></div>
       <div id="pinned-widget-list"></div>
     </div>
 
     <div class="sb-sec" id="evo-sec">
+      <div class="sb-group-label" data-sb-group="activity">ACTIVITY</div>
       <div class="sb-head">Evolution <b id="evo-count">0</b>
-        <button class="icon-btn" id="btn-replay" title="replay the whole mutation history">⏳</button>
+        <button type="button" class="icon-btn" id="btn-replay" aria-label="Replay mutation history" title="replay the whole mutation history">⏳</button>
       </div>
       <div id="stream-list"></div>
     </div>
 
     <div class="sb-bottom">
-      <button class="sb-btn" id="btn-library"><span>◈</span> Creation Library <b id="library-badge" class="wb-badge" hidden></b></button>
-      <button class="sb-btn" id="btn-workbench"><span>🛠</span> Workbench <b id="wb-badge" class="wb-badge" hidden></b></button>
+      <button type="button" class="sb-btn" id="btn-library"><span>◈</span> Creation Library <b id="library-badge" class="wb-badge" hidden></b></button>
+      <button type="button" class="sb-btn" id="btn-workbench"><span>🛠</span> Workbench <b id="wb-badge" class="wb-badge" hidden></b></button>
       <a class="sb-btn swarm-btn" id="btn-swarm" href="/swarm" title="Swarm mode — many minds, one organism">
         <span>🐝</span> Swarm mode
       </a>
-      <button class="sb-btn" id="btn-organs" data-open-organs title="Every grown tool, skill and plugin — with health and rollback"><span>🧬</span> Organs <b class="wb-badge" id="organs-badge" hidden></b></button>
-      <button class="sb-btn" id="btn-files"><span>🗂</span> Genome inspector</button>
-      <button class="sb-btn" id="btn-settings"><span>⚙️</span> Settings</button>
+      <button type="button" class="sb-btn" id="btn-organs" data-open-organs title="Every grown tool, skill and plugin — with health and rollback"><span>🧬</span> Organs <b class="wb-badge" id="organs-badge" hidden></b></button>
+      <button type="button" class="sb-btn" id="btn-files"><span>🗂</span> Genome inspector</button>
+      <button type="button" class="sb-btn" id="btn-settings"><span>⚙️</span> Settings</button>
       <div class="pill" id="provider-pill" title="click to configure models">
         <span class="dot"></span> <b id="prov-name">kilo</b> <span id="model-name">kilo-auto/free</span>
       </div>
@@ -75,7 +81,7 @@
   <div id="sb-resizer" title="drag to resize"></div>
 
   <div id="sb-rail">
-    <button class="icon-btn" id="btn-sidebar-open" title="show sidebar">»</button>
+    <button type="button" class="icon-btn" id="btn-sidebar-open" aria-label="Show sidebar" title="show sidebar">»</button>
   </div>
 
   <!-- ===== center chat ===== -->
@@ -85,9 +91,9 @@
         <b id="evo-count2">0</b>&nbsp;mutations
       </div>
       <div class="spacer"></div>
-      <button class="icon-btn" id="btn-export" title="share this conversation — download the transcript as HTML">⇪</button>
-      <button class="icon-btn" id="btn-sound" title="sound & soul — tiny blips on mutation (default off)">🔇</button>
-      <button class="icon-btn" id="btn-theme" title="toggle light / dark (ctrl+shift+l)">☀️</button>
+      <button type="button" class="icon-btn" id="btn-export" aria-label="Export conversation transcript" title="share this conversation — download the transcript as HTML">⇪</button>
+      <button type="button" class="icon-btn" id="btn-sound" aria-label="Toggle sound effects" title="sound & soul — tiny blips on mutation (default off)">🔇</button>
+      <button type="button" class="icon-btn" id="btn-theme" aria-label="Toggle light or dark theme" title="toggle light / dark (ctrl+shift+l)">☀️</button>
       <button class="dna-view-btn" id="btn-dna" type="button" title="Open the live, interactive DNA genome view"><span>🧬</span><b>Live DNA View</b></button>
       <span class="live" title="components hot-reload as files change"><i></i> live genome</span>
     </header>
@@ -96,9 +102,9 @@
       <span id="search-glyph">🔍</span>
       <input id="search-input" type="text" placeholder="search the conversation…" spellcheck="false">
       <span id="search-count">0/0</span>
-      <button class="icon-btn" id="search-prev" title="previous match (shift+enter)">↑</button>
-      <button class="icon-btn" id="search-next" title="next match (enter)">↓</button>
-      <button class="icon-btn" id="search-close" title="close (esc)">✕</button>
+      <button type="button" class="icon-btn" id="search-prev" aria-label="Previous match" title="previous match (shift+enter)">↑</button>
+      <button type="button" class="icon-btn" id="search-next" aria-label="Next match" title="next match (enter)">↓</button>
+      <button type="button" class="icon-btn" id="search-close" aria-label="Close search" title="close (esc)">✕</button>
     </div>
     <div id="chat-scroll">
       <div id="welcome">
@@ -106,19 +112,19 @@
         <h1>What should evolve today?</h1>
         <p class="w-sub">EVOLV is a workspace that rewrites itself — its UI, its tools, its mind — and works on your code anywhere on this machine.</p>
         <div class="w-grid">
-          <button class="w-card" data-q="evolve a pomodoro focus timer onto the canvas">
+          <button type="button" class="w-card" data-q="evolve a pomodoro focus timer onto the canvas">
             <span class="w-ico">⏱</span><b>Pomodoro timer</b>
             <span>a live focus widget, grown in seconds</span>
           </button>
-          <button class="w-card" data-q="evolve a live CPU/memory dashboard component that uses the shell tool">
+          <button type="button" class="w-card" data-q="evolve a live CPU/memory dashboard component that uses the shell tool">
             <span class="w-ico">📊</span><b>System monitor</b>
             <span>real CPU / memory, polled live</span>
           </button>
-          <button class="w-card" data-q="evolve yourself: grow a new tool, skill, or component of your own choosing — surprise me">
+          <button type="button" class="w-card" data-q="evolve yourself: grow a new tool, skill, or component of your own choosing — surprise me">
             <span class="w-ico">🧬</span><b>Evolve freely</b>
             <span>it picks its own next mutation</span>
           </button>
-          <button class="w-card" data-q="summarize what you are and what you can do, then show me your genome">
+          <button type="button" class="w-card" data-q="summarize what you are and what you can do, then show me your genome">
             <span class="w-ico">🗂</span><b>Show your genome</b>
             <span>a guided tour of its own body</span>
           </button>
@@ -128,11 +134,11 @@
 
     <div id="composer">
       <div class="quick-row">
-        <button class="quick" data-q="evolve a pomodoro focus timer onto the canvas">⏱ pomodoro</button>
-        <button class="quick" data-q="evolve a sticky notes component onto the canvas">🗒 stickies</button>
-        <button class="quick" data-q="evolve a live CPU/memory dashboard component that uses the shell tool">📊 system monitor</button>
-        <button class="quick" data-q="evolve yourself: grow a new tool, skill, or component of your own choosing — surprise me">🧬 evolve freely</button>
-        <button class="quick" id="btn-dream">💭 dream now</button>
+        <button type="button" class="quick" data-q="evolve a pomodoro focus timer onto the canvas">⏱ pomodoro</button>
+        <button type="button" class="quick" data-q="evolve a sticky notes component onto the canvas">🗒 stickies</button>
+        <button type="button" class="quick" data-q="evolve a live CPU/memory dashboard component that uses the shell tool">📊 system monitor</button>
+        <button type="button" class="quick" data-q="evolve yourself: grow a new tool, skill, or component of your own choosing — surprise me">🧬 evolve freely</button>
+        <button type="button" class="quick" id="btn-dream">💭 dream now</button>
       </div>
       <div class="input-wrap">
         <textarea id="input" rows="1" placeholder="Message EVOLV…"></textarea>
@@ -142,14 +148,14 @@
       <div class="foot-note">EVOLV rewrites its own code while you watch — every file it touches is yours to edit too. <span style="opacity:.75">· ctrl+k new chat · / focus · ctrl+shift+l daylight · ctrl+f search · 🔇 sound · 🎙️ voice</span></div>
     </div>
     <div id="hologram" class="hologram" role="dialog" aria-modal="true" aria-labelledby="hologram-title" hidden>
-      <div class="hologram-chrome"><div><span>🧬</span><b id="hologram-title">Live DNA View</b><small>select any gene to inspect its source</small></div><button class="close-btn" id="btn-dna-close" type="button">✕</button></div>
+      <div class="hologram-chrome"><div><span>🧬</span><b id="hologram-title">Live DNA View</b><small>select any gene to inspect its source</small></div><button class="close-btn" id="btn-dna-close" type="button" aria-label="Close live DNA view">✕</button></div>
       <iframe id="hologram-frame" data-src="/ui/genome.html?embed=1" title="Interactive live DNA genome"></iframe>
     </div>
   </main>
 </div>
 
-<div id="drawer">
-  <div class="dh">Settings <button class="icon-btn" id="btn-close-settings">✕</button></div>
+<aside id="drawer" aria-label="Settings panel">
+  <div class="dh">Settings <button type="button" class="icon-btn" id="btn-close-settings" aria-label="Close settings">✕</button></div>
   <div class="db">
     <div class="field">
       <label>Provider</label>
@@ -191,7 +197,7 @@
       <label class="check-row"><input type="checkbox" id="set-dream"> Dream mode — it evolves itself while you're away</label>
       <div class="hint" style="display:flex;align-items:center;gap:6px;margin-top:6px">every <input id="set-dream-mins" type="number" min="1" max="720" style="width:64px"> min of idle time, it wakes up and improves itself</div>
     </div>
-    <button class="save-btn" id="btn-save">Save</button>
+    <button type="button" class="save-btn" id="btn-save">Save</button>
     <div class="divider"></div>
     <div class="field">
       <label>Genome location</label>
@@ -199,12 +205,12 @@
       <div class="hint" style="margin-top:8px">Everything the organism is — shell, skin, tools, skills, prompts, plugins — is plain files here. Edit them; it hot-reloads. It edits them; you watch. It can even edit its own launcher source.</div>
     </div>
   </div>
-</div>
+</aside>
 
 <div id="update-banner" title="the organism can morph into a newer body">
   <span class="ub-dna">⬡</span>
   <span>a newer version is out: <b>v<span id="update-version">?</span></b></span>
-  <button id="btn-update">morph now</button>
+  <button type="button" id="btn-update">morph now</button>
   <a href="https://github.com/dxn111/EVOLV/releases" target="_blank" rel="noopener">changelog ↗</a>
 </div>
 
@@ -216,13 +222,13 @@
   </div>
 </div>
 
-<div id="genome-modal">
+<div id="genome-modal" role="dialog" aria-modal="true" aria-label="Genome inspector">
   <div class="gm-box">
     <div class="gm-head">
       <span>🗂 GENOME INSPECTOR — <span id="genome-count" class="live">live</span></span>
       <div style="display:flex;gap:6px">
-        <button class="icon-btn" id="btn-snap-diff" title="diff two snapshots — see what a mutation changed">⏪</button>
-        <button class="icon-btn" id="btn-genome-close">✕</button>
+        <button type="button" class="icon-btn" id="btn-snap-diff" aria-label="Diff two genome snapshots" title="diff two snapshots — see what a mutation changed">⏪</button>
+        <button type="button" class="icon-btn" id="btn-genome-close" aria-label="Close genome inspector">✕</button>
       </div>
     </div>
     <div class="gm-body">
@@ -234,26 +240,26 @@
         <div class="gm-path">
           <span id="genome-open-path">pick a file — the organism feels every save live</span>
           <span style="display:flex;gap:2px">
-            <button class="gm-del" id="btn-genome-revert" title="discard your edits — reload the genome's version" hidden>↺ revert</button>
-            <button class="gm-del" id="btn-genome-del" title="delete this file from the genome">🗑 delete</button>
+            <button type="button" class="gm-del" id="btn-genome-revert" title="discard your edits — reload the genome's version" hidden>↺ revert</button>
+            <button type="button" class="gm-del" id="btn-genome-del" title="delete this file from the genome">🗑 delete</button>
           </span>
         </div>
         <textarea id="genome-editor" spellcheck="false" placeholder="workspace files are plain text: ui/style.css, ui/components/*.html, tools/*.js, skills/*.md, plugins/*/plugin.js…"></textarea>
-        <button class="save-btn" id="btn-genome-save">⚡ WRITE TO GENOME (ctrl+s)</button>
+        <button type="button" class="save-btn" id="btn-genome-save">⚡ WRITE TO GENOME (ctrl+s)</button>
       </div>
     </div>
   </div>
 </div>
 
-<div id="wb-modal">
+<div id="wb-modal" role="dialog" aria-modal="true" aria-label="Workbench">
   <div class="gm-box wb-box">
     <div class="gm-head">
       <span>🛠 WORKBENCH — <b id="wb-root-name" class="live">…</b> <span id="wb-root-files" class="wb-files"></span></span>
       <div style="display:flex;gap:6px">
-        <button class="icon-btn" id="btn-wb-newfile" title="new file in the selected folder (or root)">＋ file</button>
-        <button class="icon-btn" id="btn-wb-newdir" title="new folder in the selected folder (or root)">＋ dir</button>
-        <button class="icon-btn" id="btn-wb-refresh" title="reload the tree">⟳</button>
-        <button class="icon-btn" id="btn-wb-close">✕</button>
+        <button type="button" class="icon-btn" id="btn-wb-newfile" title="new file in the selected folder (or root)">＋ file</button>
+        <button type="button" class="icon-btn" id="btn-wb-newdir" title="new folder in the selected folder (or root)">＋ dir</button>
+        <button type="button" class="icon-btn" id="btn-wb-refresh" aria-label="Reload project tree" title="reload the tree">⟳</button>
+        <button type="button" class="icon-btn" id="btn-wb-close" aria-label="Close workbench">✕</button>
       </div>
     </div>
     <div class="gm-body">
@@ -273,50 +279,50 @@
         <div class="gm-path">
           <span id="wb-open-path">pick a file — the workbench edits your project in place</span>
           <span style="display:flex;gap:2px">
-            <button class="gm-del" id="btn-wb-rename" title="rename / move this file" hidden>✎ rename</button>
-            <button class="gm-del" id="btn-wb-del" title="delete this file" hidden>🗑 delete</button>
+            <button type="button" class="gm-del" id="btn-wb-rename" title="rename / move this file" hidden>✎ rename</button>
+            <button type="button" class="gm-del" id="btn-wb-del" title="delete this file" hidden>🗑 delete</button>
           </span>
         </div>
         <textarea id="wb-editor" class="wb-editor" spellcheck="false" placeholder="your project, live: open any text file, edit it, ctrl+s writes it to disk instantly — the organism feels every save"></textarea>
         <div class="wb-statusbar"><span id="wb-stats">—</span><span id="wb-dirty" class="wb-dirty" hidden>● unsaved — ctrl+s to write</span></div>
-        <button class="save-btn" id="btn-wb-save">⚡ WRITE TO DISK (ctrl+s)</button>
+        <button type="button" class="save-btn" id="btn-wb-save">⚡ WRITE TO DISK (ctrl+s)</button>
       </div>
     </div>
   </div>
 </div>
 
-<div id="organ-modal">
+<div id="organ-modal" role="dialog" aria-modal="true" aria-labelledby="organ-title">
   <div class="om-box">
     <div class="om-head">
       <span>🧩 <b id="organ-title">organ</b> <span class="live"><i></i> live</span></span>
       <div style="display:flex;gap:6px">
-        <button class="icon-btn" id="btn-organ-expand" title="grow the organ to fill the window">⤢</button>
-        <button class="icon-btn" id="btn-organ-close">✕</button>
+        <button type="button" class="icon-btn" id="btn-organ-expand" aria-label="Expand organ view" title="grow the organ to fill the window">⤢</button>
+        <button type="button" class="icon-btn" id="btn-organ-close" aria-label="Close organ detail">✕</button>
       </div>
     </div>
     <div class="om-body" id="organ-body"></div>
   </div>
 </div>
 
-<div id="diff-modal">
+<div id="diff-modal" role="dialog" aria-modal="true" aria-label="Genome diff">
   <div class="dm-box">
     <div class="dm-head">
       <span>⏪ WHAT CHANGED — genome diff</span>
-      <button class="icon-btn" id="btn-diff-close">✕</button>
+      <button type="button" class="icon-btn" id="btn-diff-close" aria-label="Close diff view">✕</button>
     </div>
     <div class="dm-controls">
       <select id="diff-from"></select> → <select id="diff-to"></select>
-      <button class="save-btn" id="btn-diff-run" style="width:auto;margin:0;padding:8px 16px">DIFF</button>
+      <button type="button" class="save-btn" id="btn-diff-run" style="width:auto;margin:0;padding:8px 16px">DIFF</button>
     </div>
     <div class="dm-body" id="diff-body"></div>
   </div>
 </div>
 
-<div id="replay-modal">
+<div id="replay-modal" role="dialog" aria-modal="true" aria-label="Mutation replay">
   <div class="rp-box">
     <div class="rp-head">
       <span>⏳ REPLAY — <b id="replay-count">0</b> mutations, birth to now</span>
-      <button class="icon-btn" id="btn-replay-close">✕</button>
+      <button type="button" class="icon-btn" id="btn-replay-close" aria-label="Close replay view">✕</button>
     </div>
     <div class="rp-body" id="replay-body"></div>
   </div>
@@ -324,14 +330,14 @@
 
 <div id="library-modal" aria-hidden="true">
   <div class="library-shell" role="dialog" aria-modal="true" aria-labelledby="library-title">
-    <header class="library-head"><div><span class="library-mark">◈</span><div><h2 id="library-title">Creation Library</h2><p>Everything EVOLV has made, without crowding your workspace.</p></div></div><div class="library-head-actions"><button class="btn" id="btn-pack-export" type="button" title="Export creations and genome as an .evolvpack archive"><span>📦</span> Export Pack</button><button class="btn" id="btn-pack-import" type="button" title="Import an .evolvpack archive into EVOLV"><span>📥</span> Import Pack</button><input type="file" id="pack-file-input" accept=".evolvpack,.tar.gz" style="display:none"></div><button class="icon-btn" id="btn-library-close">✕</button></header>
-    <nav class="library-tabs" aria-label="Creation Library views"><button class="active" data-library-tab="library">Library <b id="library-count">0</b></button><button data-library-tab="inbox">Inbox <b id="inbox-count">0</b></button><button data-library-tab="candidates">Candidates <b id="candidate-count">0</b></button><button data-library-tab="history">Evolution</button></nav>
+    <header class="library-head"><div><span class="library-mark">◈</span><div><h2 id="library-title">Creation Library</h2><p>Everything EVOLV has made, without crowding your workspace.</p></div></div><div class="library-head-actions"><button class="btn" id="btn-pack-export" type="button" title="Export creations and genome as an .evolvpack archive"><span>📦</span> Export Pack</button><button class="btn" id="btn-pack-import" type="button" title="Import an .evolvpack archive into EVOLV"><span>📥</span> Import Pack</button><input type="file" id="pack-file-input" accept=".evolvpack,.tar.gz" style="display:none"></div><button type="button" class="icon-btn" id="btn-library-close" aria-label="Close creation library">✕</button></header>
+    <nav class="library-tabs" aria-label="Creation Library views"><button type="button" class="active" data-library-tab="library">Library <b id="library-count">0</b></button><button type="button" data-library-tab="inbox">Inbox <b id="inbox-count">0</b></button><button type="button" data-library-tab="candidates">Candidates <b id="candidate-count">0</b></button><button type="button" data-library-tab="history">Evolution</button></nav>
     <section class="library-toolbar" data-library-toolbar><input id="library-search" placeholder="Search creations…" spellcheck="false"><select id="library-type"><option value="all">All types</option><option value="widget">Widgets</option><option value="tool">Tools</option><option value="skill">Skills</option><option value="plugin">Plugins</option><option value="prompt">Prompts</option></select><select id="library-state"><option value="active">Active</option><option value="all">All states</option><option value="pinned">Pinned</option><option value="disabled">Disabled</option><option value="archived">Archived</option></select></section>
     <main class="library-body"><div id="library-grid" class="library-grid"></div><div id="library-inbox" class="library-grid" hidden></div><div id="library-candidates" class="candidate-list" hidden></div><div id="library-history" class="library-history" hidden></div></main>
   </div>
 </div>
 
-<div id="toasts"></div>
+<div id="toasts" aria-live="polite"></div>
 
 <div id="run-modal" class="run-modal" role="dialog" aria-label="Run Detail" aria-modal="true">
   <div class="run-shell">
@@ -380,7 +386,7 @@
         <p>Everything EVOLV grew — with real usage data and a rollback that works.</p>
       </div>
       <span class="organs-summary" id="organs-summary"></span>
-      <button class="organs-close" id="organs-close" aria-label="Close organs">✕</button>
+      <button type="button" class="organs-close" id="organs-close" aria-label="Close organs">✕</button>
     </header>
     <div class="organs-body">
       <div id="organs-list" class="organs-list"><div class="organ-empty">loading…</div></div>
@@ -389,10 +395,13 @@
   </div>
 </div>
 <script src="/ui/ambient.js?v=20261104-1"></script>
+<script src="/ui/command-palette.js?v=20261104-1"></script>
 <script src="/app.js?v=20261104-1"></script>
 <script src="/ui/workspace-layout.js"></script>
 <script src="/runs.js"></script>
 <script src="/organs.js"></script>
 <script src="/ui/appearance.js?v=20261104-1"></script>
+<script src="/ui/toasts.js"></script>
+<script src="/ui/shortcuts.js"></script>
 </body>
 </html>

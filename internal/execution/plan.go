@@ -58,24 +58,31 @@ func CompilePlan(spec PlanSpec) CompileResult {
 	}
 
 	// ids: explicit, else t1..tN. Titles are also valid references.
+	// An absent id ("") keeps the legacy behaviour of auto-assigning t1..tN;
+	// an explicitly whitespace-only id is rejected: the author clearly meant
+	// to name the step, so silently renaming it would hide the mistake.
 	byTitle := map[string]string{}
-	byID := map[string]bool{}
+	byID := map[string]int{} // id -> index of first occurrence
 	ids := make([]string, len(spec.Steps))
 	for i, step := range spec.Steps {
 		id := strings.TrimSpace(step.ID)
-		if id == "" {
+		switch {
+		case step.ID == "":
+			id = fmt.Sprintf("t%d", i+1)
+		case id == "":
+			res.Problems = append(res.Problems, fmt.Sprintf("step %d has a whitespace-only id %q", i+1, step.ID))
 			id = fmt.Sprintf("t%d", i+1)
 		}
-		if byID[id] {
-			res.Problems = append(res.Problems, "duplicate step id "+id)
+		if first, dup := byID[id]; dup {
+			res.Problems = append(res.Problems, fmt.Sprintf("duplicate step id %q (steps %d and %d)", id, first+1, i+1))
 			id = fmt.Sprintf("%s-%d", id, i+1)
 		}
-		byID[id] = true
+		byID[id] = i
 		ids[i] = id
 		title := strings.ToLower(strings.TrimSpace(step.Title))
 		if title != "" {
 			if prev, exists := byTitle[title]; exists && prev != id {
-				res.Problems = append(res.Problems, "duplicate step title: "+step.Title)
+				res.Problems = append(res.Problems, fmt.Sprintf("duplicate step title %q (steps %q and %q)", step.Title, prev, id))
 			}
 			byTitle[title] = id
 		}
@@ -85,7 +92,7 @@ func CompilePlan(spec PlanSpec) CompileResult {
 	for i, step := range spec.Steps {
 		title := strings.TrimSpace(step.Title)
 		if title == "" {
-			res.Problems = append(res.Problems, ids[i]+" has no title")
+			res.Problems = append(res.Problems, fmt.Sprintf("step %q has no title", ids[i]))
 			title = ids[i]
 		}
 		var deps []string
@@ -95,16 +102,16 @@ func CompilePlan(spec PlanSpec) CompileResult {
 				continue
 			}
 			target := ref
-			if !byID[target] {
+			if _, known := byID[target]; !known {
 				if id, ok := byTitle[strings.ToLower(ref)]; ok {
 					target = id
 				} else {
-					res.Problems = append(res.Problems, fmt.Sprintf("%s depends on unknown step %q", ids[i], ref))
+					res.Problems = append(res.Problems, fmt.Sprintf("step %q depends on unknown step %q", ids[i], ref))
 					continue
 				}
 			}
 			if target == ids[i] {
-				res.Problems = append(res.Problems, ids[i]+" depends on itself")
+				res.Problems = append(res.Problems, fmt.Sprintf("step %q depends on itself", ids[i]))
 				continue
 			}
 			deps = append(deps, target)
@@ -141,7 +148,7 @@ func scheduleProblems(g Graph) []string {
 				continue
 			}
 			if _, ok := g.Get(dep); !ok {
-				problems = append(problems, fmt.Sprintf("%s waits on missing task %q", t.ID, dep))
+				problems = append(problems, fmt.Sprintf("step %q waits on missing task %q", t.ID, dep))
 			}
 		}
 		done[t.ID] = true
@@ -206,4 +213,57 @@ func flattenWaves(waves [][]string) []string {
 		out = append(out, w...)
 	}
 	return out
+}
+
+// Summary renders a compiled plan as a compact, deterministic listing, one
+// line per step with its 1-based wave number and dependencies — suitable for
+// logs and human review. When compilation produced problems, the summary
+// lists those instead of a schedule (a plan with problems is never scheduled).
+func (r CompileResult) Summary() string {
+	var b strings.Builder
+	if len(r.Problems) > 0 {
+		fmt.Fprintf(&b, "plan invalid: %d problem(s)", len(r.Problems))
+		for _, p := range r.Problems {
+			fmt.Fprintf(&b, "\n  - %s", p)
+		}
+		return b.String()
+	}
+	byID := make(map[string]Task, len(r.Tasks))
+	for _, t := range r.Tasks {
+		byID[t.ID] = t
+	}
+	fmt.Fprintf(&b, "plan: %d step(s), %d wave(s)", len(r.Tasks), len(r.Waves))
+	if len(r.Waves) == 0 {
+		// No schedule was computed; list the steps without wave numbers.
+		for _, t := range r.Tasks {
+			writeSummaryStep(&b, 0, t)
+		}
+		return b.String()
+	}
+	for i, wave := range r.Waves {
+		for _, id := range wave {
+			t, ok := byID[id]
+			if !ok {
+				// Wave entry with no matching task (hand-built result):
+				// still list it so the summary never loses a step.
+				writeSummaryStep(&b, i+1, Task{ID: id, Title: id})
+				continue
+			}
+			writeSummaryStep(&b, i+1, t)
+		}
+	}
+	return b.String()
+}
+
+// writeSummaryStep appends one "  wave N: id (title; after: ...)" line.
+// wave 0 means "no wave assigned".
+func writeSummaryStep(b *strings.Builder, wave int, t Task) {
+	if wave > 0 {
+		fmt.Fprintf(b, "\n  wave %d: %s (%s)", wave, t.ID, t.Title)
+	} else {
+		fmt.Fprintf(b, "\n  step %s (%s)", t.ID, t.Title)
+	}
+	if len(t.DependsOn) > 0 {
+		fmt.Fprintf(b, " after: %s", strings.Join(t.DependsOn, ", "))
+	}
 }

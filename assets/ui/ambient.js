@@ -23,6 +23,10 @@
   let last = 0;
   let resizeTimer = 0;
 
+  const tint = alpha => `rgba(${accent.r},${accent.g},${accent.b},${alpha})`;
+  // Particles wrap around the viewport with a 24px off-screen margin.
+  const wrap = (value, span) => (value < -24 ? span + 24 : value > span + 24 ? -24 : value);
+
   function readAccent() {
     const raw = getComputedStyle(document.body).getPropertyValue('--accent').trim();
     const match = /^#?([0-9a-f]{6})$/i.exec(raw);
@@ -66,10 +70,8 @@
         p.x += p.vx * step * 0.06;
         p.y += p.vy * step * 0.06;
         p.phase += p.speed * step * 0.001;
-        if (p.x < -24) p.x = width + 24;
-        if (p.x > width + 24) p.x = -24;
-        if (p.y < -24) p.y = height + 24;
-        if (p.y > height + 24) p.y = -24;
+        p.x = wrap(p.x, width);
+        p.y = wrap(p.y, height);
       }
     }
 
@@ -82,7 +84,7 @@
         const distance = Math.hypot(dx, dy);
         if (distance > LINK_DISTANCE) continue;
         const alpha = (1 - distance / LINK_DISTANCE) * 0.075;
-        ctx.strokeStyle = `rgba(${accent.r},${accent.g},${accent.b},${alpha})`;
+        ctx.strokeStyle = tint(alpha);
         ctx.lineWidth = 0.6;
         ctx.beginPath();
         ctx.moveTo(a.x, a.y);
@@ -93,7 +95,7 @@
 
     for (const p of particles) {
       const twinkle = 0.55 + 0.45 * Math.sin(p.phase);
-      ctx.fillStyle = `rgba(${accent.r},${accent.g},${accent.b},${0.10 + twinkle * 0.13})`;
+      ctx.fillStyle = tint(0.10 + twinkle * 0.13);
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
       ctx.fill();

@@ -1,5 +1,13 @@
 /* EVOLV durable execution runs — an interactive inspector backed by /api/runs.
-   The backend owns all lifecycle truth; this file only reflects it. */
+   The backend owns all lifecycle truth; this file only reflects it.
+
+   Layout contract with index.html / app.js (do not rename):
+   - ids: runs-panel, runs-count, runs-list, run-modal, run-modal-title,
+     run-modal-status, run-modal-meta, run-modal-refresh, run-modal-close,
+     run-objective-box, run-objective-text, run-stats-grid,
+     run-tab-tasks-count, run-tab-events-count, run-tasks-list,
+     run-events-list, run-view-tasks, run-view-journal
+   - attrs: [data-run-tab] tab buttons */
 (function () {
   'use strict';
 
@@ -8,6 +16,22 @@
     verifying: 'verifying', paused: 'paused', completed: 'completed',
     failed: 'failed', cancelled: 'cancelled',
   };
+
+  /* Scan order for the runs list: active work first, then needs-attention,
+     then queued, terminal states last. Statuses not listed fall into "other". */
+  const statusGroups = [
+    { key: 'active',    label: 'Active',            statuses: ['running', 'planning', 'verifying'] },
+    { key: 'waiting',   label: 'Waiting',           statuses: ['waiting', 'paused'] },
+    { key: 'queued',    label: 'Queued',            statuses: ['queued'] },
+    { key: 'completed', label: 'Completed',         statuses: ['completed'] },
+    { key: 'ended',     label: 'Failed / Cancelled', statuses: ['failed', 'cancelled'] },
+    { key: 'other',     label: 'Other',             statuses: [] },
+  ];
+  const groupOfStatus = (() => {
+    const byStatus = {};
+    for (const g of statusGroups) for (const s of g.statuses) byStatus[s] = g.key;
+    return (status) => byStatus[status] || 'other';
+  })();
 
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -26,6 +50,10 @@
     const b = el('span', 'run-badge run-' + status, phaseLabels[status] || status);
     return b;
   }
+
+  /* ---- time formatting: one shared pair of formatters -------------------
+     timeAgo(iso)  → every relative timestamp in this file goes through here.
+     formatDateTime(iso) → absolute timestamps ("Started …", hover titles). */
 
   function timeAgo(iso) {
     if (!iso) return '';
@@ -48,96 +76,170 @@
     });
   }
 
+  /* A relative-time span that keeps the absolute time as its hover title. */
+  function relTime(iso) {
+    const text = timeAgo(iso);
+    const span = el('span', null, text);
+    if (text && text !== iso) {
+      const abs = formatDateTime(iso);
+      if (abs) span.title = abs;
+    }
+    return span;
+  }
+
+  /* ---- consistent idle states -------------------------------------------
+     One helper for every loading / empty / error box this panel renders, so
+     the wording and semantics stay uniform. Reuses the existing style.css
+     classes run-loading / run-empty (compact mode reuses runs-empty). */
+  function stateBox(kind, text, compact) {
+    const cls = compact ? 'runs-empty' : (kind === 'loading' ? 'run-loading' : 'run-empty');
+    const box = el('div', cls, text);
+    box.setAttribute('role', kind === 'error' ? 'alert' : 'status');
+    return box;
+  }
+
+  /* ---- runs list (sidebar panel) ---------------------------------------- */
+
   function render(container, runs) {
     container.replaceChildren();
     if (!runs.length) {
-      container.append(el('p', 'runs-empty', 'No durable runs yet. Long assignments create one.'));
+      container.append(stateBox('empty', 'No durable runs yet. Long assignments create one.', true));
       return;
     }
+
+    // Bucket runs by scan group; original order preserved inside each group.
+    const buckets = new Map();
     for (const run of runs) {
-      const card = el('article', 'run-card run-' + run.status);
-      card.tabIndex = 0;
-      card.setAttribute('role', 'button');
-      card.setAttribute('aria-label', 'Open details for run ' + (run.title || run.id));
+      const key = groupOfStatus(run.status);
+      if (!buckets.has(key)) buckets.set(key, []);
+      buckets.get(key).push(run);
+    }
 
-      const head = el('div', 'run-head');
-      head.append(el('b', null, run.title || run.id));
-      head.append(badge(run.status));
-      card.append(head);
+    for (const g of statusGroups) {
+      const group = buckets.get(g.key);
+      if (!group || !group.length) continue;
 
-      if (run.objective) card.append(el('p', 'run-objective', run.objective));
+      const section = el('div', 'runs-group');
+      section.style.display = 'flex';
+      section.style.flexDirection = 'column';
+      section.style.gap = '6px';
 
-      const p = run.progress || {};
-      const total = p.total || 0;
-      const done = p.completed || 0;
-      const pct = total ? Math.round((done / total) * 100) : 0;
-      const bar = el('div', 'run-bar');
-      const fill = el('i');
-      fill.style.width = pct + '%';
-      bar.append(fill);
-      card.append(bar);
+      const head = el('div', 'runs-group-head');
+      head.style.display = 'flex';
+      head.style.alignItems = 'center';
+      head.style.justifyContent = 'space-between';
+      head.style.margin = '6px 2px 1px';
+      head.style.color = 'var(--dim)';
+      head.style.font = '600 9px/1 var(--mono)';
+      head.style.textTransform = 'uppercase';
+      head.style.letterSpacing = '.08em';
+      head.append(el('span', null, g.label));
+      const count = el('span', 'runs-group-count', String(group.length));
+      count.style.font = '600 9px/1 var(--mono)';
+      count.style.border = '1px solid var(--line-soft)';
+      count.style.borderRadius = '999px';
+      count.style.padding = '1px 6px';
+      head.append(count);
+      section.append(head);
 
-      const meta = el('div', 'run-meta');
-      meta.append(el('span', null, done + '/' + total + ' tasks'));
-      if (p.failed) meta.append(el('span', null, p.failed + ' failed'));
-      if (run.ready) meta.append(el('span', null, run.ready + ' ready'));
-      if (run.worktree && run.worktree.active) {
-        const wt = run.worktree;
-        const tag = el('span', 'run-worktree-tag', '🌿 ' + (wt.branch || 'isolated'));
-        if (wt.merged) tag.textContent += ' (merged)';
-        meta.append(tag);
-      }
-      card.append(meta);
-      const actions = el('div', 'run-actions');
-      if (run.status === 'running' || run.status === 'planning' || run.status === 'queued') {
-        const cancelBtn = el('button', 'run-btn run-btn-danger', 'Cancel');
-        cancelBtn.type = 'button';
-        cancelBtn.onclick = async (ev) => {
-          ev.stopPropagation();
-          cancelBtn.disabled = true;
-          try {
-            await fetch('/api/runs/cancel', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ id: run.id }),
-            });
-            load(container);
-          } catch (e) {
-            cancelBtn.disabled = false;
-          }
-        };
-        actions.append(cancelBtn);
-      } else if (run.status === 'failed' || run.status === 'cancelled' || (p.failed && p.failed > 0)) {
-        const retryBtn = el('button', 'run-btn', 'Retry');
-        retryBtn.type = 'button';
-        retryBtn.onclick = async (ev) => {
-          ev.stopPropagation();
-          retryBtn.disabled = true;
-          try {
-            await fetch('/api/runs/retry', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ id: run.id }),
-            });
-            load(container);
-          } catch (e) {
-            retryBtn.disabled = false;
-          }
-        };
-        actions.append(retryBtn);
-      }
-      if (actions.children.length) card.append(actions);
-
-      card.addEventListener('click', () => openRun(run.id));
-      card.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          openRun(run.id);
-        }
-      });
-      container.append(card);
+      for (const run of group) section.append(runCard(run));
+      container.append(section);
     }
   }
+
+  function runCard(run) {
+    const card = el('article', 'run-card run-' + run.status);
+    card.tabIndex = 0;
+    card.setAttribute('role', 'button');
+    card.setAttribute('aria-label', 'Open details for run ' + (run.title || run.id));
+
+    const head = el('div', 'run-head');
+    head.append(el('b', null, run.title || run.id));
+    head.append(badge(run.status));
+    card.append(head);
+
+    if (run.objective) card.append(el('p', 'run-objective', run.objective));
+
+    const p = run.progress || {};
+    const total = p.total || 0;
+    const done = p.completed || 0;
+    const pct = total ? Math.round((done / total) * 100) : 0;
+    const bar = el('div', 'run-bar');
+    const fill = el('i');
+    fill.style.width = pct + '%';
+    bar.append(fill);
+    card.append(bar);
+
+    const meta = el('div', 'run-meta');
+    meta.append(el('span', null, done + '/' + total + ' tasks'));
+    if (p.failed) meta.append(el('span', null, p.failed + ' failed'));
+    if (run.ready) meta.append(el('span', null, run.ready + ' ready'));
+    const started = relTime(run.created_at || run.updated_at);
+    if (started.textContent) {
+      started.textContent = 'started ' + started.textContent;
+      meta.append(started);
+    }
+    if (run.worktree && run.worktree.active) {
+      const wt = run.worktree;
+      const tag = el('span', 'run-worktree-tag', '🌿 ' + (wt.branch || 'isolated'));
+      if (wt.merged) tag.textContent += ' (merged)';
+      meta.append(tag);
+    }
+    card.append(meta);
+
+    const actions = el('div', 'run-actions');
+    if (run.status === 'running' || run.status === 'planning' || run.status === 'queued') {
+      const cancelBtn = el('button', 'run-btn run-btn-danger', 'Cancel');
+      cancelBtn.type = 'button';
+      cancelBtn.onclick = async (ev) => {
+        ev.stopPropagation();
+        cancelBtn.disabled = true;
+        try {
+          await fetch('/api/runs/cancel', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: run.id }),
+          });
+          load(card.closest('.runs-list') || card.parentElement);
+        } catch (e) {
+          cancelBtn.disabled = false;
+        }
+      };
+      actions.append(cancelBtn);
+    } else if (run.status === 'failed' || run.status === 'cancelled' || (p.failed && p.failed > 0)) {
+      const retryBtn = el('button', 'run-btn', 'Retry');
+      retryBtn.type = 'button';
+      retryBtn.onclick = async (ev) => {
+        ev.stopPropagation();
+        retryBtn.disabled = true;
+        try {
+          await fetch('/api/runs/retry', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: run.id }),
+          });
+          load(card.closest('.runs-list') || card.parentElement);
+        } catch (e) {
+          retryBtn.disabled = false;
+        }
+      };
+      actions.append(retryBtn);
+    }
+    if (actions.children.length) card.append(actions);
+
+    const open = () => openRun(run.id);
+    card.addEventListener('click', open);
+    // Keyboard parity: Enter and Space trigger the exact same handler as click.
+    card.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        open();
+      }
+    });
+    return card;
+  }
+
+  /* ---- run detail modal -------------------------------------------------- */
 
   async function openRun(runId) {
     if (!runId) return;
@@ -158,8 +260,8 @@
       statusEl.textContent = '…';
     }
     if (metaEl) metaEl.textContent = 'Fetching state from /api/runs/detail…';
-    if (tasksList) tasksList.innerHTML = '<div class="run-loading">Loading task graph…</div>';
-    if (eventsList) eventsList.innerHTML = '<div class="run-loading">Loading journal events…</div>';
+    if (tasksList) tasksList.replaceChildren(stateBox('loading', 'Loading task graph…'));
+    if (eventsList) eventsList.replaceChildren(stateBox('loading', 'Loading journal events…'));
 
     try {
       const [detailRes, eventsRes] = await Promise.all([
@@ -177,12 +279,8 @@
 
       renderRunDetail(detail, events);
     } catch (err) {
-      if (tasksList) {
-        tasksList.innerHTML = '<div class="run-empty">Failed to load run: ' + esc(err.message) + '</div>';
-      }
-      if (eventsList) {
-        eventsList.innerHTML = '<div class="run-empty">Journal unavailable.</div>';
-      }
+      if (tasksList) tasksList.replaceChildren(stateBox('error', 'Failed to load run: ' + err.message));
+      if (eventsList) eventsList.replaceChildren(stateBox('error', 'Journal unavailable.'));
     }
   }
 
@@ -255,7 +353,7 @@
     if (tasksList) {
       const tasks = run.tasks || [];
       if (!tasks.length) {
-        tasksList.innerHTML = '<div class="run-empty">No tasks defined in this run.</div>';
+        tasksList.replaceChildren(stateBox('empty', 'No tasks defined in this run.'));
       } else {
         tasksList.innerHTML = tasks.map((task) => renderTaskCard(task, blockedIds, readyTasks)).join('');
         // Attach copy buttons for verification output
@@ -277,7 +375,7 @@
     const eventsList = document.getElementById('run-events-list');
     if (eventsList) {
       if (!events.length) {
-        eventsList.innerHTML = '<div class="run-empty">No journal events recorded for this run.</div>';
+        eventsList.replaceChildren(stateBox('empty', 'No journal events recorded for this run.'));
       } else {
         eventsList.innerHTML = events.map((ev) => renderEventRow(ev)).join('');
       }
@@ -387,7 +485,7 @@
         <span class="event-seq">${esc(seq)}</span>
         <span class="event-kind ${esc(kindClass)}">${esc(ev.kind || 'event')}</span>
         ${taskTag || '<span class="event-seq">—</span>'}
-        <span class="event-desc" title="${esc(desc)}">${desc || esc(time)}</span>
+        <span class="event-desc" title="${esc(desc)}${desc ? ' · ' + esc(formatDateTime(ev.at)) : ''}">${desc || esc(time)}</span>
       </div>
     `;
   }
@@ -398,7 +496,14 @@
     if (modal) modal.classList.remove('open');
   }
 
+  /* ---- panel lifecycle ---------------------------------------------------- */
+
   async function load(container) {
+    // Only show a loading box on the very first paint; silent refreshes
+    // afterwards must not flash or wipe the list.
+    if (!container.childNodes.length) {
+      container.append(stateBox('loading', 'Loading runs…', true));
+    }
     try {
       const res = await fetch('/api/runs', { cache: 'no-store' });
       if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -413,6 +518,9 @@
       }
       if (count) count.textContent = busy ? busy + ' active' : String(runs.length);
     } catch (e) {
+      // Backend unreachable: preserve the established quiet-hide behavior for
+      // the sidebar section, but leave a trace for honest debugging.
+      console.warn('[runs] /api/runs unavailable:', e && e.message);
       const panel = container.closest('.sb-sec');
       if (panel) panel.hidden = true;
       container.replaceChildren();

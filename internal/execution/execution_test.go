@@ -322,3 +322,37 @@ func TestStoreCancelAndRetry(t *testing.T) {
 		t.Fatalf("run not restored correctly: %+v", persisted)
 	}
 }
+
+func TestCreatedAtLessChronological(t *testing.T) {
+	// RFC3339Nano trims trailing fraction zeros, so naive string order puts
+	// the fractionless older stamp after the fractional newer one.
+	older := "2026-01-02T10:00:00Z"
+	newer := "2026-01-02T10:00:00.5Z"
+	if !createdAtLess(older, newer) {
+		t.Fatalf("older fractionless stamp must sort before newer fractional stamp")
+	}
+	if createdAtLess(newer, older) {
+		t.Fatalf("newer stamp must not sort before older")
+	}
+	// Mixed widths within the same second stay chronological.
+	a := "2026-01-02T10:00:00.25Z"
+	b := "2026-01-02T10:00:00.5Z"
+	if !createdAtLess(a, b) || createdAtLess(b, a) {
+		t.Fatalf("fraction widths must compare numerically: %s vs %s", a, b)
+	}
+	// Unparsable stamps fall back to deterministic string order.
+	if !createdAtLess("aaa", "bbb") || createdAtLess("bbb", "aaa") {
+		t.Fatalf("unparsable stamps must fall back to string order")
+	}
+}
+
+func TestNormalizeRunTasksMixedFractionOrder(t *testing.T) {
+	tasks := []Task{
+		{ID: "late", Title: "created with fraction", CreatedAt: "2026-01-02T10:00:00.5Z", DependsOn: []string{"early"}},
+		{ID: "early", Title: "created without fraction", CreatedAt: "2026-01-02T10:00:00Z"},
+	}
+	out := normalizeRunTasks(tasks)
+	if out[0].ID != "early" || out[1].ID != "late" {
+		t.Fatalf("chronological order violated: got %s then %s", out[0].ID, out[1].ID)
+	}
+}
