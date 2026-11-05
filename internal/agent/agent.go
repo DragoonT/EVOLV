@@ -55,6 +55,7 @@ type Agent struct {
 	dreamWG       sync.WaitGroup
 	lastSnapshot  string
 	visionMgr     *VisionManager
+	voiceMgr      *VoiceManager
 	pendingImages []string
 }
 
@@ -78,7 +79,7 @@ func NewProfile(ws *workspace.W, b *bus.Bus, prov providers.Provider, model stri
 }
 
 func newAgent(ws *workspace.W, b *bus.Bus, prov providers.Provider, model string, profile *Profile) *Agent {
-	a := &Agent{ws: ws, bus: b, prov: prov, Model: model, maxLoops: 10, lastAct: time.Now(), profile: profile, visionMgr: NewVisionManager()}
+	a := &Agent{ws: ws, bus: b, prov: prov, Model: model, maxLoops: 10, lastAct: time.Now(), profile: profile, visionMgr: NewVisionManager(), voiceMgr: NewVoiceManager(b)}
 	a.js = NewJSRuntime(a)
 	a.js.LoadAll()
 	a.loadMemory() // the mind remembers across restarts
@@ -331,6 +332,10 @@ type action struct {
 	Target         string            `json:"target,omitempty"`  // target organ or canvas for capture_canvas
 	SavePath       string            `json:"save_path,omitempty"`
 	Format         string            `json:"format,omitempty"` // png | jpeg
+	Text           string            `json:"text,omitempty"`   // spoken text for speak action
+	Voice          string            `json:"voice,omitempty"`  // optional voice identifier or mood
+	Rate           float64           `json:"rate,omitempty"`   // speech rate multiplier (e.g. 1.0)
+	Pitch          float64           `json:"pitch,omitempty"`  // speech pitch multiplier (e.g. 1.0)
 }
 
 func (a *Agent) candidateManager() *candidate.Manager {

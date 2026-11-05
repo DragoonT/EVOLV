@@ -49,6 +49,7 @@ type Server struct {
 	update        *update.Info // newer release, if any
 	genMu         sync.Mutex
 	genCancel     context.CancelFunc // cancels the in-flight generation (stop button)
+	voiceMgr      *agent.VoiceManager
 	agentMu       sync.RWMutex
 	agents        map[string]*agent.Agent
 	profiles      map[string]agent.Profile
@@ -168,6 +169,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/wb/search", s.handleWbSearch)
 	s.mux.HandleFunc("/api/canvas/screenshot", s.handleCanvasScreenshot)
 	s.mux.HandleFunc("/api/canvas/screenshots", s.handleCanvasScreenshots)
+	s.mux.HandleFunc("/api/voice/speak", s.handleVoiceSpeak)
+	s.mux.HandleFunc("/api/voice/history", s.handleVoiceHistory)
 	s.WatchReleases()
 	if s.ag != nil {
 		s.ag.StartDreaming() // the organism wakes itself when idle
@@ -2334,5 +2337,71 @@ func (s *Server) handleCanvasScreenshots(w http.ResponseWriter, r *http.Request)
 		"ok":          true,
 		"screenshots": list,
 		"count":       len(list),
+	})
+}
+
+func (s *Server) voiceManager() *agent.VoiceManager {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.ag != nil && s.ag.VoiceManager() != nil {
+		return s.ag.VoiceManager()
+	}
+	if s.voiceMgr == nil && s.bus != nil {
+		s.voiceMgr = agent.NewVoiceManager(s.bus)
+	}
+	return s.voiceMgr
+}
+
+func (s *Server) handleVoiceSpeak(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
+	var in struct {
+		Text  string  `json:"text"`
+		Voice string  `json:"voice"`
+		Rate  float64 `json:"rate"`
+		Pitch float64 `json:"pitch"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid json: "+err.Error())
+		return
+	}
+	in.Text = strings.TrimSpace(in.Text)
+	if in.Text == "" {
+		writeJSONError(w, http.StatusBadRequest, "text is required")
+		return
+	}
+	vm := s.voiceManager()
+	if vm == nil {
+		writeJSONError(w, http.StatusServiceUnavailable, "voice manager unavailable")
+		return
+	}
+	ut, err := vm.Speak(r.Context(), in.Text, in.Voice, in.Rate, in.Pitch, "api")
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"ok":        true,
+		"utterance": ut,
+	})
+}
+
+func (s *Server) handleVoiceHistory(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "GET only", http.StatusMethodNotAllowed)
+		return
+	}
+	var h []agent.Utterance
+	if vm := s.voiceManager(); vm != nil {
+		h = vm.History()
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"ok":         true,
+		"utterances": h,
+		"count":      len(h),
 	})
 }

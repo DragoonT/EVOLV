@@ -220,6 +220,8 @@ Every action returns a kernel JSON line. Read it; it is the ground truth.
                   target: component name (e.g. "clock", "pomodoro") or "canvas" (default).
                   Returns screenshot path, dimensions, byte size, and visual summary.
                   Use this to inspect UI components, verify rendering, critique styling, or observe games and charts.
+- speak            {text}                           Speaks a brief voice narration aloud to the developer via the browser shell.
+                  Keep spoken text concise and conversational (under 2 sentences). Ideal for announcing completed tasks, milestone updates, or dream insights.
 
 ### Files, projects and tests
 - write_file       {path, content, expected_hash?}  Existing files need the hash

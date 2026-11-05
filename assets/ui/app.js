@@ -152,6 +152,31 @@ function handle(ev) {
       });
       break;
     }
+    case 'voice:speak': {
+      const p = ev.payload || {};
+      if (!p.text) break;
+      // Allow custom external voice hook (e.g. RVC, ElevenLabs, local TTS) if registered
+      if (typeof window.evolvVoiceHook === 'function') {
+        window.evolvVoiceHook(p);
+        break;
+      }
+      // Respect mute setting (default sound is off unless turned on)
+      if (localStorage.getItem('evolv.sound') !== '1') break;
+      if (!('speechSynthesis' in window)) break;
+      try {
+        const u = new SpeechSynthesisUtterance(p.text);
+        if (p.rate) u.rate = Math.max(0.5, Math.min(2.0, p.rate));
+        if (p.pitch) u.pitch = Math.max(0.5, Math.min(2.0, p.pitch));
+        const voices = window.speechSynthesis.getVoices();
+        const preferred = voices.find((v) => v.lang.startsWith('en') && (v.name.includes('Natural') || v.name.includes('Neural') || v.name.includes('Google') || v.name.includes('Samantha')));
+        if (preferred) u.voice = preferred;
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.speak(u);
+      } catch (err) {
+        console.warn('[voice] speech synthesis error:', err);
+      }
+      break;
+    }
   }
 }
 
@@ -332,6 +357,76 @@ async function captureOrganOrCanvas(target) {
     el = $('#chat-scroll') || document.body;
   }
   return await rasterizeElementToDataURL(el, target);
+}
+
+/* ---------------- voice dictation & speech ---------------- */
+let speechRecognition = null;
+let isListening = false;
+
+function setupVoiceDictation() {
+  const btnMic = $('#btn-mic');
+  if (!btnMic) return;
+
+  const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRec) {
+    btnMic.title = 'voice — speech recognition not supported in this browser';
+    btnMic.style.opacity = '0.35';
+    btnMic.addEventListener('click', () => {
+      toast('⚠️ Web Speech Recognition is not supported in this browser (supported in Chrome, Edge, Safari).');
+    });
+    return;
+  }
+
+  speechRecognition = new SpeechRec();
+  speechRecognition.continuous = false;
+  speechRecognition.interimResults = true;
+  speechRecognition.lang = 'en-US';
+
+  speechRecognition.onstart = () => {
+    isListening = true;
+    btnMic.classList.add('listening');
+    btnMic.title = 'listening… speak your prompt (click to finish)';
+    blip(740, 0.05, 'sine', 0.05);
+  };
+
+  speechRecognition.onresult = (event) => {
+    let transcript = '';
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      transcript += event.results[i][0].transcript;
+    }
+    const input = $('#input');
+    if (input) {
+      input.value = transcript;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  };
+
+  speechRecognition.onerror = (event) => {
+    isListening = false;
+    btnMic.classList.remove('listening');
+    btnMic.title = 'voice — click to dictate prompt (hands-free)';
+    if (event.error === 'not-allowed') {
+      toast('⚠️ Microphone access was denied in browser permissions.');
+    }
+  };
+
+  speechRecognition.onend = () => {
+    isListening = false;
+    btnMic.classList.remove('listening');
+    btnMic.title = 'voice — click to dictate prompt (hands-free)';
+  };
+
+  btnMic.addEventListener('click', () => {
+    if (isListening) {
+      speechRecognition.stop();
+    } else {
+      try {
+        speechRecognition.start();
+      } catch (err) {
+        console.warn('[voice] start error:', err);
+      }
+    }
+  });
 }
 
 async function rasterizeElementToDataURL(el, title) {
@@ -1305,6 +1400,7 @@ window.addEventListener('DOMContentLoaded', () => {
   // sound & soul — off until you ask for it
   $('#btn-sound').addEventListener('click', () => setSound(localStorage.getItem('evolv.sound') !== '1'));
   $('#btn-sound').textContent = localStorage.getItem('evolv.sound') === '1' ? '🔊' : '🔇';
+  setupVoiceDictation();
 
   $('#send').addEventListener('click', () => { if (state.busy) stopGeneration(); else { blip(660, 0.06, 'sine', 0.04); send(); } });
   $('#input').addEventListener('keydown', (e) => {

@@ -1366,6 +1366,28 @@ body {
 }
 #send:hover { transform: translateY(-1px) scale(1.02); }
 #send.stop { background: var(--danger); color: #1a0d0a; }
+#btn-mic {
+  width: 34px; height: 34px; border-radius: 12px; border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--bg3) 65%, transparent);
+  color: var(--faint); font-size: 15px; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: all 0.15s ease; flex-shrink: 0;
+}
+#btn-mic:hover {
+  color: var(--text); border-color: var(--line); background: var(--bg3);
+  transform: translateY(-1px) scale(1.02);
+}
+#btn-mic.listening {
+  color: var(--accent); border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: 0 0 14px rgba(201, 239, 114, 0.35);
+  animation: mic-pulse 1.4s infinite ease-in-out;
+}
+@keyframes mic-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(1.04); }
+}
+body.paper #btn-mic { background: color-mix(in srgb, #fff 80%, transparent); color: var(--dim); }
 .foot-note { font-size: 10.5px; color: var(--faint); }
 
 /* ---------- welcome ---------- */
