@@ -28,6 +28,8 @@ import (
 	"github.com/dxn111/EVOLV/internal/agent"
 	"github.com/dxn111/EVOLV/internal/bus"
 	"github.com/dxn111/EVOLV/internal/candidate"
+	"github.com/dxn111/EVOLV/internal/cloud"
+	"github.com/dxn111/EVOLV/internal/deploy"
 	"github.com/dxn111/EVOLV/internal/execution"
 	"github.com/dxn111/EVOLV/internal/lint"
 	"github.com/dxn111/EVOLV/internal/providers"
@@ -68,6 +70,7 @@ type Server struct {
 	runStats      *runMetrics
 	execStore     *execution.Store
 	execMu        sync.Mutex
+	cloudAPI      *cloud.API
 }
 
 // New builds the server.
@@ -99,6 +102,9 @@ func New(ws *workspace.W, b *bus.Bus, ag *agent.Agent, reg *providers.Registry) 
 	}
 	s.loadSwarmState()
 	s.loadAgentProfiles()
+	cloudMeter := cloud.NewMeter()
+	cloudBot := cloud.NewBot(os.Getenv("EVOLV_GITHUB_WEBHOOK_SECRET"), cloudMeter, nil, nil)
+	s.cloudAPI = cloud.NewAPI(cloudBot, cloudMeter)
 	s.routes()
 	return s
 }
@@ -171,6 +177,11 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/canvas/screenshots", s.handleCanvasScreenshots)
 	s.mux.HandleFunc("/api/voice/speak", s.handleVoiceSpeak)
 	s.mux.HandleFunc("/api/voice/history", s.handleVoiceHistory)
+	s.mux.HandleFunc("/api/deploy", s.handleDeploy)
+	s.mux.HandleFunc("/api/deploy/list", s.handleDeployList)
+	if s.cloudAPI != nil {
+		s.cloudAPI.RegisterRoutes(s.mux)
+	}
 	s.WatchReleases()
 	if s.ag != nil {
 		s.ag.StartDreaming() // the organism wakes itself when idle
@@ -2403,5 +2414,43 @@ func (s *Server) handleVoiceHistory(w http.ResponseWriter, r *http.Request) {
 		"ok":         true,
 		"utterances": h,
 		"count":      len(h),
+	})
+}
+
+func (s *Server) handleDeploy(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
+	var in struct {
+		Component string `json:"component"`
+		Target    string `json:"target"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&in)
+	mgr := deploy.NewManager(s.ws)
+	dep, err := mgr.DeployPackage(r.Context(), in.Component, in.Target)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"ok":         true,
+		"deployment": dep,
+	})
+}
+
+func (s *Server) handleDeployList(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "GET only", http.StatusMethodNotAllowed)
+		return
+	}
+	mgr := deploy.NewManager(s.ws)
+	list := mgr.List()
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"ok":          true,
+		"deployments": list,
+		"count":       len(list),
 	})
 }
