@@ -1,4 +1,10 @@
-/* Editable workspace layout. Existing panels and their event handlers stay mounted. */
+/* EVOLV editable workspace layout — turns the static sidebar into a dockable
+   panel system. Each section gains collapse / move / lock controls, drag and
+   Alt+Arrow reordering, a resize grip, and a right-hand "inspector" dock.
+   Arrangements persist in localStorage and are re-applied on load.
+   Only the known panel sections are ever reparented; every other child (such
+   as the .sb-group-label headers inside each .sb-sec) is left exactly where
+   the markup puts it, so group labels travel with their panels untouched. */
 (() => {
   const sidebar = document.getElementById('sidebar');
   const app = document.getElementById('app');
@@ -17,51 +23,54 @@
   model.innerHTML = '<div class="sb-head">Model status</div>';
   model.appendChild(document.getElementById('provider-pill')); target.appendChild(model);
   const ids = ['mind-sec', 'plan-sec', 'organs-sec', 'pinned-sec', 'evo-sec', 'navigation-sec', 'model-sec'];
+  const byId = id => document.getElementById(id);
+  const isLocked = el => !!el && el.dataset.locked === 'true';
   let saved = {};
   try { saved = JSON.parse(localStorage.getItem('evolv.panel-layout.v1') || '{}') || {}; } catch (_) {}
   const persist = () => {
     const data = {};
-    ids.forEach(id => { const el = document.getElementById(id); if (el) data[id] = { side: el.parentElement === target ? 'right' : 'left', order: [...el.parentElement.children].indexOf(el), collapsed: el.classList.contains('panel-collapsed'), locked: el.dataset.locked === 'true', size: el.dataset.panelSize || '' }; });
+    ids.forEach(id => { const el = byId(id); if (el) data[id] = { side: el.parentElement === target ? 'right' : 'left', order: [...el.parentElement.children].indexOf(el), collapsed: el.classList.contains('panel-collapsed'), locked: isLocked(el), size: el.dataset.panelSize || '' }; });
     try { localStorage.setItem('evolv.panel-layout.v1', JSON.stringify(data)); } catch (_) {}
   };
   ids.forEach(id => {
-    const panel = document.getElementById(id), head = panel && panel.querySelector('.sb-head');
+    const panel = byId(id), head = panel && panel.querySelector('.sb-head');
     if (!head) return;
+    const name = id.replace('-sec', '');
     panel.dataset.panelId = id;
     const controls = document.createElement('span'); controls.className = 'panel-controls';
     const toggle = document.createElement('button'); toggle.type = 'button'; toggle.className = 'panel-control'; toggle.title = 'Collapse or expand panel'; toggle.textContent = '−';
-    const move = document.createElement('button'); move.type = 'button'; move.className = 'panel-control'; move.title = 'Move panel to other sidebar'; move.textContent = '⇄'; move.setAttribute('aria-label', 'Move ' + id.replace('-sec', '') + ' to other sidebar');
-    const update = () => { const collapsed = panel.classList.contains('panel-collapsed'); toggle.textContent = collapsed ? '+' : '−'; toggle.setAttribute('aria-expanded', String(!collapsed)); toggle.setAttribute('aria-label', (collapsed ? 'Expand ' : 'Collapse ') + id.replace('-sec', '')); };
+    const move = document.createElement('button'); move.type = 'button'; move.className = 'panel-control'; move.title = 'Move panel to other sidebar'; move.textContent = '⇄'; move.setAttribute('aria-label', 'Move ' + name + ' to other sidebar');
+    const update = () => { const collapsed = panel.classList.contains('panel-collapsed'); toggle.textContent = collapsed ? '+' : '−'; toggle.setAttribute('aria-expanded', String(!collapsed)); toggle.setAttribute('aria-label', (collapsed ? 'Expand ' : 'Collapse ') + name); };
     toggle.addEventListener('click', () => { panel.classList.toggle('panel-collapsed'); update(); persist(); });
     move.addEventListener('click', () => { if (panel.parentElement === target) sidebar.appendChild(panel); else target.appendChild(panel); persist(); });
     controls.append(toggle, move); head.appendChild(controls);
     const grip = document.createElement('button'); grip.type = 'button'; grip.className = 'panel-control panel-grip'; grip.textContent = '⠿'; grip.draggable = true;
-    grip.setAttribute('aria-label', 'Reorder ' + id.replace('-sec', '') + ': Alt plus up or down');
+    grip.setAttribute('aria-label', 'Reorder ' + name + ': Alt plus up or down');
     grip.title = 'Drag to reorder; Alt + Up/Down to move with keyboard';
     head.prepend(grip);
-    const lock = document.createElement('button'); lock.type = 'button'; lock.className = 'panel-control'; lock.textContent = '○'; lock.title = 'Lock panel position'; lock.setAttribute('aria-label', 'Lock ' + id.replace('-sec', '') + ' position');
+    const lock = document.createElement('button'); lock.type = 'button'; lock.className = 'panel-control'; lock.textContent = '○'; lock.title = 'Lock panel position'; lock.setAttribute('aria-label', 'Lock ' + name + ' position');
     controls.append(lock);
     const setLocked = value => { panel.dataset.locked = String(value); grip.draggable = !value; move.disabled = value; lock.textContent = value ? '●' : '○'; lock.setAttribute('aria-pressed', String(value)); };
     lock.addEventListener('click', () => { setLocked(panel.dataset.locked !== 'true'); persist(); });
-    const resizer = document.createElement('div'); resizer.className = 'panel-resizer'; resizer.setAttribute('role', 'separator'); resizer.setAttribute('aria-label', 'Resize ' + id.replace('-sec', '') + ' panel');
+    const resizer = document.createElement('div'); resizer.className = 'panel-resizer'; resizer.setAttribute('role', 'separator'); resizer.setAttribute('aria-label', 'Resize ' + name + ' panel');
     panel.appendChild(resizer);
     const savedSize = Number(saved[id]?.size);
     if (savedSize >= 96 && savedSize <= 720) { panel.style.setProperty('--panel-size', savedSize + 'px'); panel.dataset.panelSize = String(savedSize); }
     resizer.addEventListener('pointerdown', e => {
-      if (panel.dataset.locked === 'true') return;
+      if (isLocked(panel)) return;
       e.preventDefault(); resizer.setPointerCapture(e.pointerId);
-      const startY = e.clientY, start = panel.getBoundingClientRect().height;
-      const move = ev => { const size = Math.max(96, Math.min(720, Math.round(start + ev.clientY - startY))); panel.style.setProperty('--panel-size', size + 'px'); panel.dataset.panelSize = String(size); };
-      const end = () => { resizer.removeEventListener('pointermove', move); resizer.removeEventListener('pointerup', end); persist(); };
-      resizer.addEventListener('pointermove', move); resizer.addEventListener('pointerup', end);
+      const startY = e.clientY, startHeight = panel.getBoundingClientRect().height;
+      const onMove = ev => { const size = Math.max(96, Math.min(720, Math.round(startHeight + ev.clientY - startY))); panel.style.setProperty('--panel-size', size + 'px'); panel.dataset.panelSize = String(size); };
+      const onEnd = () => { resizer.removeEventListener('pointermove', onMove); resizer.removeEventListener('pointerup', onEnd); persist(); };
+      resizer.addEventListener('pointermove', onMove); resizer.addEventListener('pointerup', onEnd);
     });
     setLocked(saved[id]?.locked === true);
     grip.addEventListener('keydown', e => {
-      if (panel.dataset.locked === 'true' || !e.altKey || !['ArrowUp', 'ArrowDown'].includes(e.key)) return;
+      if (isLocked(panel) || !e.altKey || !['ArrowUp', 'ArrowDown'].includes(e.key)) return;
       e.preventDefault();
       const siblings = [...panel.parentElement.children].filter(el => el.dataset.panelId);
       const index = siblings.indexOf(panel), other = siblings[index + (e.key === 'ArrowUp' ? -1 : 1)];
-      if (!other || other.dataset.locked === 'true') return;
+      if (!other || isLocked(other)) return;
       panel.parentElement.insertBefore(panel, e.key === 'ArrowUp' ? other : other.nextSibling);
       persist(); grip.focus();
     });
@@ -71,8 +80,8 @@
     panel.addEventListener('drop', e => {
       e.preventDefault(); panel.classList.remove('panel-drop');
       const sourceId = e.dataTransfer.getData('text/x-evolv-panel');
-      if (!ids.includes(sourceId) || sourceId === id || panel.dataset.locked === 'true' || document.getElementById(sourceId).dataset.locked === 'true') return;
-      panel.parentElement.insertBefore(document.getElementById(sourceId), panel); persist();
+      if (!ids.includes(sourceId) || sourceId === id || isLocked(panel) || isLocked(byId(sourceId))) return;
+      panel.parentElement.insertBefore(byId(sourceId), panel); persist();
     });
     grip.addEventListener('dragend', () => document.querySelectorAll('.panel-drop').forEach(el => el.classList.remove('panel-drop')));
     if (saved[id] && saved[id].collapsed === true) panel.classList.add('panel-collapsed');
@@ -81,7 +90,7 @@
     else if (id === 'pinned-sec') target.appendChild(panel);
     update();
   });
-  if (!Object.keys(saved).length) ['plan-sec', 'evo-sec'].forEach(id => { const el = document.getElementById(id); if (el) target.appendChild(el); });
+  if (!Object.keys(saved).length) ['plan-sec', 'evo-sec'].forEach(id => { const el = byId(id); if (el) target.appendChild(el); });
   for (const dock of [sidebar, target]) {
     [...dock.children].filter(el => el.dataset.panelId).sort((a,b) => (Number(saved[a.id]?.order) || 0) - (Number(saved[b.id]?.order) || 0)).forEach(el => dock.appendChild(el));
   }
@@ -89,9 +98,9 @@
   const narrow = matchMedia('(max-width: 700px)');
   const desktopSides = new Map();
   function responsive() {
-    if (narrow.matches) ids.forEach(id => { const el = document.getElementById(id); if (el.parentElement === target) { desktopSides.set(id, true); sidebar.appendChild(el); } });
-    else { desktopSides.forEach((_, id) => target.appendChild(document.getElementById(id))); desktopSides.clear(); }
-    document.querySelectorAll('.panel-controls button:nth-child(2)').forEach(b => { b.disabled = narrow.matches || b.closest('[data-panel-id]').dataset.locked === 'true'; });
+    if (narrow.matches) ids.forEach(id => { const el = byId(id); if (el.parentElement === target) { desktopSides.set(id, true); sidebar.appendChild(el); } });
+    else { desktopSides.forEach((_, id) => target.appendChild(byId(id))); desktopSides.clear(); }
+    document.querySelectorAll('.panel-controls button:nth-child(2)').forEach(b => { b.disabled = narrow.matches || isLocked(b.closest('[data-panel-id]')); });
   }
   narrow.addEventListener('change', responsive); responsive();
   const manager = document.createElement('div'); manager.className = 'layout-manager';
@@ -112,7 +121,7 @@
   const applyLayout = layout => {
     ids.slice().sort((a,b) => (Number(layout[a]?.order)||0)-(Number(layout[b]?.order)||0)).forEach(id => {
       const value = layout[id]; if (!value) return;
-      const panel = document.getElementById(id), buttons = panel.querySelector('.panel-controls').children;
+      const panel = byId(id), buttons = panel.querySelector('.panel-controls').children;
       if (panel.classList.contains('panel-collapsed') !== (value.collapsed === true)) buttons[0].click();
       (value.side === 'right' ? target : sidebar).appendChild(panel);
       if (value.size) {

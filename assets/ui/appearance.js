@@ -1,4 +1,7 @@
-// EVOLV's editable appearance panel. All choices are local to this browser.
+/* EVOLV appearance playground — a local-only theming panel. Palette presets,
+   accent colors, interface density and corner radius are applied as CSS
+   variables and data attributes on <body>, persisted in localStorage, and
+   kept in step with the global paper/dark theme switcher (applyTheme). */
 (() => {
   const key = 'evolv.appearance.v1';
   const palettes = {
@@ -86,6 +89,12 @@
   const slider = panel.querySelector('.ap-radius');
   slider.oninput = () => { state.radius = Number(slider.value); apply(); };
   panel.querySelector('.ap-reset').onclick = () => { Object.assign(state, defaults); apply(); };
+  // Shared "which option is active" sync for the preset / accent / density groups.
+  const setActive = (group, isActive) => group.querySelectorAll('button').forEach(b => {
+    const active = isActive(b);
+    b.classList.toggle('selected', active);
+    b.setAttribute('aria-pressed', String(active));
+  });
   let lastPaper = document.body.classList.contains('paper');
   function apply() {
     const p = palettes[state.preset];
@@ -100,22 +109,21 @@
     document.body.style.setProperty('--radius', `${state.radius}px`);
     document.body.dataset.density = state.density;
     document.body.dataset.appearance = state.preset;
-    grid.querySelectorAll('button').forEach(b => { const active = b.dataset.preset === state.preset; b.classList.toggle('selected', active); b.setAttribute('aria-pressed', String(active)); });
-    accentGroup.querySelectorAll('button').forEach(b => { const active = b.dataset.color === accent; b.classList.toggle('selected', active); b.setAttribute('aria-pressed', String(active)); });
-    density.querySelectorAll('button').forEach(b => { const active = b.dataset.density === state.density; b.classList.toggle('selected', active); b.setAttribute('aria-pressed', String(active)); });
+    setActive(grid, b => b.dataset.preset === state.preset);
+    setActive(accentGroup, b => b.dataset.color === accent);
+    setActive(density, b => b.dataset.density === state.density);
     custom.value = accent;
     slider.value = String(state.radius);
     panel.querySelector('#ap-radius-output').textContent = `${state.radius}px`;
     localStorage.setItem(key, JSON.stringify(state));
   }
-  const appearanceRoot = document.body;
-  if (!appearanceRoot) return;
+  // document.body is already dereferenced above, so a null check here is dead.
   new MutationObserver(() => {
     const paper = document.body.classList.contains('paper');
     if (paper === lastPaper) return;
     lastPaper = paper;
     const next = paper ? 'arctic' : 'graphite';
     if (state.preset !== next) { state.preset = next; state.accent = ''; apply(); }
-  }).observe(appearanceRoot, { attributes: true, attributeFilter: ['class'] });
+  }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
   apply();
 })();
