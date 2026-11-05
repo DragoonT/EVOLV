@@ -423,7 +423,7 @@ Because it does. Literally. You watched it happen in the GIF.
 
 ## Contribute
 
-The most fun repo on your machine to hack on:
+The most fun repo on your machine to hack on — read [CONTRIBUTING.md](CONTRIBUTING.md) first:
 
 ```bash
 git clone https://github.com/dxn111/EVOLV && cd EVOLV
